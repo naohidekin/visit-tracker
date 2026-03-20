@@ -1,4 +1,8 @@
 {
+  "incentive_defaults": {
+    "nurse": 3.5,
+    "rehab": 20.0
+  },
   "staff": [
     {
       "id": "ubukata01",
@@ -10,7 +14,8 @@
       "iryo_col": "D",
       "seq": 1,
       "initial_pw": "YU01",
-      "password_hash": "$2a$10$oKUIdud3Tv3ICCb/gJ8nfebCYlZ72ez9nwEAdWRog5yVqZ9cseH2C"
+      "password_hash": "$2a$10$oKUIdud3Tv3ICCb/gJ8nfebCYlZ72ez9nwEAdWRog5yVqZ9cseH2C",
+      "incentive_line": null
     },
     {
       "id": "suzuki02",
@@ -22,7 +27,8 @@
       "iryo_col": "F",
       "seq": 2,
       "initial_pw": "KS02",
-      "password_hash": "$2a$10$fXKRkYqyrJaul5V35U79BONw9y81Y1CLTs56ySqa/yynA2PHdPPpe"
+      "password_hash": "$2a$10$fXKRkYqyrJaul5V35U79BONw9y81Y1CLTs56ySqa/yynA2PHdPPpe",
+      "incentive_line": null
     },
     {
       "id": "goto03",
@@ -34,7 +40,8 @@
       "iryo_col": "H",
       "seq": 3,
       "initial_pw": "KG03",
-      "password_hash": "$2a$10$wsq/nSw7Do23Psr.Rc1IBesr99IeGMWtYFPu4Ii9ugN8cQX.TNfZS"
+      "password_hash": "$2a$10$wsq/nSw7Do23Psr.Rc1IBesr99IeGMWtYFPu4Ii9ugN8cQX.TNfZS",
+      "incentive_line": null
     },
     {
       "id": "kamata04",
@@ -46,7 +53,8 @@
       "iryo_col": "J",
       "seq": 4,
       "initial_pw": "YK04",
-      "password_hash": "$2a$10$JoF4GlaGTY9YUW1m/a0oX.sp3cTYuI2VzjVevSiQZusO/tVBvEyjW"
+      "password_hash": "$2a$10$JoF4GlaGTY9YUW1m/a0oX.sp3cTYuI2VzjVevSiQZusO/tVBvEyjW",
+      "incentive_line": null
     },
     {
       "id": "nakashima05",
@@ -57,7 +65,8 @@
       "col": "K",
       "seq": 5,
       "initial_pw": "DN05",
-      "password_hash": "$2a$10$9/J6C7HIT2Bkx76VbQ186.x2F1OqASs3VIkaOsLK8RiJk/.rRy.ey"
+      "password_hash": "$2a$10$9/J6C7HIT2Bkx76VbQ186.x2F1OqASs3VIkaOsLK8RiJk/.rRy.ey",
+      "incentive_line": null
     },
     {
       "id": "ozawa06",
@@ -68,7 +77,8 @@
       "col": "L",
       "seq": 6,
       "initial_pw": "YO06",
-      "password_hash": "$2a$10$oCWyFpFJSr3F0IredydJ8etfExRwx5IqsWu6HJ2PowoWsthXimh5e"
+      "password_hash": "$2a$10$oCWyFpFJSr3F0IredydJ8etfExRwx5IqsWu6HJ2PowoWsthXimh5e",
+      "incentive_line": null
     },
     {
       "id": "ooe07",
@@ -79,7 +89,8 @@
       "col": "M",
       "seq": 7,
       "initial_pw": "AO07",
-      "password_hash": "$2a$10$OaEhI0Glj2Y/rohCeLe9ZuuGgKON4KPpWyaweBinlhO7INhJqQ1Ou"
+      "password_hash": "$2a$10$OaEhI0Glj2Y/rohCeLe9ZuuGgKON4KPpWyaweBinlhO7INhJqQ1Ou",
+      "incentive_line": null
     }
   ]
 }

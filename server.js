@@ -264,7 +264,11 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
         total_iryo  += i;
         if (k > 0 || i > 0) working_days++;
       }
-      res.json({ total_kaigo, total_iryo, total: total_kaigo + total_iryo, working_days });
+      const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const avg = working_days > 0 ? (total_kaigo + total_iryo) / working_days : 0;
+      res.json({ total_kaigo, total_iryo, total: total_kaigo + total_iryo, working_days,
+                 incentive_line: iline, incentive_triggered: avg > iline });
     } else {
       const resp = await api.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
@@ -277,7 +281,11 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
         total_units += v;
         if (v > 0) working_days++;
       }
-      res.json({ total_units, working_days });
+      const iDef2 = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+      const iline2 = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
+      const avg2 = working_days > 0 ? total_units / working_days : 0;
+      res.json({ total_units, working_days,
+                 incentive_line: iline2, incentive_triggered: avg2 > iline2 });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -310,6 +318,37 @@ app.get('/api/debug/sheets', requireAdmin, async (_req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
   }
+});
+
+// ─── API: インセンティブ設定 ────────────────────────────────────
+app.get('/api/admin/incentive', requireAdmin, (_req, res) => {
+  const data = loadStaff();
+  res.json({
+    defaults: data.incentive_defaults || { nurse: 3.5, rehab: 20.0 },
+    staff: data.staff.map(s => ({
+      id: s.id, name: s.name, type: s.type,
+      incentive_line: s.incentive_line ?? null,
+    })),
+  });
+});
+
+app.post('/api/admin/incentive/defaults', requireAdmin, (req, res) => {
+  const { nurse, rehab } = req.body;
+  if (nurse == null || rehab == null) return res.status(400).json({ error: 'パラメータ不足' });
+  const data = loadStaff();
+  data.incentive_defaults = { nurse: Number(nurse), rehab: Number(rehab) };
+  saveStaff(data);
+  res.json({ success: true });
+});
+
+app.post('/api/admin/staff/:id/incentive', requireAdmin, (req, res) => {
+  const data  = loadStaff();
+  const staff = data.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  const { line } = req.body;
+  staff.incentive_line = (line != null) ? Number(line) : null;
+  saveStaff(data);
+  res.json({ success: true });
 });
 
 // ─── API: 管理者認証 ────────────────────────────────────────────

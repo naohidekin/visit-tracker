@@ -66,6 +66,8 @@
     .spinner{text-align:center;padding:14px;color:var(--muted);font-size:12px;display:none}
     /* ── 自動生成ラベル ── */
     .auto-label{font-size:10px;color:var(--muted);margin-top:3px}
+    /* ── インセンティブ ── */
+    .section-sub{font-size:12px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
   </style>
 </head>
 <body>
@@ -101,6 +103,41 @@
         </thead>
         <tbody id="staffBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- インセンティブ設定 -->
+  <div class="card">
+    <h2>💰 インセンティブ設定</h2>
+    <div id="incentiveSpinner" class="spinner">読み込み中...</div>
+
+    <!-- デフォルト設定 -->
+    <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
+      <p class="section-sub">デフォルト設定</p>
+      <div class="form-grid">
+        <div class="field">
+          <label>看護師 デフォルト（時間/日）</label>
+          <select id="defaultNurse"></select>
+        </div>
+        <div class="field">
+          <label>リハビリ デフォルト（単位/日）</label>
+          <select id="defaultRehab"></select>
+        </div>
+      </div>
+      <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
+    </div>
+
+    <!-- スタッフ個別設定 -->
+    <div id="incentiveStaffSection" style="display:none">
+      <p class="section-sub">スタッフ個別設定</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>名前</th><th>職種</th><th>1日あたりのライン</th><th>操作</th></tr>
+          </thead>
+          <tbody id="incentiveBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -257,6 +294,7 @@
     staffList  = await res.json();
     document.getElementById('tableSpinner').style.display = 'none';
     renderTable();
+    loadIncentive();
   }
 
   function renderTable() {
@@ -401,6 +439,98 @@
     }
   }
 
+  // ── インセンティブ設定 ────────────────────────────────────────
+  let incentiveData = null;
+
+  function buildNurseLineOpts() {
+    const opts = [];
+    for (let v = 0; v <= 5.0 + 0.001; v += 0.5) opts.push(Math.round(v * 10) / 10);
+    return opts;
+  }
+  function buildRehabLineOpts() {
+    const opts = [];
+    for (let v = 0; v <= 20.0 + 0.001; v += 0.1) opts.push(Math.round(v * 10) / 10);
+    return opts;
+  }
+  function buildSelectHtml(opts, selected, unit) {
+    return opts.map(v => {
+      const label = unit === 'h' ? v.toFixed(1) + ' 時間/日' : v.toFixed(1) + ' 単位/日';
+      const sel = Math.abs(v - selected) < 0.001 ? ' selected' : '';
+      return `<option value="${v}"${sel}>${label}</option>`;
+    }).join('');
+  }
+
+  async function loadIncentive() {
+    document.getElementById('incentiveSpinner').style.display = 'block';
+    const res = await fetch('/api/admin/incentive');
+    if (!res.ok) { document.getElementById('incentiveSpinner').style.display = 'none'; return; }
+    incentiveData = await res.json();
+    document.getElementById('incentiveSpinner').style.display = 'none';
+
+    const def = incentiveData.defaults;
+    const nurseOpts = buildNurseLineOpts();
+    const rehabOpts = buildRehabLineOpts();
+
+    document.getElementById('defaultNurse').innerHTML = buildSelectHtml(nurseOpts, def.nurse, 'h');
+    document.getElementById('defaultRehab').innerHTML = buildSelectHtml(rehabOpts, def.rehab, 'u');
+    document.getElementById('incentiveDefaultSection').style.display = 'block';
+
+    renderIncentiveTable(nurseOpts, rehabOpts);
+    document.getElementById('incentiveStaffSection').style.display = 'block';
+  }
+
+  function renderIncentiveTable(nurseOpts, rehabOpts) {
+    const tbody = document.getElementById('incentiveBody');
+    tbody.innerHTML = '';
+    const def = incentiveData.defaults;
+    for (const s of incentiveData.staff) {
+      const badge = s.type === 'nurse'
+        ? '<span class="badge badge-nurse">看護師</span>'
+        : '<span class="badge badge-rehab">リハビリ</span>';
+      const opts = s.type === 'nurse' ? nurseOpts : rehabOpts;
+      const unit = s.type === 'nurse' ? 'h' : 'u';
+      const effective = (s.incentive_line != null) ? s.incentive_line
+        : (s.type === 'nurse' ? def.nurse : def.rehab);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${s.name}</strong></td>
+        <td>${badge}</td>
+        <td><select id="iline_${s.id}" style="width:auto;min-width:130px">
+          ${buildSelectHtml(opts, effective, unit)}
+        </select></td>
+        <td><button class="btn btn-sm btn-blue" onclick="saveStaffIncentive('${s.id}','${s.name}')">保存</button></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function saveDefaults() {
+    const nurse = parseFloat(document.getElementById('defaultNurse').value);
+    const rehab = parseFloat(document.getElementById('defaultRehab').value);
+    const res = await fetch('/api/admin/incentive/defaults', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nurse, rehab }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      incentiveData.defaults = { nurse, rehab };
+      showToast('✅ デフォルトを保存しました');
+    } else showToast('エラー: ' + (data.error || '保存失敗'));
+  }
+
+  async function saveStaffIncentive(id, name) {
+    const line = parseFloat(document.getElementById(`iline_${id}`).value);
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/incentive`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const s = incentiveData.staff.find(x => x.id === id);
+      if (s) s.incentive_line = line;
+      showToast(`✅ ${name} のラインを保存しました`);
+    } else showToast('エラー: ' + (data.error || '保存失敗'));
+  }
+
   // ── トースト ─────────────────────────────────────────────────
   let toastTimer;
   function showToast(msg) {
@@ -415,7 +545,7 @@
     if (r.ok) {
       document.getElementById('loginCard').style.display = 'none';
       document.getElementById('mainContent').style.display = 'block';
-      r.json().then(list => { staffList = list; renderTable(); });
+      r.json().then(list => { staffList = list; renderTable(); loadIncentive(); });
     }
   }).catch(() => {});
 </script>

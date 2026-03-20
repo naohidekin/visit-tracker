@@ -92,7 +92,7 @@
 
     /* ── 注意書き ── */
     .notes{background:#f8faff;border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:16px}
-    .notes p{font-size:11.5px;color:var(--muted);line-height:1.8}
+    .notes p{font-size:13px;color:var(--text);line-height:1.8}
 
     /* ── 送信ボタン ── */
     .submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
@@ -122,6 +122,11 @@
     .continue-btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
     .continue-btn:active{background:var(--blue-dark)}
     .loading{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+
+    /* ── インセンティブ ── */
+    .incentive-goal{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px}
+    .incentive-hit{background:#fee2e2;color:#b91c1c;border-radius:9px;padding:12px 16px;font-size:14px;font-weight:700;text-align:center}
+    .incentive-ok {background:#f0f0f0;color:var(--muted);border-radius:9px;padding:12px 16px;font-size:14px;font-weight:600;text-align:center}
 
     /* ── 上書きモーダル ── */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
@@ -261,6 +266,13 @@
     <div class="section-title" id="monthlyTitle">月の実績</div>
     <div id="monthlyLoading" class="loading">集計中...</div>
     <div class="monthly-grid" id="monthlyGrid" style="display:none"></div>
+  </div>
+
+  <!-- インセンティブ -->
+  <div class="card" id="incentiveCard" style="display:none">
+    <div class="section-title">インセンティブ</div>
+    <p class="incentive-goal" id="incentiveGoalLine"></p>
+    <div id="incentiveMsg"></div>
   </div>
 
   <div style="padding:0 0 16px">
@@ -528,6 +540,34 @@
         <div class="m-box"><div class="m-label">稼働日数</div>
           <div class="m-val">${stats.working_days||0}<span class="m-unit">日</span></div></div>`;
     }
+    renderIncentive(stats);
+  }
+
+  function renderIncentive(stats) {
+    const card = document.getElementById('incentiveCard');
+    if (!stats || stats.incentive_line == null || (stats.working_days || 0) === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    const line = stats.incentive_line;
+    const days = stats.working_days;
+    const goalLine = document.getElementById('incentiveGoalLine');
+    if (currentUser.type === 'nurse') {
+      const target = (line * days).toFixed(1);
+      const actual = (stats.total || 0).toFixed(1);
+      goalLine.textContent = `目標：${target}時間　／　実績：${actual}時間`;
+    } else {
+      const target = Math.round(line * days * 10) / 10;
+      const actual = stats.total_units || 0;
+      goalLine.textContent = `目標：${target}単位　／　実績：${actual}単位`;
+    }
+    const msg = document.getElementById('incentiveMsg');
+    if (stats.incentive_triggered) {
+      msg.innerHTML = '<div class="incentive-hit">お疲れ様です。インセンティブが発生しています！</div>';
+    } else {
+      msg.innerHTML = '<div class="incentive-ok">入力ありがとうございます。お疲れ様でした。</div>';
+    }
   }
 
   function continueInput() {
@@ -538,9 +578,10 @@
     // 日付を今日に戻す
     document.getElementById('dateInput').value = toDateStr(new Date());
     // 結果ビューを隠す
-    document.getElementById('nurseResult').style.display  = 'none';
-    document.getElementById('rehabResult').style.display  = 'none';
-    document.getElementById('resultView').style.display   = 'none';
+    document.getElementById('nurseResult').style.display   = 'none';
+    document.getElementById('rehabResult').style.display   = 'none';
+    document.getElementById('incentiveCard').style.display = 'none';
+    document.getElementById('resultView').style.display    = 'none';
     document.getElementById('formView').style.display     = 'block';
     window.scrollTo(0, 0);
   }
