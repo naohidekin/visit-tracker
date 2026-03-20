@@ -92,6 +92,10 @@ app.get('/change-password', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'change-password.html'));
 });
 app.get('/admin',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/history', (req, res) => {
+  if (!req.session.staffId) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'history.html'));
+});
 app.get('/', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -317,6 +321,74 @@ app.get('/api/debug/sheets', requireAdmin, async (_req, res) => {
     res.json({ mimeType, sheets, readTest });
   } catch (e) {
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+  }
+});
+
+// ─── API: 月別日別明細 ──────────────────────────────────────────
+app.get('/api/monthly-detail', requireStaff, async (req, res) => {
+  const { year, month } = req.query;
+  if (!year || !month) return res.status(400).json({ error: 'パラメータ不足' });
+
+  const y = Number(year), m = Number(month);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const endRow = DATA_START_ROW + daysInMonth - 1;
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const WD = ['日','月','火','水','木','金','土'];
+  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+
+  try {
+    const api = await getSheets();
+    if (staff.type === 'nurse') {
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
+      });
+      const rows = resp.data.values ?? [];
+      let total_kaigo = 0, total_iryo = 0, working_days = 0;
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const row = rows[d - 1] ?? [];
+        const kaigo = (row[0] !== undefined && row[0] !== '') ? parseFloat(row[0]) : null;
+        const iryo  = (row[1] !== undefined && row[1] !== '') ? parseFloat(row[1]) : null;
+        if (kaigo != null) total_kaigo += kaigo;
+        if (iryo  != null) total_iryo  += iryo;
+        if (kaigo != null || iryo != null) working_days++;
+        const total = (kaigo != null || iryo != null) ? (kaigo || 0) + (iryo || 0) : null;
+        days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], kaigo, iryo, total });
+      }
+      const total = total_kaigo + total_iryo;
+      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const avg = working_days > 0 ? total / working_days : 0;
+      res.json({ type: 'nurse', year: y, month: m, days,
+        stats: { total_kaigo, total_iryo, total, working_days,
+                 incentive_line: iline, incentive_triggered: avg > iline } });
+    } else {
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
+      });
+      const rows = resp.data.values ?? [];
+      let total_units = 0, working_days = 0;
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const row = rows[d - 1] ?? [];
+        const value = (row[0] !== undefined && row[0] !== '') ? parseFloat(row[0]) : null;
+        if (value != null) { total_units += value; working_days++; }
+        days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], value });
+      }
+      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const avg = working_days > 0 ? total_units / working_days : 0;
+      res.json({ type: 'rehab', year: y, month: m, days,
+        stats: { total_units, working_days,
+                 incentive_line: iline, incentive_triggered: avg > iline } });
+    }
+  } catch (e) {
+    console.error('monthly-detail error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

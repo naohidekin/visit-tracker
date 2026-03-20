@@ -148,6 +148,7 @@
     <div class="header-type" id="headerType"></div>
   </div>
   <nav class="header-nav">
+    <a href="/history">月次実績</a>
     <a href="/change-password">PW変更</a>
     <button class="logout-btn" onclick="logout()">ログアウト</button>
   </nav>
@@ -391,10 +392,18 @@
     document.getElementById('headerType').textContent =
       currentUser.type === 'nurse' ? '看護師' : 'リハビリ';
 
-    const today = toDateStr(new Date());
+    const now = new Date();
+    const today = toDateStr(now);
+    const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
     const di = document.getElementById('dateInput');
-    di.value = today;
-    di.max   = today;
+    di.max = today;
+    di.min = firstDay;
+    const dateParam = new URLSearchParams(window.location.search).get('date');
+    if (dateParam && dateParam >= firstDay && dateParam <= today) {
+      di.value = dateParam;
+    } else {
+      di.value = today;
+    }
 
     if (currentUser.type === 'nurse') {
       document.getElementById('nurseCard').style.display = 'block';
