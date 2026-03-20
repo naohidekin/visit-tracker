@@ -137,8 +137,12 @@ app.post('/api/change-password', requireStaff, async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'パラメータが不足しています' });
-  if (newPassword.length < 4)
-    return res.status(400).json({ error: 'パスワードは4文字以上にしてください' });
+  const SPECIAL_RE = /[!@#$%^&*()\-_=+\[\]{};':",.<>/?\\|`~]/;
+  if (
+    newPassword.length < 4 || newPassword.length > 20 ||
+    !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) ||
+    !/[0-9]/.test(newPassword) || !SPECIAL_RE.test(newPassword)
+  ) return res.status(400).json({ error: 'パスワードは大文字・小文字・数字・記号を含む4〜20文字で設定してください' });
   if (newPassword !== confirmPassword)
     return res.status(400).json({ error: '新しいパスワードが一致しません' });
 
@@ -389,6 +393,117 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
   } catch (e) {
     console.error('monthly-detail error:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── API: 管理者用 月別日別明細 ────────────────────────────────
+app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
+  const { staffId, year, month } = req.query;
+  if (!staffId || !year || !month) return res.status(400).json({ error: 'パラメータ不足' });
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const y = Number(year), m = Number(month);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const endRow = DATA_START_ROW + daysInMonth - 1;
+  const WD = ['日','月','火','水','木','金','土'];
+  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+
+  try {
+    const api = await getSheets();
+    if (staff.type === 'nurse') {
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
+      });
+      const rows = resp.data.values ?? [];
+      let total_kaigo = 0, total_iryo = 0, working_days = 0;
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const row = rows[d - 1] ?? [];
+        const kaigo = (row[0] !== undefined && row[0] !== '') ? parseFloat(row[0]) : null;
+        const iryo  = (row[1] !== undefined && row[1] !== '') ? parseFloat(row[1]) : null;
+        if (kaigo != null) total_kaigo += kaigo;
+        if (iryo  != null) total_iryo  += iryo;
+        if (kaigo != null || iryo != null) working_days++;
+        const total = (kaigo != null || iryo != null) ? (kaigo || 0) + (iryo || 0) : null;
+        days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], kaigo, iryo, total });
+      }
+      const total = total_kaigo + total_iryo;
+      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const avg = working_days > 0 ? total / working_days : 0;
+      res.json({ type: 'nurse', year: y, month: m, days,
+        stats: { total_kaigo, total_iryo, total, working_days,
+                 incentive_line: iline, incentive_triggered: avg > iline } });
+    } else {
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
+      });
+      const rows = resp.data.values ?? [];
+      let total_units = 0, working_days = 0;
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const row = rows[d - 1] ?? [];
+        const value = (row[0] !== undefined && row[0] !== '') ? parseFloat(row[0]) : null;
+        if (value != null) { total_units += value; working_days++; }
+        days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], value });
+      }
+      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const avg = working_days > 0 ? total_units / working_days : 0;
+      res.json({ type: 'rehab', year: y, month: m, days,
+        stats: { total_units, working_days,
+                 incentive_line: iline, incentive_triggered: avg > iline } });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+  }
+});
+
+// ─── API: 管理者用 記録書き込み ─────────────────────────────────
+app.post('/api/admin/record', requireAdmin, async (req, res) => {
+  const { staffId, date } = req.body;
+  if (!staffId || !date) return res.status(400).json({ error: 'パラメータ不足' });
+
+  const d = new Date(date);
+  const month = d.getMonth() + 1;
+  const row   = DATA_START_ROW + d.getDate() - 1;
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  try {
+    const api = await getSheets();
+    if (staff.type === 'nurse') {
+      const { kaigo, iryo } = req.body;
+      const kVal = (kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
+      const iVal = (iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
+      await api.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kVal]] },
+            { range: `${month}月!${staff.iryo_col}${row}`, values: [[iVal]] },
+          ],
+        },
+      });
+    } else {
+      const { value } = req.body;
+      const val = (value !== null && value !== undefined) ? Number(value) : '';
+      await api.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${month}月!${staff.col}${row}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[val]] },
+      });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
   }
 });
 

@@ -32,6 +32,21 @@
     .btn-sm    {padding:5px 11px;font-size:12px}
     .btn-danger{background:var(--danger);color:#fff}
     .btn-reset {background:#e8a020;color:#fff}
+    /* ── スタッフ月次実績 ── */
+    .a-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .a-stat-box{border-radius:10px;padding:12px 14px}
+    .a-stat-kaigo{background:#dbeafe}.a-stat-iryo{background:#fef3c7}
+    .a-stat-total{background:#f0fdf4}.a-stat-days{background:#f0f4f8}.a-stat-units{background:#f0fdf4}
+    .a-stat-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .a-stat-val{font-size:18px;font-weight:800;color:#1a2233}
+    .a-stat-unit{font-size:12px;color:var(--muted);margin-left:2px}
+    .a-section-title{font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.06em}
+    .a-incentive-goal{font-size:13px;font-weight:600;color:#1a2233;margin-bottom:8px}
+    .a-incentive-hit{background:#fee2e2;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;text-align:center;margin-bottom:12px}
+    .a-incentive-ok{background:#f0f0f0;color:var(--muted);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;text-align:center;margin-bottom:12px}
+    .date-cell-a{text-align:left;white-space:nowrap;font-size:13px;font-weight:600}
+    .sat-a{color:#1e40af}.sun-a{color:#c0392b}
+    .edit-sel{padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;max-width:95px}
     /* ── ログイン ── */
     #loginCard{max-width:360px;margin:60px auto 0}
     #mainContent{display:none}
@@ -103,6 +118,50 @@
         </thead>
         <tbody id="staffBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- スタッフ月次実績 -->
+  <div class="card">
+    <h2>📊 スタッフ月次実績</h2>
+    <div class="form-grid">
+      <div class="field" style="grid-column:1/-1">
+        <label>スタッフ</label>
+        <select id="viewStaff"><option value="">スタッフを選択してください</option></select>
+      </div>
+      <div class="field">
+        <label>年</label>
+        <select id="viewYear"></select>
+      </div>
+      <div class="field">
+        <label>月</label>
+        <select id="viewMonth">
+          <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+          <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+          <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+          <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-blue" onclick="loadAdminMonthly()">表示</button>
+
+    <div id="adminMonthlyResult" style="display:none;margin-top:18px">
+      <div class="spinner" id="adminMonthlySpinner">読み込み中...</div>
+      <div id="adminStatsSection" style="display:none">
+        <div class="a-section-title" id="adminStatsTitle"></div>
+        <div class="a-stats-grid" id="adminStatsGrid"></div>
+      </div>
+      <div id="adminIncentiveSection" style="display:none">
+        <div class="a-section-title">インセンティブ</div>
+        <p class="a-incentive-goal" id="adminIncentiveGoal"></p>
+        <div id="adminIncentiveMsg"></div>
+      </div>
+      <div id="adminTableSection" style="display:none">
+        <div class="a-section-title">日別明細</div>
+        <div class="table-wrap">
+          <table><thead id="adminTableHead"></thead><tbody id="adminTableBody"></tbody></table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -295,6 +354,8 @@
     document.getElementById('tableSpinner').style.display = 'none';
     renderTable();
     loadIncentive();
+    initAdminMonthlySelectors();
+    updateAdminStaffSelect();
   }
 
   function renderTable() {
@@ -437,6 +498,213 @@
       showToast('エラー: ' + (data.error || 'リセット失敗'));
       closeResetModal();
     }
+  }
+
+  // ── スタッフ月次実績 ──────────────────────────────────────────
+  let currentAdminData = null;
+
+  function initAdminMonthlySelectors() {
+    const ySel = document.getElementById('viewYear');
+    if (ySel.options.length > 0) return;
+    const now = new Date(), cy = now.getFullYear();
+    for (let y = cy; y >= cy - 2; y--) {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = `${y}年`; ySel.appendChild(opt);
+    }
+    document.getElementById('viewMonth').value = String(now.getMonth() + 1);
+  }
+
+  function updateAdminStaffSelect() {
+    const sel = document.getElementById('viewStaff');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">スタッフを選択してください</option>';
+    for (const s of staffList) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name + (s.type === 'nurse' ? '（看護師）' : '（リハビリ）');
+      sel.appendChild(opt);
+    }
+    if (cur) sel.value = cur;
+  }
+
+  async function loadAdminMonthly() {
+    const staffId = document.getElementById('viewStaff').value;
+    const year    = document.getElementById('viewYear').value;
+    const month   = document.getElementById('viewMonth').value;
+    if (!staffId) { showToast('スタッフを選択してください'); return; }
+
+    document.getElementById('adminMonthlyResult').style.display   = 'block';
+    document.getElementById('adminMonthlySpinner').style.display  = 'block';
+    document.getElementById('adminStatsSection').style.display    = 'none';
+    document.getElementById('adminIncentiveSection').style.display = 'none';
+    document.getElementById('adminTableSection').style.display    = 'none';
+
+    try {
+      const res = await fetch(`/api/admin/monthly-detail?staffId=${encodeURIComponent(staffId)}&year=${year}&month=${month}`);
+      if (!res.ok) throw new Error((await res.json()).error);
+      currentAdminData = await res.json();
+      renderAdminStats(currentAdminData);
+      renderAdminIncentive(currentAdminData);
+      renderAdminTable(currentAdminData);
+      document.getElementById('adminMonthlySpinner').style.display  = 'none';
+      document.getElementById('adminStatsSection').style.display    = 'block';
+      document.getElementById('adminIncentiveSection').style.display = 'block';
+      document.getElementById('adminTableSection').style.display    = 'block';
+    } catch (e) {
+      document.getElementById('adminMonthlySpinner').textContent = 'エラー: ' + e.message;
+    }
+  }
+
+  function renderAdminStats(data) {
+    document.getElementById('adminStatsTitle').textContent = `${data.month}月の実績`;
+    const grid = document.getElementById('adminStatsGrid');
+    const s = data.stats;
+    if (data.type === 'nurse') {
+      grid.innerHTML = `
+        <div class="a-stat-box a-stat-kaigo">
+          <div class="a-stat-label"><span class="badge badge-nurse" style="font-size:10px">介護</span> 合計</div>
+          <div class="a-stat-val">${(s.total_kaigo||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
+        </div>
+        <div class="a-stat-box a-stat-iryo">
+          <div class="a-stat-label"><span class="badge" style="background:#fef3c7;color:#9a3412;font-size:10px">医療</span> 合計</div>
+          <div class="a-stat-val">${(s.total_iryo||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
+        </div>
+        <div class="a-stat-box a-stat-total">
+          <div class="a-stat-label">合計時間</div>
+          <div class="a-stat-val" style="color:var(--ok)">${(s.total||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
+        </div>
+        <div class="a-stat-box a-stat-days">
+          <div class="a-stat-label">稼働日数</div>
+          <div class="a-stat-val">${s.working_days||0}<span class="a-stat-unit">日</span></div>
+        </div>`;
+    } else {
+      grid.innerHTML = `
+        <div class="a-stat-box a-stat-units">
+          <div class="a-stat-label">合計単位数</div>
+          <div class="a-stat-val" style="color:var(--ok)">${s.total_units||0}<span class="a-stat-unit">単位</span></div>
+        </div>
+        <div class="a-stat-box a-stat-days">
+          <div class="a-stat-label">稼働日数</div>
+          <div class="a-stat-val">${s.working_days||0}<span class="a-stat-unit">日</span></div>
+        </div>`;
+    }
+  }
+
+  function renderAdminIncentive(data) {
+    const s = data.stats;
+    if (s.incentive_line == null || (s.working_days || 0) === 0) {
+      document.getElementById('adminIncentiveSection').style.display = 'none'; return;
+    }
+    const line = s.incentive_line, days = s.working_days;
+    if (data.type === 'nurse') {
+      document.getElementById('adminIncentiveGoal').textContent =
+        `目標：${(line * days).toFixed(1)}時間　／　実績：${(s.total||0).toFixed(1)}時間`;
+    } else {
+      document.getElementById('adminIncentiveGoal').textContent =
+        `目標：${Math.round(line * days * 100)/100}単位　／　実績：${s.total_units||0}単位`;
+    }
+    document.getElementById('adminIncentiveMsg').innerHTML = s.incentive_triggered
+      ? '<div class="a-incentive-hit">お疲れ様です。インセンティブが発生しています！</div>'
+      : '<div class="a-incentive-ok">入力ありがとうございます。お疲れ様でした。</div>';
+  }
+
+  function buildNurseOptHtml(selected) {
+    let html = '<option value="">空白</option>';
+    for (let v = 0.5; v <= 10.0 + 0.001; v += 0.5) {
+      const val = Math.round(v * 10) / 10;
+      const sel = (selected != null && Math.abs(val - selected) < 0.001) ? ' selected' : '';
+      html += `<option value="${val}"${sel}>${val.toFixed(1)}時間</option>`;
+    }
+    return html;
+  }
+  function buildRehabOptHtml(selected) {
+    let html = '<option value="">空白</option>';
+    for (let v = 1; v <= 50; v++) {
+      const sel = (selected != null && v === selected) ? ' selected' : '';
+      html += `<option value="${v}"${sel}>${v}単位</option>`;
+    }
+    return html;
+  }
+
+  function buildAdminRowHtml(d, data, dateStr, isEdit) {
+    const wdClass = d.weekday === '土' ? 'sat-a' : d.weekday === '日' ? 'sun-a' : '';
+    const dateCell = `<td class="date-cell-a"><span class="${wdClass}">${data.month}/${d.day}（${d.weekday}）</span></td>`;
+    if (isEdit) {
+      const saveBtns = `<div class="td-btns">
+        <button class="btn btn-sm btn-blue" onclick="saveAdminRow(${d.day},'${dateStr}')">保存</button>
+        <button class="btn btn-sm" style="background:#eef0f4;color:var(--muted)" onclick="cancelAdminEdit(${d.day})">×</button>
+      </div>`;
+      if (data.type === 'nurse') {
+        return dateCell +
+          `<td><select id="eK_${d.day}" class="edit-sel">${buildNurseOptHtml(d.kaigo)}</select></td>` +
+          `<td><select id="eI_${d.day}" class="edit-sel">${buildNurseOptHtml(d.iryo)}</select></td>` +
+          `<td>—</td><td>${saveBtns}</td>`;
+      } else {
+        return dateCell +
+          `<td><select id="eV_${d.day}" class="edit-sel">${buildRehabOptHtml(d.value)}</select></td>` +
+          `<td>${saveBtns}</td>`;
+      }
+    } else {
+      if (data.type === 'nurse') {
+        return dateCell +
+          `<td>${d.kaigo != null ? d.kaigo.toFixed(1) : '—'}</td>` +
+          `<td>${d.iryo  != null ? d.iryo.toFixed(1)  : '—'}</td>` +
+          `<td>${d.total != null ? d.total.toFixed(1) : '—'}</td>` +
+          `<td><button class="btn btn-sm btn-blue" onclick="editAdminRow(${d.day})">修正</button></td>`;
+      } else {
+        return dateCell +
+          `<td>${d.value != null ? d.value : '—'}</td>` +
+          `<td><button class="btn btn-sm btn-blue" onclick="editAdminRow(${d.day})">修正</button></td>`;
+      }
+    }
+  }
+
+  function renderAdminTable(data) {
+    const head = document.getElementById('adminTableHead');
+    const body = document.getElementById('adminTableBody');
+    body.innerHTML = '';
+    if (data.type === 'nurse') {
+      head.innerHTML = '<tr><th>日付</th><th><span class="badge badge-nurse" style="font-size:10px">介護</span></th><th><span class="badge" style="background:#fef3c7;color:#9a3412;font-size:10px">医療</span></th><th>合計</th><th></th></tr>';
+    } else {
+      head.innerHTML = '<tr><th>日付</th><th>単位数</th><th></th></tr>';
+    }
+    for (const d of data.days) {
+      const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
+      const tr = document.createElement('tr');
+      tr.id = `aRow_${d.day}`;
+      tr.innerHTML = buildAdminRowHtml(d, data, dateStr, false);
+      body.appendChild(tr);
+    }
+  }
+
+  function editAdminRow(day) {
+    const d = currentAdminData.days.find(x => x.day === day);
+    const dateStr = `${currentAdminData.year}-${String(currentAdminData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    document.getElementById(`aRow_${day}`).innerHTML = buildAdminRowHtml(d, currentAdminData, dateStr, true);
+  }
+  function cancelAdminEdit(day) {
+    const d = currentAdminData.days.find(x => x.day === day);
+    const dateStr = `${currentAdminData.year}-${String(currentAdminData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    document.getElementById(`aRow_${day}`).innerHTML = buildAdminRowHtml(d, currentAdminData, dateStr, false);
+  }
+  async function saveAdminRow(day, dateStr) {
+    const staffId = document.getElementById('viewStaff').value;
+    let body;
+    if (currentAdminData.type === 'nurse') {
+      const kVal = document.getElementById(`eK_${day}`).value;
+      const iVal = document.getElementById(`eI_${day}`).value;
+      body = { staffId, date: dateStr, kaigo: kVal === '' ? null : Number(kVal), iryo: iVal === '' ? null : Number(iVal) };
+    } else {
+      const vVal = document.getElementById(`eV_${day}`).value;
+      body = { staffId, date: dateStr, value: vVal === '' ? null : Number(vVal) };
+    }
+    const res = await fetch('/api/admin/record', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅ 保存しました'); loadAdminMonthly(); }
+    else showToast('エラー: ' + (data.error || '保存失敗'));
   }
 
   // ── インセンティブ設定 ────────────────────────────────────────
