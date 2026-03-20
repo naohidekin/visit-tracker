@@ -18,7 +18,7 @@ app.use(csession({
   httpOnly: true,
   sameSite: 'lax',
 }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── 定数 ──────────────────────────────────────────────────────
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
