@@ -663,6 +663,19 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
   }
 });
 
+app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
+  const { name, furigana_family, furigana_given } = req.body;
+  if (!name) return res.status(400).json({ error: '氏名は必須です' });
+  const data  = loadStaff();
+  const staff = data.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  staff.name             = name;
+  staff.furigana_family  = furigana_family  ?? staff.furigana_family;
+  staff.furigana_given   = furigana_given   ?? staff.furigana_given;
+  saveStaff(data);
+  res.json({ success: true, staff: data.staff });
+});
+
 app.delete('/api/admin/staff/:id', requireAdmin, (req, res) => {
   const data = loadStaff();
   const idx  = data.staff.findIndex(s => s.id === req.params.id);

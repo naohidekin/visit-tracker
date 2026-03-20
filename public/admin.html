@@ -60,6 +60,8 @@
     .badge-nurse{background:#dbeafe;color:#1e40af}
     .badge-rehab{background:#dcfce7;color:#166534}
     .td-btns{display:flex;gap:6px;flex-wrap:wrap}
+    .edit-input{padding:5px 8px;font-size:13px;border:1.5px solid var(--blue);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;width:100%;min-width:80px;box-sizing:border-box}
+    .btn-edit{background:#6b7a99;color:#fff}
     /* ── メッセージ ── */
     .msg{display:none;border-radius:8px;padding:9px 13px;font-size:13px;margin-bottom:12px}
     .msg.err{background:#fee;color:var(--danger)}
@@ -358,6 +360,22 @@
     updateAdminStaffSelect();
   }
 
+  function buildStaffRowHtml(s, badge, colInfo, furi) {
+    return `
+      <td><strong>${s.name}</strong></td>
+      <td style="font-size:12px;color:var(--muted)">${furi}</td>
+      <td>${badge}</td>
+      <td style="font-size:12px;font-family:monospace">${s.id}</td>
+      <td>${colInfo}</td>
+      <td>
+        <div class="td-btns">
+          <button class="btn btn-sm btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
+          <button class="btn btn-sm btn-reset" onclick="askReset('${s.id}','${s.name}')">PWリセット</button>
+          <button class="btn btn-sm btn-danger" onclick="askDelete('${s.id}','${s.name}')">削除</button>
+        </div>
+      </td>`;
+  }
+
   function renderTable() {
     const tbody = document.getElementById('staffBody');
     tbody.innerHTML = '';
@@ -370,20 +388,63 @@
         ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
         : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${s.name}</strong></td>
-        <td style="font-size:12px;color:var(--muted)">${furi}</td>
-        <td>${badge}</td>
-        <td style="font-size:12px;font-family:monospace">${s.id}</td>
-        <td>${colInfo}</td>
-        <td>
-          <div class="td-btns">
-            <button class="btn btn-sm btn-reset" onclick="askReset('${s.id}','${s.name}')">PWリセット</button>
-            <button class="btn btn-sm btn-danger" onclick="askDelete('${s.id}','${s.name}')">削除</button>
-          </div>
-        </td>`;
+      tr.dataset.staffId = s.id;
+      tr.innerHTML = buildStaffRowHtml(s, badge, colInfo, furi);
       tbody.appendChild(tr);
     }
+  }
+
+  function editStaffRow(id) {
+    const s = staffList.find(x => x.id === id);
+    if (!s) return;
+    const tr = document.querySelector(`tr[data-staff-id="${id}"]`);
+    if (!tr) return;
+    const furi_f = s.furigana_family || '';
+    const furi_g = s.furigana_given  || '';
+    tr.innerHTML = `
+      <td><input class="edit-input" id="edit-name-${id}" value="${s.name}"></td>
+      <td>
+        <input class="edit-input" id="edit-furi-f-${id}" value="${furi_f}" placeholder="姓ふりがな" style="margin-bottom:4px">
+        <input class="edit-input" id="edit-furi-g-${id}" value="${furi_g}" placeholder="名ふりがな">
+      </td>
+      <td colspan="3" style="font-size:12px;color:var(--muted)">種別・ID・列は変更不可</td>
+      <td>
+        <div class="td-btns">
+          <button class="btn btn-sm btn-green" onclick="saveStaffRow('${id}')">保存</button>
+          <button class="btn btn-sm" onclick="cancelStaffEdit('${id}')">キャンセル</button>
+        </div>
+      </td>`;
+  }
+
+  function cancelStaffEdit(id) {
+    const s = staffList.find(x => x.id === id);
+    if (!s) return;
+    const tr = document.querySelector(`tr[data-staff-id="${id}"]`);
+    if (!tr) return;
+    const furi    = (s.furigana_family || '') + (s.furigana_given || '');
+    const badge   = s.type === 'nurse'
+      ? '<span class="badge badge-nurse">看護師</span>'
+      : '<span class="badge badge-rehab">リハビリ</span>';
+    const colInfo = s.type === 'nurse'
+      ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
+      : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
+    tr.innerHTML = buildStaffRowHtml(s, badge, colInfo, furi);
+  }
+
+  async function saveStaffRow(id) {
+    const name    = document.getElementById(`edit-name-${id}`).value.trim();
+    const furi_f  = document.getElementById(`edit-furi-f-${id}`).value.trim();
+    const furi_g  = document.getElementById(`edit-furi-g-${id}`).value.trim();
+    if (!name) { alert('氏名を入力してください'); return; }
+    const res  = await fetch(`/api/admin/staff/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, furigana_family: furi_f, furigana_given: furi_g }),
+    });
+    const data = await res.json();
+    if (!data.success) { alert(data.error || '保存に失敗しました'); return; }
+    staffList = data.staff;
+    renderTable();
   }
 
   // ── スタッフ追加 ─────────────────────────────────────────────
