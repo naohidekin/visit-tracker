@@ -137,12 +137,8 @@ app.post('/api/change-password', requireStaff, async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'パラメータが不足しています' });
-  const SPECIAL_RE = /[!@#$%^&*()\-_=+\[\]{};':",.<>/?\\|`~]/;
-  if (
-    newPassword.length < 4 || newPassword.length > 20 ||
-    !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) ||
-    !/[0-9]/.test(newPassword) || !SPECIAL_RE.test(newPassword)
-  ) return res.status(400).json({ error: 'パスワードは大文字・小文字・数字・記号を含む4〜20文字で設定してください' });
+  if (newPassword.length < 4 || newPassword.length > 20)
+    return res.status(400).json({ error: 'パスワードは4〜20文字で設定してください' });
   if (newPassword !== confirmPassword)
     return res.status(400).json({ error: '新しいパスワードが一致しません' });
 
