@@ -286,10 +286,10 @@
 
   // ── ピッカー用オプション生成 ──────────────────────────────────
   const NURSE_OPTS = [];
-  for (let v = 0.5; v <= 24.0 + 0.001; v += 0.5) NURSE_OPTS.push(Math.round(v * 10) / 10);
+  for (let v = 0.5; v <= 10.0 + 0.001; v += 0.5) NURSE_OPTS.push(Math.round(v * 10) / 10);
 
   const REHAB_OPTS = [];
-  for (let v = 1; v <= 100; v++) REHAB_OPTS.push(v);
+  for (let v = 1; v <= 50; v++) REHAB_OPTS.push(v);
 
   // ── ピッカー状態 ─────────────────────────────────────────────
   const pv = { kaigo: null, iryo: null, rehab: null };
