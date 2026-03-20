@@ -449,12 +449,12 @@
   }
   function buildRehabLineOpts() {
     const opts = [];
-    for (let v = 0; v <= 20.0 + 0.001; v += 0.1) opts.push(Math.round(v * 10) / 10);
+    for (let v = 0; v <= 20.0 + 0.001; v += 0.25) opts.push(Math.round(v * 100) / 100);
     return opts;
   }
   function buildSelectHtml(opts, selected, unit) {
     return opts.map(v => {
-      const label = unit === 'h' ? v.toFixed(1) + ' 時間/日' : v.toFixed(1) + ' 単位/日';
+      const label = unit === 'h' ? v.toFixed(1) + ' 時間/日' : v.toFixed(2) + ' 単位/日';
       const sel = Math.abs(v - selected) < 0.001 ? ' selected' : '';
       return `<option value="${v}"${sel}>${label}</option>`;
     }).join('');
