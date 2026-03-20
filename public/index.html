@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>訪問単位数入力 | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2E75B6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="にこっと">
+  <link rel="apple-touch-icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --kaigo:#1e40af;--kaigo-bg:#dbeafe;--iryo:#9a3412;--iryo-bg:#fef3c7;
+      --ok:#0a7c42;--ok-bg:#e6f7ef;--warn:#b45309;
+      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+
+    /* ── ヘッダー ── */
+    header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .header-left{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .header-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .header-type{font-size:11px;opacity:.75}
+    .header-nav{display:flex;gap:8px;align-items:center;flex-shrink:0}
+    .header-nav a{color:#fff;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.5);padding:4px 9px;border-radius:6px;white-space:nowrap}
+    .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 9px;border-radius:6px;cursor:pointer;white-space:nowrap}
+
+    /* ── カード ── */
+    .container{padding:16px}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
+    .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+
+    /* ── 日付入力 ── */
+    input[type="date"]{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;background:var(--white);color:var(--text);-webkit-appearance:none}
+    input[type="date"]:focus{border-color:var(--blue)}
+
+    /* ── ピッカー共通 ── */
+    .picker-wrap{position:relative}
+    .picker-btn{
+      width:100%;padding:13px 14px;
+      border:1.5px solid var(--border);border-radius:9px;
+      font-size:17px;font-weight:700;font-family:inherit;
+      background:var(--white);cursor:pointer;
+      display:flex;justify-content:space-between;align-items:center;
+      transition:border-color .15s;
+    }
+    .picker-btn.open{border-color:var(--blue);border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .picker-btn .chevron{font-size:11px;color:var(--muted);transition:transform .2s}
+    .picker-btn.open .chevron{transform:rotate(180deg)}
+    .picker-dropdown{
+      position:absolute;bottom:calc(100% - 1px);left:0;right:0;
+      background:var(--white);
+      border:1.5px solid var(--blue);border-bottom:none;
+      border-top-left-radius:10px;border-top-right-radius:10px;
+      max-height:220px;overflow-y:auto;
+      z-index:50;
+      box-shadow:0 -6px 20px rgba(0,0,0,.12);
+    }
+    .picker-dropdown::-webkit-scrollbar{width:4px}
+    .picker-dropdown::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+    .picker-item{
+      padding:10px 16px;font-size:15px;cursor:pointer;
+      border-bottom:1px solid #f0f4f8;
+      transition:background .1s;
+    }
+    .picker-item:first-child{border-top-left-radius:8px;border-top-right-radius:8px}
+    .picker-item:last-child{border-bottom:none}
+    .picker-item:hover{background:#f0f4fb}
+    .picker-item.selected{background:var(--blue);color:#fff;font-weight:700}
+    .picker-item.empty-opt{color:var(--muted);font-style:italic}
+    .picker-item.empty-opt.selected{background:#eef0f4;color:var(--muted)}
+
+    /* ── 看護師 横並びグリッド ── */
+    .nurse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .nurse-col-label{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+    .badge-kaigo{background:var(--kaigo-bg);color:var(--kaigo);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
+    .badge-iryo {background:var(--iryo-bg); color:var(--iryo); padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
+    .nurse-col.kaigo .picker-btn{color:var(--kaigo)}
+    .nurse-col.iryo  .picker-btn{color:var(--iryo)}
+    .nurse-col .picker-btn .val-empty{color:var(--muted);font-weight:400;font-size:14px}
+
+    /* ── 合計バー ── */
+    .total-bar{background:var(--blue-dark);color:#fff;border-radius:9px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .total-bar span{font-size:13px;opacity:.85}
+    .total-bar strong{font-size:20px;font-weight:800}
+
+    /* ── 注意書き ── */
+    .notes{background:#f8faff;border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:16px}
+    .notes p{font-size:11.5px;color:var(--muted);line-height:1.8}
+
+    /* ── 送信ボタン ── */
+    .submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
+    .submit-btn:active{background:var(--blue-dark)}
+    .submit-btn:disabled{background:#9ab3d1;cursor:default}
+
+    /* ── 結果ビュー ── */
+    .result-header{text-align:center;padding:16px 0 8px}
+    .result-header .check{font-size:48px;margin-bottom:8px}
+    .result-header h2{font-size:17px;font-weight:700;color:var(--ok)}
+    .result-header .date-label{font-size:15px;color:var(--text);margin-top:6px;font-weight:600}
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .stat-box{border-radius:10px;padding:12px 14px}
+    .stat-box.kaigo-box{background:var(--kaigo-bg)}
+    .stat-box.iryo-box {background:var(--iryo-bg)}
+    .stat-box.total-box{background:#f0fdf4;grid-column:1/-1}
+    .stat-box.units-box{background:#f0fdf4}
+    .stat-box .stat-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .stat-box .stat-val{font-size:22px;font-weight:800;color:var(--text)}
+    .stat-box .stat-unit{font-size:12px;color:var(--muted);margin-left:2px}
+    .section-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+    .monthly-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .m-box{background:var(--bg);border-radius:10px;padding:12px 14px}
+    .m-box .m-label{font-size:11px;color:var(--muted);margin-bottom:4px}
+    .m-box .m-val{font-size:19px;font-weight:700;color:var(--blue-dark)}
+    .m-box .m-unit{font-size:12px;color:var(--muted);margin-left:2px}
+    .continue-btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
+    .continue-btn:active{background:var(--blue-dark)}
+    .loading{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+
+    /* ── 上書きモーダル ── */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.show{display:flex}
+    .modal{background:#fff;border-radius:var(--radius);padding:22px 20px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+    .modal h2{font-size:15px;color:var(--warn);font-weight:700;margin-bottom:10px}
+    .modal p{font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px}
+    .modal-btns{display:flex;gap:10px}
+    .modal-btns button{flex:1;padding:12px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer}
+    .btn-cancel{background:#eef0f4;color:var(--muted)}
+    .btn-ok{background:var(--blue);color:#fff}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="header-name" id="headerName">読み込み中...</div>
+    <div class="header-type" id="headerType"></div>
+  </div>
+  <nav class="header-nav">
+    <a href="/change-password">PW変更</a>
+    <button class="logout-btn" onclick="logout()">ログアウト</button>
+  </nav>
+</header>
+
+<!-- ── 入力フォームビュー ── -->
+<div id="formView" class="container" style="display:none">
+
+  <!-- 日付 -->
+  <div class="card">
+    <div class="card-title">📅 訪問日</div>
+    <input type="date" id="dateInput" required>
+  </div>
+
+  <!-- 看護師 -->
+  <div class="card" id="nurseCard" style="display:none">
+    <div class="card-title">💉 訪問単位数</div>
+    <div class="nurse-grid">
+      <div class="nurse-col kaigo">
+        <div class="nurse-col-label"><span class="badge-kaigo">介護</span></div>
+        <div class="picker-wrap">
+          <button type="button" class="picker-btn" id="kaigoBtn" onclick="togglePicker('kaigo')">
+            <span id="kaigoDisplay" class="val-empty">空白</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div class="picker-dropdown" id="kaigoList" style="display:none"></div>
+        </div>
+      </div>
+      <div class="nurse-col iryo">
+        <div class="nurse-col-label"><span class="badge-iryo">医療</span></div>
+        <div class="picker-wrap">
+          <button type="button" class="picker-btn" id="iryoBtn" onclick="togglePicker('iryo')">
+            <span id="iryoDisplay" class="val-empty">空白</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div class="picker-dropdown" id="iryoList" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+    <div class="total-bar">
+      <span>本日の合計</span>
+      <div><strong id="totalVal">0.0</strong><span style="font-size:14px;opacity:.75;margin-left:4px">時間</span></div>
+    </div>
+    <div class="notes">
+      <p>※ 合計時間を時間単位で入力（例：390分 → 6.5）</p>
+      <p>※ 30分未満＝30分　30〜60分＝60分　60〜90分＝90分で計算</p>
+      <p>※ 該当しない場合は空白のままでOK</p>
+    </div>
+  </div>
+
+  <!-- リハビリ -->
+  <div class="card" id="rehabCard" style="display:none">
+    <div class="card-title">🏃 訪問単位数</div>
+    <div class="picker-wrap" style="margin-bottom:14px">
+      <button type="button" class="picker-btn" id="rehabBtn"
+              onclick="togglePicker('rehab')"
+              style="font-size:20px;color:var(--blue-dark)">
+        <span id="rehabDisplay" class="val-empty" style="font-size:16px;font-weight:400">〇〇単位</span>
+        <span class="chevron">▼</span>
+      </button>
+      <div class="picker-dropdown" id="rehabList" style="display:none"></div>
+    </div>
+    <div class="notes">
+      <p>※ 10分を「1」として計算した数値を入力</p>
+      <p>※「医療」は1件40分＝「4」として計算して入力</p>
+    </div>
+  </div>
+
+  <div style="padding:0 0 16px">
+    <button class="submit-btn" id="submitBtn" onclick="handleSubmit()">記録する</button>
+  </div>
+</div>
+
+<!-- ── 送信結果ビュー ── -->
+<div id="resultView" class="container" style="display:none">
+  <div class="card">
+    <div class="result-header">
+      <div class="check">✅</div>
+      <h2>記録を送信しました</h2>
+      <div class="date-label" id="resultDateLabel"></div>
+    </div>
+  </div>
+
+  <!-- 本日（看護師） -->
+  <div class="card" id="nurseResult" style="display:none">
+    <div class="section-title">本日の入力内容</div>
+    <div class="stats-grid">
+      <div class="stat-box kaigo-box">
+        <div class="stat-label"><span class="badge-kaigo">介護</span></div>
+        <div class="stat-val" id="r-kaigo">—</div>
+      </div>
+      <div class="stat-box iryo-box">
+        <div class="stat-label"><span class="badge-iryo">医療</span></div>
+        <div class="stat-val" id="r-iryo">—</div>
+      </div>
+      <div class="stat-box total-box">
+        <div class="stat-label">合計</div>
+        <div class="stat-val" id="r-total">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 本日（リハビリ） -->
+  <div class="card" id="rehabResult" style="display:none">
+    <div class="section-title">本日の入力内容</div>
+    <div class="stats-grid" style="grid-template-columns:1fr">
+      <div class="stat-box units-box">
+        <div class="stat-label">訪問単位数</div>
+        <div class="stat-val" id="r-units">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 月の実績 -->
+  <div class="card">
+    <div class="section-title" id="monthlyTitle">月の実績</div>
+    <div id="monthlyLoading" class="loading">集計中...</div>
+    <div class="monthly-grid" id="monthlyGrid" style="display:none"></div>
+  </div>
+
+  <div style="padding:0 0 16px">
+    <button class="continue-btn" onclick="continueInput()">続けて入力する</button>
+  </div>
+</div>
+
+<!-- 上書き確認モーダル -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <h2>⚠️ 上書き確認</h2>
+    <p id="confirmMsg"></p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-ok" onclick="doSubmit()">上書きする</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const WEEKDAYS = ['日','月','火','水','木','金','土'];
+  let currentUser = null;
+
+  // ── ピッカー用オプション生成 ──────────────────────────────────
+  const NURSE_OPTS = [];
+  for (let v = 0.5; v <= 24.0 + 0.001; v += 0.5) NURSE_OPTS.push(Math.round(v * 10) / 10);
+
+  const REHAB_OPTS = [];
+  for (let v = 1; v <= 100; v++) REHAB_OPTS.push(v);
+
+  // ── ピッカー状態 ─────────────────────────────────────────────
+  const pv = { kaigo: null, iryo: null, rehab: null };
+
+  function buildList(name) {
+    const list = document.getElementById(name + 'List');
+    const opts = name === 'rehab' ? REHAB_OPTS : NURSE_OPTS;
+    list.innerHTML = '';
+
+    // 空白オプション
+    const empty = document.createElement('div');
+    empty.className = 'picker-item empty-opt' + (pv[name] === null ? ' selected' : '');
+    empty.textContent = '空白';
+    empty.onclick = () => selectVal(name, null);
+    list.appendChild(empty);
+
+    for (const opt of opts) {
+      const item = document.createElement('div');
+      item.className = 'picker-item' + (pv[name] === opt ? ' selected' : '');
+      item.textContent = name === 'rehab' ? `${opt}　単位` : `${opt.toFixed(1)}　時間`;
+      item.onclick = () => selectVal(name, opt);
+      list.appendChild(item);
+    }
+
+    // 選択中のアイテムにスクロール
+    const sel = list.querySelector('.selected');
+    if (sel) setTimeout(() => sel.scrollIntoView({ block: 'center' }), 0);
+  }
+
+  function togglePicker(name) {
+    const list = document.getElementById(name + 'List');
+    const btn  = document.getElementById(name + 'Btn');
+    const isOpen = list.style.display !== 'none';
+    closeAllPickers();
+    if (!isOpen) {
+      buildList(name);
+      list.style.display = 'block';
+      btn.classList.add('open');
+    }
+  }
+
+  function closeAllPickers() {
+    for (const n of ['kaigo', 'iryo', 'rehab']) {
+      const l = document.getElementById(n + 'List');
+      const b = document.getElementById(n + 'Btn');
+      if (l) { l.style.display = 'none'; }
+      if (b) { b.classList.remove('open'); }
+    }
+  }
+
+  function selectVal(name, val) {
+    pv[name] = val;
+    const display = document.getElementById(name + 'Display');
+    if (val === null) {
+      display.textContent = name === 'rehab' ? '〇〇単位' : '空白';
+      display.className = 'val-empty';
+    } else if (name === 'rehab') {
+      display.textContent = val + '　単位';
+      display.className = '';
+      display.style.color = 'var(--blue-dark)';
+    } else {
+      display.textContent = val.toFixed(1) + '　時間';
+      display.className = '';
+      display.style.color = name === 'kaigo' ? 'var(--kaigo)' : 'var(--iryo)';
+    }
+    closeAllPickers();
+    if (name !== 'rehab') updateTotal();
+  }
+
+  function updateTotal() {
+    const total = (pv.kaigo || 0) + (pv.iryo || 0);
+    document.getElementById('totalVal').textContent = total.toFixed(1);
+  }
+
+  // 外側クリックでピッカーを閉じる
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.picker-wrap')) closeAllPickers();
+  });
+
+  // ── 初期化 ─────────────────────────────────────────────────
+  async function init() {
+    const res = await fetch('/api/me');
+    if (!res.ok) { location.href = '/login'; return; }
+    currentUser = await res.json();
+
+    document.getElementById('headerName').textContent = currentUser.name;
+    document.getElementById('headerType').textContent =
+      currentUser.type === 'nurse' ? '看護師' : 'リハビリ';
+
+    const today = toDateStr(new Date());
+    const di = document.getElementById('dateInput');
+    di.value = today;
+    di.max   = today;
+
+    if (currentUser.type === 'nurse') {
+      document.getElementById('nurseCard').style.display = 'block';
+    } else {
+      document.getElementById('rehabCard').style.display = 'block';
+    }
+    document.getElementById('formView').style.display = 'block';
+  }
+
+  function toDateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function formatDateJP(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+  }
+
+  // ── 送信処理 ─────────────────────────────────────────────
+  async function handleSubmit() {
+    const date = document.getElementById('dateInput').value;
+    if (!date) { alert('訪問日を入力してください'); return; }
+    if (date > toDateStr(new Date())) { alert('未来の日付は記録できません'); return; }
+
+    if (currentUser.type === 'nurse') {
+      if (pv.kaigo === null && pv.iryo === null) {
+        alert('介護か医療のどちらかを選択してください'); return;
+      }
+    } else {
+      if (pv.rehab === null) { alert('単位数を選択してください'); return; }
+    }
+
+    // 上書きチェック
+    try {
+      const checkRes = await fetch('/api/record?' + new URLSearchParams({ date }));
+      if (checkRes.ok) {
+        const existing = await checkRes.json();
+        const msg = buildOverwriteMsg(existing, date);
+        if (msg) {
+          document.getElementById('confirmMsg').textContent = msg;
+          document.getElementById('confirmModal').classList.add('show');
+          return;
+        }
+      }
+    } catch (_) { /* チェック失敗時はそのまま送信 */ }
+
+    await doSubmit();
+  }
+
+  function buildOverwriteMsg(ex, date) {
+    const label = formatDateJP(date);
+    if (currentUser.type === 'nurse') {
+      if ((ex.kaigo !== null && ex.kaigo !== '') || (ex.iryo !== null && ex.iryo !== '')) {
+        const k = ex.kaigo ?? '—'; const i = ex.iryo ?? '—';
+        return `${label}の記録（介護：${k}時間 / 医療：${i}時間）が既に入力されています。上書きしますか？`;
+      }
+    } else {
+      if (ex.value !== null && ex.value !== '') {
+        return `${label}の記録（${ex.value}単位）が既に入力されています。上書きしますか？`;
+      }
+    }
+    return null;
+  }
+
+  function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+  }
+
+  async function doSubmit() {
+    closeModal();
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = '送信中...';
+
+    const date = document.getElementById('dateInput').value;
+    const body = currentUser.type === 'nurse'
+      ? { date, kaigo: pv.kaigo, iryo: pv.iryo }
+      : { date, value: pv.rehab };
+
+    const res  = await fetch('/api/record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    btn.disabled = false; btn.textContent = '記録する';
+
+    if (!data.success) { alert('エラー: ' + (data.error || '送信失敗')); return; }
+    await showResult(date, data);
+  }
+
+  // ── 結果ビュー ────────────────────────────────────────────
+  async function showResult(date, submitted) {
+    document.getElementById('formView').style.display   = 'none';
+    document.getElementById('resultView').style.display = 'block';
+    document.getElementById('resultDateLabel').textContent = formatDateJP(date) + ' の記録を送信しました';
+
+    if (currentUser.type === 'nurse') {
+      const k = submitted.kaigo !== null && submitted.kaigo !== '' ? Number(submitted.kaigo) : null;
+      const i = submitted.iryo  !== null && submitted.iryo  !== '' ? Number(submitted.iryo)  : null;
+      const total = (k || 0) + (i || 0);
+      document.getElementById('r-kaigo').innerHTML = k != null ? `${k.toFixed(1)}<span class="stat-unit">時間</span>` : '—';
+      document.getElementById('r-iryo').innerHTML  = i != null ? `${i.toFixed(1)}<span class="stat-unit">時間</span>` : '—';
+      document.getElementById('r-total').innerHTML = `${total.toFixed(1)}<span class="stat-unit">時間</span>`;
+      document.getElementById('nurseResult').style.display = 'block';
+    } else {
+      const v = submitted.value !== null && submitted.value !== '' ? Number(submitted.value) : null;
+      document.getElementById('r-units').innerHTML = v != null ? `${v}<span class="stat-unit">単位</span>` : '—';
+      document.getElementById('rehabResult').style.display = 'block';
+    }
+
+    // 月次実績
+    const d = new Date(date + 'T00:00:00');
+    const year = d.getFullYear(), month = d.getMonth() + 1;
+    document.getElementById('monthlyTitle').textContent = `${month}月の実績`;
+    document.getElementById('monthlyLoading').style.display = 'block';
+    document.getElementById('monthlyGrid').style.display    = 'none';
+
+    try {
+      const r = await fetch(`/api/monthly-stats?year=${year}&month=${month}`);
+      renderMonthlyStats(await r.json(), month);
+    } catch (_) {
+      document.getElementById('monthlyLoading').textContent = '集計の取得に失敗しました';
+    }
+  }
+
+  function renderMonthlyStats(stats, month) {
+    document.getElementById('monthlyLoading').style.display = 'none';
+    const grid = document.getElementById('monthlyGrid');
+    grid.style.display = 'grid';
+    if (currentUser.type === 'nurse') {
+      grid.innerHTML = `
+        <div class="m-box"><div class="m-label">介護 合計</div>
+          <div class="m-val">${(stats.total_kaigo||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
+        <div class="m-box"><div class="m-label">医療 合計</div>
+          <div class="m-val">${(stats.total_iryo||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
+        <div class="m-box" style="background:var(--ok-bg)"><div class="m-label">合計時間</div>
+          <div class="m-val" style="color:var(--ok)">${(stats.total||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
+        <div class="m-box"><div class="m-label">稼働日数</div>
+          <div class="m-val">${stats.working_days||0}<span class="m-unit">日</span></div></div>`;
+    } else {
+      grid.innerHTML = `
+        <div class="m-box" style="background:var(--ok-bg)"><div class="m-label">合計単位数</div>
+          <div class="m-val" style="color:var(--ok)">${stats.total_units||0}<span class="m-unit">単位</span></div></div>
+        <div class="m-box"><div class="m-label">稼働日数</div>
+          <div class="m-val">${stats.working_days||0}<span class="m-unit">日</span></div></div>`;
+    }
+  }
+
+  function continueInput() {
+    // ピッカー状態リセット
+    pv.kaigo = null; pv.iryo = null; pv.rehab = null;
+    selectVal('kaigo', null); selectVal('iryo', null); selectVal('rehab', null);
+    updateTotal();
+    // 日付を今日に戻す
+    document.getElementById('dateInput').value = toDateStr(new Date());
+    // 結果ビューを隠す
+    document.getElementById('nurseResult').style.display  = 'none';
+    document.getElementById('rehabResult').style.display  = 'none';
+    document.getElementById('resultView').style.display   = 'none';
+    document.getElementById('formView').style.display     = 'block';
+    window.scrollTo(0, 0);
+  }
+
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  init();
+</script>
+</body>
+</html>

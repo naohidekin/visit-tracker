@@ -1,0 +1,85 @@
+{
+  "staff": [
+    {
+      "id": "ubukata01",
+      "name": "生方雪絵",
+      "furigana_family": "うぶかた",
+      "furigana_given": "ゆきえ",
+      "type": "nurse",
+      "kaigo_col": "C",
+      "iryo_col": "D",
+      "seq": 1,
+      "initial_pw": "YU01",
+      "password_hash": "$2a$10$oKUIdud3Tv3ICCb/gJ8nfebCYlZ72ez9nwEAdWRog5yVqZ9cseH2C"
+    },
+    {
+      "id": "suzuki02",
+      "name": "鈴木幸平",
+      "furigana_family": "すずき",
+      "furigana_given": "こうへい",
+      "type": "nurse",
+      "kaigo_col": "E",
+      "iryo_col": "F",
+      "seq": 2,
+      "initial_pw": "KS02",
+      "password_hash": "$2a$10$fXKRkYqyrJaul5V35U79BONw9y81Y1CLTs56ySqa/yynA2PHdPPpe"
+    },
+    {
+      "id": "goto03",
+      "name": "後藤来実",
+      "furigana_family": "ごとう",
+      "furigana_given": "くるみ",
+      "type": "nurse",
+      "kaigo_col": "G",
+      "iryo_col": "H",
+      "seq": 3,
+      "initial_pw": "KG03",
+      "password_hash": "$2a$10$wsq/nSw7Do23Psr.Rc1IBesr99IeGMWtYFPu4Ii9ugN8cQX.TNfZS"
+    },
+    {
+      "id": "kamata04",
+      "name": "鎌田由布",
+      "furigana_family": "かまた",
+      "furigana_given": "ゆふ",
+      "type": "nurse",
+      "kaigo_col": "I",
+      "iryo_col": "J",
+      "seq": 4,
+      "initial_pw": "YK04",
+      "password_hash": "$2a$10$JoF4GlaGTY9YUW1m/a0oX.sp3cTYuI2VzjVevSiQZusO/tVBvEyjW"
+    },
+    {
+      "id": "nakashima05",
+      "name": "中島大智",
+      "furigana_family": "なかしま",
+      "furigana_given": "だいち",
+      "type": "rehab",
+      "col": "K",
+      "seq": 5,
+      "initial_pw": "DN05",
+      "password_hash": "$2a$10$9/J6C7HIT2Bkx76VbQ186.x2F1OqASs3VIkaOsLK8RiJk/.rRy.ey"
+    },
+    {
+      "id": "ozawa06",
+      "name": "小澤悠那",
+      "furigana_family": "おざわ",
+      "furigana_given": "ゆうな",
+      "type": "rehab",
+      "col": "L",
+      "seq": 6,
+      "initial_pw": "YO06",
+      "password_hash": "$2a$10$oCWyFpFJSr3F0IredydJ8etfExRwx5IqsWu6HJ2PowoWsthXimh5e"
+    },
+    {
+      "id": "ooe07",
+      "name": "大江綾子",
+      "furigana_family": "おおえ",
+      "furigana_given": "あやこ",
+      "type": "rehab",
+      "col": "M",
+      "seq": 7,
+      "initial_pw": "AO07",
+      "password_hash": "$2a$10$OaEhI0Glj2Y/rohCeLe9ZuuGgKON4KPpWyaweBinlhO7INhJqQ1Ou"
+    }
+  ]
+}

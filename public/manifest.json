@@ -1,0 +1,18 @@
+{
+  "name": "にこっと訪問看護ステーション",
+  "short_name": "にこっと",
+  "description": "にこっと訪問看護ステーション 訪問単位数入力アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2E75B6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

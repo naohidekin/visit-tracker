@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>管理者画面 | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;--green:#375623;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --danger:#c0392b;--ok:#0a7c42;--ok-bg:#e6f7ef;--radius:12px;--shadow:0 2px 12px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    header{background:var(--blue-dark);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+    header h1{font-size:16px;font-weight:700}
+    .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer}
+    .container{padding:16px;max-width:700px;margin:0 auto}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
+    .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e8edf5}
+    label{display:block;font-size:12px;font-weight:600;color:var(--blue-dark);margin-bottom:5px}
+    input,select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--white);outline:none;-webkit-appearance:none}
+    input:focus,select:focus{border-color:var(--blue)}
+    .field{margin-bottom:14px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .btn{padding:10px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s}
+    .btn:active{opacity:.75}
+    .btn-blue  {background:var(--blue);color:#fff}
+    .btn-green {background:var(--green);color:#fff}
+    .btn-full  {width:100%;padding:12px;font-size:14px}
+    .btn-sm    {padding:5px 11px;font-size:12px}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-reset {background:#e8a020;color:#fff}
+    /* ── ログイン ── */
+    #loginCard{max-width:360px;margin:60px auto 0}
+    #mainContent{display:none}
+    /* ── テーブル ── */
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
+    th{background:var(--blue-dark);color:#fff;padding:8px 10px;text-align:left;font-size:12px;white-space:nowrap}
+    td{padding:8px 10px;border-bottom:1px solid #eef0f4;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700}
+    .badge-nurse{background:#dbeafe;color:#1e40af}
+    .badge-rehab{background:#dcfce7;color:#166534}
+    .td-btns{display:flex;gap:6px;flex-wrap:wrap}
+    /* ── メッセージ ── */
+    .msg{display:none;border-radius:8px;padding:9px 13px;font-size:13px;margin-bottom:12px}
+    .msg.err{background:#fee;color:var(--danger)}
+    .msg.ok {background:var(--ok-bg);color:var(--ok)}
+    /* ── モーダル共通 ── */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.show{display:flex}
+    .modal{background:#fff;border-radius:14px;padding:22px 18px;width:100%;max-width:320px}
+    .modal h2{font-size:15px;margin-bottom:10px}
+    .modal p{font-size:13px;line-height:1.7;margin-bottom:18px;color:var(--text)}
+    .modal-btns{display:flex;gap:10px}
+    .modal-btns button{flex:1;padding:11px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer}
+    .m-cancel{background:#eef0f4;color:var(--muted)}
+    .m-ok    {background:var(--blue);color:#fff}
+    .m-del   {background:var(--danger);color:#fff}
+    /* ── PWリセット結果 ── */
+    .pw-result{display:none;background:var(--ok-bg);border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:var(--ok)}
+    /* ── ローディング ── */
+    .spinner{text-align:center;padding:14px;color:var(--muted);font-size:12px;display:none}
+    /* ── 自動生成ラベル ── */
+    .auto-label{font-size:10px;color:var(--muted);margin-top:3px}
+  </style>
+</head>
+<body>
+<header>
+  <h1>🔐 管理者画面 — 訪問単位数管理</h1>
+  <button class="logout-btn" onclick="adminLogout()">ログアウト</button>
+</header>
+
+<!-- ログイン -->
+<div class="card" id="loginCard">
+  <h2>管理者パスワード</h2>
+  <div class="msg err" id="loginErr"></div>
+  <div class="field">
+    <label for="pwInput">パスワード</label>
+    <input type="password" id="pwInput" placeholder="管理者パスワードを入力" autocomplete="current-password">
+  </div>
+  <button class="btn btn-blue btn-full" onclick="adminLogin()">ログイン</button>
+</div>
+
+<!-- メインコンテンツ -->
+<div id="mainContent" class="container">
+
+  <!-- スタッフ一覧 -->
+  <div class="card">
+    <h2>👥 スタッフ一覧</h2>
+    <div class="spinner" id="tableSpinner">読み込み中...</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>名前</th><th>ふりがな</th><th>職種</th><th>ID</th><th>列</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="staffBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- スタッフ追加 -->
+  <div class="card">
+    <h2>➕ スタッフ追加</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">追加すると全月シート（1〜12月）の4行目に列が自動作成されます。</p>
+    <div class="msg err" id="addErr"></div>
+    <div class="form-grid">
+      <div class="field">
+        <label>フルネーム</label>
+        <input type="text" id="newName" placeholder="山田 花子">
+      </div>
+      <div class="field">
+        <label>職種</label>
+        <select id="newType" onchange="autoGenerate()">
+          <option value="nurse">看護師</option>
+          <option value="rehab">リハビリ</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>ふりがな（姓）</label>
+        <input type="text" id="newFkana" placeholder="やまだ" oninput="autoGenerate()">
+      </div>
+      <div class="field">
+        <label>ふりがな（名）</label>
+        <input type="text" id="newGkana" placeholder="はなこ" oninput="autoGenerate()">
+      </div>
+      <div class="field">
+        <label>ログインID</label>
+        <input type="text" id="newLoginId" placeholder="yamada08">
+        <div class="auto-label" id="idAutoLabel"></div>
+      </div>
+      <div class="field">
+        <label>初期パスワード</label>
+        <input type="text" id="newInitialPw" placeholder="HY08">
+        <div class="auto-label" id="pwAutoLabel"></div>
+      </div>
+    </div>
+    <button class="btn btn-green btn-full" onclick="addStaff()" id="addBtn">追加する</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px">
+      ※ 追加処理には数秒かかります（全月シートの列追加のため）
+    </div>
+  </div>
+
+</div>
+
+<!-- 削除確認モーダル -->
+<div class="modal-overlay" id="delModal">
+  <div class="modal">
+    <h2 style="color:var(--danger)">⚠️ 削除確認</h2>
+    <p id="delMsg"></p>
+    <div class="modal-btns">
+      <button class="m-cancel" onclick="closeDelModal()">キャンセル</button>
+      <button class="m-del" onclick="confirmDelete()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- PWリセット確認モーダル -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal">
+    <h2 style="color:#e8a020">🔑 PW リセット確認</h2>
+    <p id="resetMsg"></p>
+    <div class="pw-result" id="resetResult"></div>
+    <div class="modal-btns" id="resetBtns">
+      <button class="m-cancel" onclick="closeResetModal()">キャンセル</button>
+      <button style="flex:1;padding:11px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:#e8a020;color:#fff" onclick="confirmReset()">リセットする</button>
+    </div>
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
+
+<script>
+  // ── ひらがな → ヘボン式ローマ字 ──────────────────────────────
+  const HIRA = {
+    'あ':'a','い':'i','う':'u','え':'e','お':'o',
+    'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
+    'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so',
+    'た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+    'な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no',
+    'は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+    'ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+    'や':'ya','ゆ':'yu','よ':'yo',
+    'ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro',
+    'わ':'wa','を':'wo','ん':'n',
+    'が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+    'ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo',
+    'だ':'da','ぢ':'ji','づ':'zu','で':'de','ど':'do',
+    'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo',
+    'ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po',
+    'きゃ':'kya','きゅ':'kyu','きょ':'kyo',
+    'しゃ':'sha','しゅ':'shu','しょ':'sho',
+    'ちゃ':'cha','ちゅ':'chu','ちょ':'cho',
+    'にゃ':'nya','にゅ':'nyu','にょ':'nyo',
+    'ひゃ':'hya','ひゅ':'hyu','ひょ':'hyo',
+    'みゃ':'mya','みゅ':'myu','みょ':'myo',
+    'りゃ':'rya','りゅ':'ryu','りょ':'ryo',
+    'ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo',
+    'じゃ':'ja','じゅ':'ju','じょ':'jo',
+    'びゃ':'bya','びゅ':'byu','びょ':'byo',
+    'ぴゃ':'pya','ぴゅ':'pyu','ぴょ':'pyo',
+    'っ':'',
+  };
+  function hiraToRomaji(str) {
+    let out = '';
+    for (let i = 0; i < str.length; i++) {
+      const two = str.slice(i, i+2);
+      if (HIRA[two] !== undefined) { out += HIRA[two]; i++; }
+      else out += HIRA[str[i]] ?? '';
+    }
+    return out;
+  }
+
+  // ── 状態 ──────────────────────────────────────────────────
+  let staffList = [];
+  let deleteTarget = '', resetTarget = '';
+
+  // ── 管理者ログイン ──────────────────────────────────────────
+  async function adminLogin() {
+    const pw  = document.getElementById('pwInput').value;
+    const err = document.getElementById('loginErr');
+    err.style.display = 'none';
+
+    const res  = await fetch('/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'block';
+      loadStaff();
+    } else {
+      err.textContent = data.error || 'ログイン失敗';
+      err.style.display = 'block';
+    }
+  }
+  document.getElementById('pwInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') adminLogin();
+  });
+
+  async function adminLogout() {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    location.reload();
+  }
+
+  // ── スタッフ一覧 ────────────────────────────────────────────
+  async function loadStaff() {
+    document.getElementById('tableSpinner').style.display = 'block';
+    const res  = await fetch('/api/admin/staff');
+    staffList  = await res.json();
+    document.getElementById('tableSpinner').style.display = 'none';
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('staffBody');
+    tbody.innerHTML = '';
+    for (const s of staffList) {
+      const furi  = (s.furigana_family || '') + (s.furigana_given || '');
+      const badge = s.type === 'nurse'
+        ? '<span class="badge badge-nurse">看護師</span>'
+        : '<span class="badge badge-rehab">リハビリ</span>';
+      const colInfo = s.type === 'nurse'
+        ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
+        : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${s.name}</strong></td>
+        <td style="font-size:12px;color:var(--muted)">${furi}</td>
+        <td>${badge}</td>
+        <td style="font-size:12px;font-family:monospace">${s.id}</td>
+        <td>${colInfo}</td>
+        <td>
+          <div class="td-btns">
+            <button class="btn btn-sm btn-reset" onclick="askReset('${s.id}','${s.name}')">PWリセット</button>
+            <button class="btn btn-sm btn-danger" onclick="askDelete('${s.id}','${s.name}')">削除</button>
+          </div>
+        </td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ── スタッフ追加 ─────────────────────────────────────────────
+  function autoGenerate() {
+    const fkana = document.getElementById('newFkana').value.trim();
+    const gkana = document.getElementById('newGkana').value.trim();
+    const nextSeq = Math.max(0, ...staffList.map(s => s.seq || 0)) + 1;
+    const seqStr  = String(nextSeq).padStart(2, '0');
+
+    if (fkana) {
+      const fRomaji = hiraToRomaji(fkana);
+      const loginId = fRomaji + seqStr;
+      document.getElementById('newLoginId').value = loginId;
+      document.getElementById('idAutoLabel').textContent = `自動生成: ${loginId}`;
+    }
+    if (fkana && gkana) {
+      const fRomaji = hiraToRomaji(fkana);
+      const gRomaji = hiraToRomaji(gkana);
+      const fi = (fRomaji[0] || '').toUpperCase();
+      const gi = (gRomaji[0] || '').toUpperCase();
+      const pw = gi + fi + seqStr;
+      document.getElementById('newInitialPw').value = pw;
+      document.getElementById('pwAutoLabel').textContent = `自動生成: ${pw}`;
+    }
+  }
+
+  async function addStaff() {
+    const name    = document.getElementById('newName').value.trim();
+    const fkana   = document.getElementById('newFkana').value.trim();
+    const gkana   = document.getElementById('newGkana').value.trim();
+    const type    = document.getElementById('newType').value;
+    const loginId = document.getElementById('newLoginId').value.trim();
+    const initPw  = document.getElementById('newInitialPw').value.trim();
+    const err     = document.getElementById('addErr');
+    const btn     = document.getElementById('addBtn');
+    err.style.display = 'none';
+
+    if (!name || !loginId || !initPw) {
+      err.textContent = '名前・ログインID・初期PWは必須です'; err.style.display = 'block'; return;
+    }
+
+    btn.disabled = true; btn.textContent = '処理中（全月シート更新中）...';
+
+    const res  = await fetch('/api/admin/staff', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, furigana_family: fkana, furigana_given: gkana,
+                             type, loginId, initialPw: initPw }),
+    });
+    const data = await res.json();
+    btn.disabled = false; btn.textContent = '追加する';
+
+    if (data.success) {
+      staffList = data.staff;
+      renderTable();
+      // フォームリセット
+      ['newName','newFkana','newGkana','newLoginId','newInitialPw'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('idAutoLabel').textContent = '';
+      document.getElementById('pwAutoLabel').textContent = '';
+      showToast(`✅ ${name} を追加しました`);
+    } else {
+      err.textContent = 'エラー: ' + (data.error || '追加失敗');
+      err.style.display = 'block';
+    }
+  }
+
+  // ── 削除 ────────────────────────────────────────────────────
+  function askDelete(id, name) {
+    deleteTarget = id;
+    document.getElementById('delMsg').textContent =
+      `「${name}」を削除します。\nスプレッドシートの列は変更されません（手動で削除してください）。よろしいですか？`;
+    document.getElementById('delModal').classList.add('show');
+  }
+  function closeDelModal() {
+    document.getElementById('delModal').classList.remove('show');
+    deleteTarget = '';
+  }
+  async function confirmDelete() {
+    closeDelModal();
+    const res  = await fetch(`/api/admin/staff/${encodeURIComponent(deleteTarget)}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (data.success) { staffList = data.staff; renderTable(); showToast(`🗑️ 削除しました`); }
+    else showToast('エラー: ' + (data.error || '削除失敗'));
+  }
+
+  // ── PWリセット ───────────────────────────────────────────────
+  function askReset(id, name) {
+    resetTarget = id;
+    document.getElementById('resetMsg').textContent =
+      `「${name}」のパスワードを初期パスワードに戻します。よろしいですか？`;
+    document.getElementById('resetResult').style.display = 'none';
+    document.getElementById('resetBtns').style.display   = 'flex';
+    document.getElementById('resetModal').classList.add('show');
+  }
+  function closeResetModal() {
+    document.getElementById('resetModal').classList.remove('show');
+    resetTarget = '';
+  }
+  async function confirmReset() {
+    const res  = await fetch(`/api/admin/staff/${encodeURIComponent(resetTarget)}/reset-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('resetBtns').style.display   = 'none';
+      document.getElementById('resetResult').textContent   = `✅ リセット完了。初期PW：${data.initial_pw}`;
+      document.getElementById('resetResult').style.display = 'block';
+    } else {
+      showToast('エラー: ' + (data.error || 'リセット失敗'));
+      closeResetModal();
+    }
+  }
+
+  // ── トースト ─────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  // ── セッション確認（管理者セッションが既にある場合） ──────────
+  fetch('/api/admin/staff').then(r => {
+    if (r.ok) {
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'block';
+      r.json().then(list => { staffList = list; renderTable(); });
+    }
+  }).catch(() => {});
+</script>
+</body>
+</html>
