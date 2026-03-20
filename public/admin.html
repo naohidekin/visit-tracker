@@ -133,7 +133,11 @@
       </div>
       <div class="field">
         <label>年</label>
-        <select id="viewYear"></select>
+        <select id="viewYear">
+          <option value="2025">2025年</option>
+          <option value="2026">2026年</option>
+          <option value="2027">2027年</option>
+        </select>
       </div>
       <div class="field">
         <label>月</label>
@@ -565,13 +569,8 @@
   let currentAdminData = null;
 
   function initAdminMonthlySelectors() {
-    const ySel = document.getElementById('viewYear');
-    if (ySel.options.length > 0) return;
-    const now = new Date(), cy = now.getFullYear();
-    for (let y = cy; y >= cy - 2; y--) {
-      const opt = document.createElement('option');
-      opt.value = y; opt.textContent = `${y}年`; ySel.appendChild(opt);
-    }
+    const now = new Date();
+    document.getElementById('viewYear').value  = String(now.getFullYear());
     document.getElementById('viewMonth').value = String(now.getMonth() + 1);
   }
 
@@ -869,12 +868,20 @@
     toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3000);
   }
 
+  // 年・月の初期値をページ読み込み時に設定
+  initAdminMonthlySelectors();
+
   // ── セッション確認（管理者セッションが既にある場合） ──────────
   fetch('/api/admin/staff').then(r => {
     if (r.ok) {
       document.getElementById('loginCard').style.display = 'none';
       document.getElementById('mainContent').style.display = 'block';
-      r.json().then(list => { staffList = list; renderTable(); loadIncentive(); });
+      r.json().then(list => {
+        staffList = list;
+        renderTable();
+        loadIncentive();
+        updateAdminStaffSelect();
+      });
     }
   }).catch(() => {});
 </script>
