@@ -356,7 +356,7 @@
 
     document.getElementById('headerName').textContent = currentUser.name;
     document.getElementById('headerType').textContent =
-      currentUser.type === 'nurse' ? '看護師' : 'リハビリ';
+      currentUser.type === 'nurse' ? '看護師' : currentUser.type;
 
     const now = new Date();
     const today = toDateStr(now);
@@ -489,8 +489,7 @@
 
     if (currentUser.type === 'nurse') {
       const target = (line * days).toFixed(1);
-      const actual = (stats.total || 0).toFixed(1);
-      goalLine = `目標：${target}時間　／　実績：${actual}時間`;
+      goalLine = `インセンティブ目安：${target}時間`;
       bigLabel = '合計時間'; bigNum = (stats.total || 0).toFixed(1); bigUnit = '時間';
       subCols  = 'cols-3';
       subHtml  = `
@@ -508,8 +507,7 @@
         </div>`;
     } else {
       const target = (Math.round(line * days * 10) / 10).toFixed(1);
-      const actual = stats.total_units || 0;
-      goalLine = `目標：${target}単位　／　実績：${actual}単位`;
+      goalLine = `インセンティブ目安：${target}単位`;
       bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
       subCols  = 'cols-2';
       subHtml  = `

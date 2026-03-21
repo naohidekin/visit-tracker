@@ -692,7 +692,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         });
       }
       for (const s of data.staff)
-        if (s.type === 'rehab') s.col = idxToCol(colToIdx(s.col) + 2);
+        if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
 
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
@@ -703,7 +703,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
     } else {
       // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
       const nurseCount = data.staff.filter(s => s.type === 'nurse').length;
-      const rehabCount = data.staff.filter(s => s.type === 'rehab').length;
+      const rehabCount = data.staff.filter(s => s.type !== 'nurse').length;
       const newColIdx = 2 + nurseCount * 2 + rehabCount;
       const newCol    = idxToCol(newColIdx);
 
@@ -728,7 +728,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       }
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
-        type: 'rehab', col: newCol,
+        type: type, col: newCol,
         seq: nextSeq, initial_pw: initialPw,
         password_hash: await bcrypt.hash(initialPw, 10) };
     }
@@ -791,7 +791,7 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
       }
       // 全リハビリの列を -2 シフト（リハビリは常に看護師の後ろ）
       for (const s of data.staff) {
-        if (s.type === 'rehab') s.col = idxToCol(colToIdx(s.col) - 2);
+        if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
       }
     } else {
       const delIdx = colToIdx(removed.col);
@@ -811,7 +811,7 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
       }
       // 削除列より後ろのリハビリの列を -1 シフト
       for (const s of data.staff) {
-        if (s.type === 'rehab' && colToIdx(s.col) > delIdx) {
+        if (s.type !== 'nurse' && colToIdx(s.col) > delIdx) {
           s.col = idxToCol(colToIdx(s.col) - 1);
         }
       }

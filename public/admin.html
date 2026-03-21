@@ -231,7 +231,9 @@
         <label>職種</label>
         <select id="newType" onchange="autoGenerate()">
           <option value="nurse">看護師</option>
-          <option value="rehab">リハビリ</option>
+          <option value="PT">PT</option>
+          <option value="OT">OT</option>
+          <option value="ST">ST</option>
         </select>
       </div>
       <div class="field">
@@ -330,6 +332,13 @@
     return out;
   }
 
+  // ── ユーティリティ ────────────────────────────────────────
+  function staffTypeBadge(type) {
+    return type === 'nurse'
+      ? '<span class="badge badge-nurse">看護師</span>'
+      : `<span class="badge badge-rehab">${type}</span>`;
+  }
+
   // ── 状態 ──────────────────────────────────────────────────
   let staffList = [];
   let deleteTarget = '', resetTarget = '';
@@ -396,9 +405,7 @@
     tbody.innerHTML = '';
     for (const s of staffList) {
       const furi  = (s.furigana_family || '') + (s.furigana_given || '');
-      const badge = s.type === 'nurse'
-        ? '<span class="badge badge-nurse">看護師</span>'
-        : '<span class="badge badge-rehab">リハビリ</span>';
+      const badge = staffTypeBadge(s.type);
       const colInfo = s.type === 'nurse'
         ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
         : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
@@ -437,9 +444,7 @@
     const tr = document.querySelector(`tr[data-staff-id="${id}"]`);
     if (!tr) return;
     const furi    = (s.furigana_family || '') + (s.furigana_given || '');
-    const badge   = s.type === 'nurse'
-      ? '<span class="badge badge-nurse">看護師</span>'
-      : '<span class="badge badge-rehab">リハビリ</span>';
+    const badge   = staffTypeBadge(s.type);
     const colInfo = s.type === 'nurse'
       ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
       : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
@@ -592,7 +597,7 @@
     for (const s of staffList) {
       const opt = document.createElement('option');
       opt.value = s.id;
-      opt.textContent = s.name + (s.type === 'nurse' ? '（看護師）' : '（リハビリ）');
+      opt.textContent = s.name + `（${s.type === 'nurse' ? '看護師' : s.type}）`;
       sel.appendChild(opt);
     }
     if (cur) sel.value = cur;
@@ -823,9 +828,7 @@
     tbody.innerHTML = '';
     const def = incentiveData.defaults;
     for (const s of incentiveData.staff) {
-      const badge = s.type === 'nurse'
-        ? '<span class="badge badge-nurse">看護師</span>'
-        : '<span class="badge badge-rehab">リハビリ</span>';
+      const badge = staffTypeBadge(s.type);
       const opts = s.type === 'nurse' ? nurseOpts : rehabOpts;
       const unit = s.type === 'nurse' ? 'h' : 'u';
       const effective = (s.incentive_line != null) ? s.incentive_line
