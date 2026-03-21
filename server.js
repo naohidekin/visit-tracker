@@ -664,10 +664,9 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 
     let newEntry;
     if (type === 'nurse') {
-      const nurses       = data.staff.filter(s => s.type === 'nurse');
-      const lastNurseIdx = nurses.length > 0
-        ? Math.max(...nurses.map(s => colToIdx(s.iryo_col))) : colToIdx('B');
-      const kaigoIdx = lastNurseIdx + 1;
+      // C(index 2) + 看護師人数 × 2列 = 新看護師の介護列
+      const nurseCount = data.staff.filter(s => s.type === 'nurse').length;
+      const kaigoIdx = 2 + nurseCount * 2;
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
 
@@ -701,12 +700,10 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         password_hash: await bcrypt.hash(initialPw, 10) };
 
     } else {
-      const rehabs  = data.staff.filter(s => s.type === 'rehab');
-      const nurses  = data.staff.filter(s => s.type === 'nurse');
-      const baseIdx = rehabs.length > 0
-        ? Math.max(...rehabs.map(s => colToIdx(s.col)))
-        : (nurses.length > 0 ? Math.max(...nurses.map(s => colToIdx(s.iryo_col))) : colToIdx('J'));
-      const newColIdx = baseIdx + 1;
+      // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
+      const nurseCount = data.staff.filter(s => s.type === 'nurse').length;
+      const rehabCount = data.staff.filter(s => s.type === 'rehab').length;
+      const newColIdx = 2 + nurseCount * 2 + rehabCount;
       const newCol    = idxToCol(newColIdx);
 
       for (const ssId of allSids) {
@@ -757,13 +754,74 @@ app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
   res.json({ success: true, staff: data.staff });
 });
 
-app.delete('/api/admin/staff/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
   const data = loadStaff();
   const idx  = data.staff.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const [removed] = data.staff.splice(idx, 1);
-  saveStaff(data);
-  res.json({ success: true, removed, staff: data.staff });
+
+  try {
+    const api      = await getSheets();
+    const registry = loadRegistry();
+    const allSids  = [...new Set([SPREADSHEET_ID, ...Object.values(registry)])];
+
+    if (removed.type === 'nurse') {
+      const delStart = colToIdx(removed.kaigo_col);
+      // 全スプレッドシートから介護・医療の2列を削除
+      for (const ssId of allSids) {
+        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+        const sm = {};
+        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+        const vm = MONTHS.filter(m => sm[m] !== undefined);
+        await api.spreadsheets.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { requests: vm.map(m => ({
+            deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+              startIndex: delStart, endIndex: delStart + 2 } },
+          })) },
+        });
+      }
+      // 削除列より後ろの看護師の列を -2 シフト
+      for (const s of data.staff) {
+        if (s.type === 'nurse' && colToIdx(s.kaigo_col) > delStart) {
+          s.kaigo_col = idxToCol(colToIdx(s.kaigo_col) - 2);
+          s.iryo_col  = idxToCol(colToIdx(s.iryo_col)  - 2);
+        }
+      }
+      // 全リハビリの列を -2 シフト（リハビリは常に看護師の後ろ）
+      for (const s of data.staff) {
+        if (s.type === 'rehab') s.col = idxToCol(colToIdx(s.col) - 2);
+      }
+    } else {
+      const delIdx = colToIdx(removed.col);
+      // 全スプレッドシートから1列を削除
+      for (const ssId of allSids) {
+        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+        const sm = {};
+        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+        const vm = MONTHS.filter(m => sm[m] !== undefined);
+        await api.spreadsheets.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { requests: vm.map(m => ({
+            deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+              startIndex: delIdx, endIndex: delIdx + 1 } },
+          })) },
+        });
+      }
+      // 削除列より後ろのリハビリの列を -1 シフト
+      for (const s of data.staff) {
+        if (s.type === 'rehab' && colToIdx(s.col) > delIdx) {
+          s.col = idxToCol(colToIdx(s.col) - 1);
+        }
+      }
+    }
+
+    saveStaff(data);
+    res.json({ success: true, removed, staff: data.staff });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) => {
