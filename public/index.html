@@ -32,7 +32,7 @@
     .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 9px;border-radius:6px;cursor:pointer;white-space:nowrap}
 
     /* ── カード ── */
-    .container{padding:16px}
+    .container{padding:16px;max-width:480px;margin:0 auto}
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
     .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px}
 
@@ -92,7 +92,7 @@
 
     /* ── 注意書き ── */
     .notes{background:#f8faff;border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:16px}
-    .notes p{font-size:13px;color:var(--text);line-height:1.8}
+    .notes p{font-size:14px;color:var(--text);line-height:1.8}
 
     /* ── 送信ボタン ── */
     .submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
@@ -554,20 +554,20 @@
 
   function renderIncentive(stats) {
     const card = document.getElementById('incentiveCard');
-    if (!stats || stats.incentive_line == null || (stats.working_days || 0) === 0) {
+    if (!stats || stats.incentive_line == null) {
       card.style.display = 'none';
       return;
     }
     card.style.display = 'block';
     const line = stats.incentive_line;
-    const days = stats.working_days;
+    const days = stats.working_days || 0;
     const goalLine = document.getElementById('incentiveGoalLine');
     if (currentUser.type === 'nurse') {
       const target = (line * days).toFixed(1);
       const actual = (stats.total || 0).toFixed(1);
       goalLine.textContent = `目標：${target}時間　／　実績：${actual}時間`;
     } else {
-      const target = Math.round(line * days * 10) / 10;
+      const target = (Math.round(line * days * 10) / 10).toFixed(1);
       const actual = stats.total_units || 0;
       goalLine.textContent = `目標：${target}単位　／　実績：${actual}単位`;
     }
