@@ -5,6 +5,7 @@ const fs         = require('fs');
 const path       = require('path');
 const bcrypt     = require('bcryptjs');
 const csession   = require('cookie-session');
+const cron       = require('node-cron');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -21,11 +22,93 @@ app.use(csession({
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── 定数 ──────────────────────────────────────────────────────
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const STAFF_PATH     = path.join(__dirname, 'staff.json');
-const MONTHS         = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-const HEADER_ROW     = 4;
-const DATA_START_ROW = 5;
+const SPREADSHEET_ID  = process.env.SPREADSHEET_ID;
+const STAFF_PATH      = path.join(__dirname, 'staff.json');
+const REGISTRY_PATH   = path.join(__dirname, 'spreadsheet-registry.json');
+const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const HEADER_ROW      = 4;
+const DATA_START_ROW  = 5;
+const WD              = ['日','月','火','水','木','金','土'];
+
+// ─── スプレッドシートレジストリ（年 → ID） ─────────────────────
+function loadRegistry() {
+  if (!fs.existsSync(REGISTRY_PATH)) {
+    const year = String(new Date().getFullYear());
+    const reg  = { [year]: SPREADSHEET_ID };
+    fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
+    return reg;
+  }
+  return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+}
+function saveRegistry(reg) {
+  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
+}
+function getSpreadsheetIdForYear(year) {
+  const reg = loadRegistry();
+  return reg[String(year)] || SPREADSHEET_ID;
+}
+
+// ─── 新年スプレッドシート作成 ───────────────────────────────────
+function buildSheetHeaderRow(staffList) {
+  if (staffList.length === 0) return ['日付', '曜日'];
+  const maxIdx = Math.max(
+    ...staffList.map(s => s.type === 'nurse' ? colToIdx(s.iryo_col) : colToIdx(s.col))
+  );
+  const row = new Array(maxIdx + 1).fill('');
+  row[0] = '日付'; row[1] = '曜日';
+  for (const s of staffList) {
+    if (s.type === 'nurse') {
+      row[colToIdx(s.kaigo_col)] = `${s.name}(介護)`;
+      row[colToIdx(s.iryo_col)]  = `${s.name}(医療)`;
+    } else {
+      row[colToIdx(s.col)] = s.name;
+    }
+  }
+  return row;
+}
+
+async function createSpreadsheetForYear(year) {
+  const registry = loadRegistry();
+  if (registry[String(year)]) {
+    throw new Error(`already_exists:${registry[String(year)]}`);
+  }
+
+  const api       = await getSheets();
+  const staffData = loadStaff();
+  const headerRow = buildSheetHeaderRow(staffData.staff);
+
+  const created = await api.spreadsheets.create({
+    requestBody: {
+      properties: { title: `訪問件数カウント ${year}` },
+      sheets: MONTHS.map((title, i) => ({ properties: { title, sheetId: i, index: i } })),
+    },
+  });
+  const newId = created.data.spreadsheetId;
+
+  const batchData = [];
+  for (let mi = 0; mi < MONTHS.length; mi++) {
+    const m           = mi + 1;
+    const daysInMonth = new Date(year, m, 0).getDate();
+    const values      = [
+      [`${year}年 ${MONTHS[mi]} 訪問件数`], [], [],
+      headerRow,
+    ];
+    for (let d = 1; d <= daysInMonth; d++) {
+      values.push([d, WD[new Date(year, m - 1, d).getDay()],
+        ...new Array(Math.max(0, headerRow.length - 2)).fill('')]);
+    }
+    batchData.push({ range: `${MONTHS[mi]}!A1`, values });
+  }
+  await api.spreadsheets.values.batchUpdate({
+    spreadsheetId: newId,
+    requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
+  });
+
+  registry[String(year)] = newId;
+  saveRegistry(registry);
+  console.log(`✅ ${year}年スプレッドシートを作成しました: ${newId}`);
+  return newId;
+}
 
 // ─── ユーティリティ ─────────────────────────────────────────────
 function loadStaff() {
@@ -160,8 +243,10 @@ app.get('/api/record', requireStaff, async (req, res) => {
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
 
   const d     = new Date(date);
+  const year  = d.getFullYear();
   const month = d.getMonth() + 1;
   const row   = DATA_START_ROW + d.getDate() - 1;
+  const sid   = getSpreadsheetIdForYear(year);
 
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
@@ -171,14 +256,14 @@ app.get('/api/record', requireStaff, async (req, res) => {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`,
       });
       const vals = resp.data.values?.[0] ?? [];
       res.json({ kaigo: vals[0] ?? null, iryo: vals[1] ?? null });
     } else {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
       });
       res.json({ value: resp.data.values?.[0]?.[0] ?? null });
@@ -198,8 +283,10 @@ app.post('/api/record', requireStaff, async (req, res) => {
   const today = new Date(); today.setHours(23, 59, 59, 999);
   if (d > today) return res.status(400).json({ error: '未来の日付には記録できません' });
 
+  const year  = d.getFullYear();
   const month = d.getMonth() + 1;
   const row   = DATA_START_ROW + d.getDate() - 1;
+  const sid   = getSpreadsheetIdForYear(year);
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -212,7 +299,7 @@ app.post('/api/record', requireStaff, async (req, res) => {
       const kVal = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
       const iVal = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
       await api.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
@@ -226,7 +313,7 @@ app.post('/api/record', requireStaff, async (req, res) => {
       const { value } = req.body;
       const val = (value !== '' && value !== null && value !== undefined) ? Number(value) : '';
       await api.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
@@ -247,6 +334,7 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
 
   const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
   const endRow      = DATA_START_ROW + daysInMonth - 1;
+  const sid         = getSpreadsheetIdForYear(Number(year));
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -256,7 +344,7 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -275,7 +363,7 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
                  incentive_line: iline, incentive_triggered: avg > iline });
     } else {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -298,9 +386,10 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
 
 // ─── API: 診断 ──────────────────────────────────────────────────
 app.get('/api/debug/sheets', requireAdmin, async (_req, res) => {
+  const debugSid = getSpreadsheetIdForYear(new Date().getFullYear());
   try {
     const api = await getSheets();
-    const meta = await api.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const meta = await api.spreadsheets.get({ spreadsheetId: debugSid });
     const mimeType = meta.data.spreadsheetId ? 'google-sheets' : 'unknown';
     const sheets = meta.data.sheets.map(s => ({
       title: s.properties.title,
@@ -311,7 +400,7 @@ app.get('/api/debug/sheets', requireAdmin, async (_req, res) => {
     let readTest = null;
     try {
       const r = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: debugSid,
         range: '1月!A5:M5',
       });
       readTest = r.data.values;
@@ -329,7 +418,8 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const { year, month } = req.query;
   if (!year || !month) return res.status(400).json({ error: 'パラメータ不足' });
 
-  const y = Number(year), m = Number(month);
+  const y   = Number(year), m = Number(month);
+  const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;
 
@@ -337,14 +427,13 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
-  const WD = ['日','月','火','水','木','金','土'];
   const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
 
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -368,7 +457,7 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
                  incentive_line: iline, incentive_triggered: avg > iline } });
     } else {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -401,17 +490,17 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
-  const y = Number(year), m = Number(month);
+  const y   = Number(year), m = Number(month);
+  const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;
-  const WD = ['日','月','火','水','木','金','土'];
   const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
 
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -435,7 +524,7 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
                  incentive_line: iline, incentive_triggered: avg > iline } });
     } else {
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
       });
       const rows = resp.data.values ?? [];
@@ -463,9 +552,11 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
   const { staffId, date } = req.body;
   if (!staffId || !date) return res.status(400).json({ error: 'パラメータ不足' });
 
-  const d = new Date(date);
+  const d     = new Date(date);
+  const year  = d.getFullYear();
   const month = d.getMonth() + 1;
   const row   = DATA_START_ROW + d.getDate() - 1;
+  const sid   = getSpreadsheetIdForYear(year);
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
@@ -478,7 +569,7 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
       const kVal = (kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
       const iVal = (iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
       await api.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
@@ -491,7 +582,7 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
       const { value } = req.body;
       const val = (value !== null && value !== undefined) ? Number(value) : '';
       await api.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
@@ -566,11 +657,10 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 
   try {
     const api = await getSheets();
-    const spreadsheet = await api.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-    const sheetMap = {};
-    for (const s of spreadsheet.data.sheets)
-      sheetMap[s.properties.title] = s.properties.sheetId;
-    const validMonths = MONTHS.filter(m => sheetMap[m] !== undefined);
+
+    // 全登録済みスプレッドシートIDを取得
+    const registry  = loadRegistry();
+    const allSids   = [...new Set([SPREADSHEET_ID, ...Object.values(registry)])];
 
     let newEntry;
     if (type === 'nurse') {
@@ -581,28 +671,26 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
 
-      await api.spreadsheets.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          requests: validMonths.map(m => ({
-            insertDimension: {
-              range: { sheetId: sheetMap[m], dimension: 'COLUMNS',
-                       startIndex: kaigoIdx, endIndex: kaigoIdx + 2 },
-              inheritFromBefore: false,
-            },
-          })),
-        },
-      });
-      await api.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: validMonths.map(m => ({
+      for (const ssId of allSids) {
+        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+        const sm = {};
+        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+        const vm = MONTHS.filter(m => sm[m] !== undefined);
+        await api.spreadsheets.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { requests: vm.map(m => ({
+            insertDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+              startIndex: kaigoIdx, endIndex: kaigoIdx + 2 }, inheritFromBefore: false },
+          })) },
+        });
+        await api.spreadsheets.values.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { valueInputOption: 'USER_ENTERED', data: vm.map(m => ({
             range: `${m}!${kaigoCol}${HEADER_ROW}:${iryoCol}${HEADER_ROW}`,
             values: [[`${name}(介護)`, `${name}(医療)`]],
-          })),
-        },
-      });
+          })) },
+        });
+      }
       for (const s of data.staff)
         if (s.type === 'rehab') s.col = idxToCol(colToIdx(s.col) + 2);
 
@@ -613,36 +701,33 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         password_hash: await bcrypt.hash(initialPw, 10) };
 
     } else {
-      const rehabs      = data.staff.filter(s => s.type === 'rehab');
-      const nurses      = data.staff.filter(s => s.type === 'nurse');
-      const baseIdx     = rehabs.length > 0
+      const rehabs  = data.staff.filter(s => s.type === 'rehab');
+      const nurses  = data.staff.filter(s => s.type === 'nurse');
+      const baseIdx = rehabs.length > 0
         ? Math.max(...rehabs.map(s => colToIdx(s.col)))
         : (nurses.length > 0 ? Math.max(...nurses.map(s => colToIdx(s.iryo_col))) : colToIdx('J'));
       const newColIdx = baseIdx + 1;
       const newCol    = idxToCol(newColIdx);
 
-      await api.spreadsheets.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          requests: validMonths.map(m => ({
-            insertDimension: {
-              range: { sheetId: sheetMap[m], dimension: 'COLUMNS',
-                       startIndex: newColIdx, endIndex: newColIdx + 1 },
-              inheritFromBefore: false,
-            },
-          })),
-        },
-      });
-      await api.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: validMonths.map(m => ({
-            range: `${m}!${newCol}${HEADER_ROW}`,
-            values: [[name]],
-          })),
-        },
-      });
+      for (const ssId of allSids) {
+        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+        const sm = {};
+        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+        const vm = MONTHS.filter(m => sm[m] !== undefined);
+        await api.spreadsheets.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { requests: vm.map(m => ({
+            insertDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+              startIndex: newColIdx, endIndex: newColIdx + 1 }, inheritFromBefore: false },
+          })) },
+        });
+        await api.spreadsheets.values.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { valueInputOption: 'USER_ENTERED', data: vm.map(m => ({
+            range: `${m}!${newCol}${HEADER_ROW}`, values: [[name]],
+          })) },
+        });
+      }
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: 'rehab', col: newCol,
@@ -690,9 +775,57 @@ app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) =
   res.json({ success: true, initial_pw: staff.initial_pw });
 });
 
+// ─── API: 翌年スプレッドシート作成 ─────────────────────────────
+app.post('/api/admin/create-next-year-sheet', requireAdmin, async (_req, res) => {
+  const nextYear = new Date().getFullYear() + 1;
+  try {
+    const newId = await createSpreadsheetForYear(nextYear);
+    res.json({
+      success: true, year: nextYear, spreadsheetId: newId,
+      url: `https://docs.google.com/spreadsheets/d/${newId}`,
+    });
+  } catch (e) {
+    if (e.message.startsWith('already_exists:')) {
+      const existingId = e.message.slice('already_exists:'.length);
+      return res.json({
+        success: false, already_exists: true, year: nextYear, spreadsheetId: existingId,
+        url: `https://docs.google.com/spreadsheets/d/${existingId}`,
+      });
+    }
+    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+  }
+});
+
+// ─── API: スプレッドシートレジストリ取得 ───────────────────────
+app.get('/api/admin/registry', requireAdmin, (_req, res) => {
+  const reg = loadRegistry();
+  res.json(Object.entries(reg).map(([year, id]) => ({
+    year, spreadsheetId: id,
+    url: `https://docs.google.com/spreadsheets/d/${id}`,
+  })));
+});
+
 // ─── 起動 ──────────────────────────────────────────────────────
 async function main() {
   await ensurePasswordsHashed();
+
+  // 毎年12/31 23:00に翌年スプレッドシートを自動作成
+  cron.schedule('0 23 31 12 *', async () => {
+    const nextYear = new Date().getFullYear() + 1;
+    console.log(`[cron] ${nextYear}年スプレッドシートを自動作成します...`);
+    try {
+      const id = await createSpreadsheetForYear(nextYear);
+      console.log(`[cron] ✅ 完了: ${id}`);
+    } catch (e) {
+      if (e.message.startsWith('already_exists:')) {
+        console.log(`[cron] ${nextYear}年スプレッドシートは既に存在します`);
+      } else {
+        console.error('[cron] ❌ エラー:', e.message);
+      }
+    }
+  });
+  console.log('📅 自動作成スケジュール: 毎年 12/31 23:00 に翌年スプレッドシートを作成');
+
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }
 main().catch(e => { console.error(e); process.exit(1); });

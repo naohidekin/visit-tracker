@@ -123,6 +123,17 @@
     </div>
   </div>
 
+  <!-- 翌年スプレッドシート作成 -->
+  <div class="card">
+    <h2>📅 翌年スプレッドシート作成</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+      翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
+      作成後、新しいスプレッドシートURLが表示されます。
+    </p>
+    <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()">翌年シートを作成</button>
+    <div id="createSheetResult" style="display:none;margin-top:14px"></div>
+  </div>
+
   <!-- スタッフ月次実績 -->
   <div class="card">
     <h2>📊 スタッフ月次実績</h2>
@@ -870,6 +881,37 @@
 
   // 年・月の初期値をページ読み込み時に設定
   initAdminMonthlySelectors();
+
+  // ── 翌年スプレッドシート作成 ──────────────────────────────────
+  document.getElementById('nextYearLabel').textContent = new Date().getFullYear() + 1;
+
+  async function createNextYearSheet() {
+    const btn = document.getElementById('createNextYearBtn');
+    const box = document.getElementById('createSheetResult');
+    btn.disabled = true; btn.textContent = '作成中...';
+    box.style.display = 'none';
+    try {
+      const res  = await fetch('/api/admin/create-next-year-sheet', { method: 'POST' });
+      const data = await res.json();
+      if (data.already_exists) {
+        box.innerHTML = `<div style="background:#fff3cd;color:#856404;border-radius:8px;padding:10px 14px;font-size:13px">
+          ✅ ${data.year}年のスプレッドシートはすでに作成済みです。<br>
+          <a href="${data.url}" target="_blank" style="color:#1e40af;word-break:break-all">${data.url}</a>
+        </div>`;
+      } else if (data.success) {
+        box.innerHTML = `<div style="background:#e6f7ef;color:#0a7c42;border-radius:8px;padding:10px 14px;font-size:13px">
+          ✅ ${data.year}年のスプレッドシートを作成しました！<br>
+          <a href="${data.url}" target="_blank" style="color:#1e40af;word-break:break-all">${data.url}</a>
+        </div>`;
+      } else {
+        box.innerHTML = `<div style="background:#fee;color:#c0392b;border-radius:8px;padding:10px 14px;font-size:13px">❌ ${data.error || 'エラーが発生しました'}</div>`;
+      }
+    } catch (e) {
+      box.innerHTML = `<div style="background:#fee;color:#c0392b;border-radius:8px;padding:10px 14px;font-size:13px">❌ ${e.message}</div>`;
+    }
+    box.style.display = 'block';
+    btn.disabled = false; btn.textContent = '翌年シートを作成';
+  }
 
   // ── セッション確認（管理者セッションが既にある場合） ──────────
   fetch('/api/admin/staff').then(r => {
