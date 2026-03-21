@@ -506,6 +506,7 @@
           <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
         </div>`;
     } else {
+      const actual = stats.total_units || 0;
       const target = (Math.round(line * days * 10) / 10).toFixed(1);
       goalLine = `インセンティブ目安：${target}単位`;
       bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
