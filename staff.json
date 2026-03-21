@@ -91,6 +91,31 @@
       "initial_pw": "AO07",
       "password_hash": "$2a$10$OaEhI0Glj2Y/rohCeLe9ZuuGgKON4KPpWyaweBinlhO7INhJqQ1Ou",
       "incentive_line": null
+    },
+    {
+      "id": "testns",
+      "name": "テスト看護師",
+      "furigana_family": "てすと",
+      "furigana_given": "かんごし",
+      "type": "nurse",
+      "kaigo_col": "N",
+      "iryo_col": "O",
+      "seq": 8,
+      "initial_pw": "0000",
+      "password_hash": "$2a$10$KYpcka43yEQbqf8mVFl1suU0X/hmyZSMPisoRwUZZ26d6fDWXQ2HW",
+      "incentive_line": null
+    },
+    {
+      "id": "testpt",
+      "name": "テストリハ",
+      "furigana_family": "てすと",
+      "furigana_given": "りは",
+      "type": "PT",
+      "col": "P",
+      "seq": 9,
+      "initial_pw": "0000",
+      "password_hash": "$2a$10$aE4wgJM4OVFTjKKZ7BCLYOmGeH5mMqYZXHhSY/0vC6noK0Kurpu/i",
+      "incentive_line": null
     }
   ]
 }
