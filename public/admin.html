@@ -85,6 +85,25 @@
     .auto-label{font-size:10px;color:var(--muted);margin-top:3px}
     /* ── インセンティブ ── */
     .section-sub{font-size:12px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+    /* ── 月次実績カード（スタッフビューと共通デザイン） ── */
+    .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:14px}
+    .result-card.incentive{background:#FCEBEB;border:1.5px solid #E24B4A}
+    .result-goal-line{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:16px}
+    .result-card.incentive .result-goal-line{color:#A32D2D}
+    .result-big-total{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:6px}
+    .result-big-label{font-size:13px;font-weight:600;color:var(--muted)}
+    .result-card.incentive .result-big-label{color:#A32D2D}
+    .result-big-num{font-size:36px;font-weight:800;color:var(--text)}
+    .result-card.incentive .result-big-num{color:#E24B4A}
+    .result-incentive-msg{font-size:15px;font-weight:700;color:#E24B4A;text-align:center;margin-bottom:4px}
+    .result-sub-grid{display:grid;gap:8px;margin-top:14px}
+    .result-sub-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .result-sub-grid.cols-2{grid-template-columns:1fr 1fr}
+    .result-sub-box{background:#fff;border-radius:10px;padding:10px 8px;text-align:center}
+    .result-card.incentive .result-sub-box{background:#f5d5d5}
+    .result-sub-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .result-sub-val{font-size:18px;font-weight:800;color:var(--text)}
+    .result-sub-unit{font-size:12px;color:var(--muted);margin-left:2px}
   </style>
 </head>
 <body>
@@ -165,13 +184,7 @@
     <div id="adminMonthlyResult" style="display:none;margin-top:18px">
       <div class="spinner" id="adminMonthlySpinner">読み込み中...</div>
       <div id="adminStatsSection" style="display:none">
-        <div class="a-section-title" id="adminStatsTitle"></div>
-        <div class="a-stats-grid" id="adminStatsGrid"></div>
-      </div>
-      <div id="adminIncentiveSection" style="display:none">
-        <div class="a-section-title">インセンティブ</div>
-        <p class="a-incentive-goal" id="adminIncentiveGoal"></p>
-        <div id="adminIncentiveMsg"></div>
+        <div id="adminStatsCard"></div>
       </div>
       <div id="adminTableSection" style="display:none">
         <div class="a-section-title">日別明細</div>
@@ -609,79 +622,83 @@
     const month   = document.getElementById('viewMonth').value;
     if (!staffId) { showToast('スタッフを選択してください'); return; }
 
-    document.getElementById('adminMonthlyResult').style.display   = 'block';
-    document.getElementById('adminMonthlySpinner').style.display  = 'block';
-    document.getElementById('adminStatsSection').style.display    = 'none';
-    document.getElementById('adminIncentiveSection').style.display = 'none';
-    document.getElementById('adminTableSection').style.display    = 'none';
+    document.getElementById('adminMonthlyResult').style.display  = 'block';
+    document.getElementById('adminMonthlySpinner').style.display = 'block';
+    document.getElementById('adminStatsSection').style.display   = 'none';
+    document.getElementById('adminTableSection').style.display   = 'none';
 
     try {
       const res = await fetch(`/api/admin/monthly-detail?staffId=${encodeURIComponent(staffId)}&year=${year}&month=${month}`);
       if (!res.ok) throw new Error((await res.json()).error);
       currentAdminData = await res.json();
-      renderAdminStats(currentAdminData);
-      renderAdminIncentive(currentAdminData);
+      renderAdminMonthlyCard(currentAdminData);
       renderAdminTable(currentAdminData);
-      document.getElementById('adminMonthlySpinner').style.display  = 'none';
-      document.getElementById('adminStatsSection').style.display    = 'block';
-      document.getElementById('adminIncentiveSection').style.display = 'block';
-      document.getElementById('adminTableSection').style.display    = 'block';
+      document.getElementById('adminMonthlySpinner').style.display = 'none';
+      document.getElementById('adminStatsSection').style.display   = 'block';
+      document.getElementById('adminTableSection').style.display   = 'block';
     } catch (e) {
       document.getElementById('adminMonthlySpinner').textContent = 'エラー: ' + e.message;
     }
   }
 
-  function renderAdminStats(data) {
-    document.getElementById('adminStatsTitle').textContent = `${data.month}月の実績`;
-    const grid = document.getElementById('adminStatsGrid');
+  function renderAdminMonthlyCard(data) {
     const s = data.stats;
-    if (data.type === 'nurse') {
-      grid.innerHTML = `
-        <div class="a-stat-box a-stat-kaigo">
-          <div class="a-stat-label"><span class="badge badge-nurse" style="font-size:10px">介護</span> 合計</div>
-          <div class="a-stat-val">${(s.total_kaigo||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
-        </div>
-        <div class="a-stat-box a-stat-iryo">
-          <div class="a-stat-label"><span class="badge" style="background:#fef3c7;color:#9a3412;font-size:10px">医療</span> 合計</div>
-          <div class="a-stat-val">${(s.total_iryo||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
-        </div>
-        <div class="a-stat-box a-stat-total">
-          <div class="a-stat-label">合計時間</div>
-          <div class="a-stat-val" style="color:var(--ok)">${(s.total||0).toFixed(1)}<span class="a-stat-unit">時間</span></div>
-        </div>
-        <div class="a-stat-box a-stat-days">
-          <div class="a-stat-label">稼働日数</div>
-          <div class="a-stat-val">${s.working_days||0}<span class="a-stat-unit">日</span></div>
-        </div>`;
-    } else {
-      grid.innerHTML = `
-        <div class="a-stat-box a-stat-units">
-          <div class="a-stat-label">合計単位数</div>
-          <div class="a-stat-val" style="color:var(--ok)">${s.total_units||0}<span class="a-stat-unit">単位</span></div>
-        </div>
-        <div class="a-stat-box a-stat-days">
-          <div class="a-stat-label">稼働日数</div>
-          <div class="a-stat-val">${s.working_days||0}<span class="a-stat-unit">日</span></div>
-        </div>`;
-    }
-  }
+    const isIncentive = !!s.incentive_triggered;
+    const cls  = isIncentive ? ' incentive' : '';
+    const line = s.incentive_line ?? 0;
+    const days = s.working_days || 0;
 
-  function renderAdminIncentive(data) {
-    const s = data.stats;
-    if (s.incentive_line == null || (s.working_days || 0) === 0) {
-      document.getElementById('adminIncentiveSection').style.display = 'none'; return;
-    }
-    const line = s.incentive_line, days = s.working_days;
+    let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml;
+
     if (data.type === 'nurse') {
-      document.getElementById('adminIncentiveGoal').textContent =
-        `目標：${(line * days).toFixed(1)}時間　／　実績：${(s.total||0).toFixed(1)}時間`;
+      const target = (line * days).toFixed(1);
+      goalLine = `インセンティブ目安：${target}時間`;
+      bigLabel = '合計時間'; bigNum = (s.total || 0).toFixed(1); bigUnit = '時間';
+      subCols  = 'cols-3';
+      subHtml  = `
+        <div class="result-sub-box">
+          <div class="result-sub-label">介護</div>
+          <div class="result-sub-val">${(s.total_kaigo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">医療</div>
+          <div class="result-sub-val">${(s.total_iryo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">稼働日数</div>
+          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+        </div>`;
     } else {
-      document.getElementById('adminIncentiveGoal').textContent =
-        `目標：${Math.round(line * days * 100)/100}単位　／　実績：${s.total_units||0}単位`;
+      const actual = s.total_units || 0;
+      const target = (Math.round(line * days * 10) / 10).toFixed(1);
+      goalLine = `インセンティブ目安：${target}単位`;
+      bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
+      subCols  = 'cols-2';
+      subHtml  = `
+        <div class="result-sub-box">
+          <div class="result-sub-label">合計単位数</div>
+          <div class="result-sub-val">${actual}<span class="result-sub-unit">単位</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">稼働日数</div>
+          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+        </div>`;
     }
-    document.getElementById('adminIncentiveMsg').innerHTML = s.incentive_triggered
-      ? '<div class="a-incentive-hit">お疲れ様です。インセンティブが発生しています！</div>'
-      : '<div class="a-incentive-ok">入力ありがとうございます。お疲れ様でした。</div>';
+
+    const incentiveMsg = isIncentive
+      ? '<p class="result-incentive-msg">インセンティブが発生しています💰</p>' : '';
+
+    document.getElementById('adminStatsCard').innerHTML = `
+      <div class="result-card${cls}">
+        <p class="result-goal-line">${goalLine}</p>
+        <div class="result-big-total">
+          <span class="result-big-label">${bigLabel}</span>
+          <span class="result-big-num">${bigNum}</span>
+          <span class="result-big-label">${bigUnit}</span>
+        </div>
+        ${incentiveMsg}
+        <div class="result-sub-grid ${subCols}">${subHtml}</div>
+      </div>`;
   }
 
   function buildNurseOptHtml(selected) {
