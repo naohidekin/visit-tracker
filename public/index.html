@@ -104,29 +104,31 @@
     .result-header .check{font-size:48px;margin-bottom:8px}
     .result-header h2{font-size:17px;font-weight:700;color:var(--ok)}
     .result-header .date-label{font-size:15px;color:var(--text);margin-top:6px;font-weight:600}
-    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
-    .stat-box{border-radius:10px;padding:12px 14px}
-    .stat-box.kaigo-box{background:var(--kaigo-bg)}
-    .stat-box.iryo-box {background:var(--iryo-bg)}
-    .stat-box.total-box{background:#f0fdf4;grid-column:1/-1}
-    .stat-box.units-box{background:#f0fdf4}
-    .stat-box .stat-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
-    .stat-box .stat-val{font-size:22px;font-weight:800;color:var(--text)}
-    .stat-box .stat-unit{font-size:12px;color:var(--muted);margin-left:2px}
-    .section-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
-    .monthly-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .m-box{background:var(--bg);border-radius:10px;padding:12px 14px}
-    .m-box .m-label{font-size:11px;color:var(--muted);margin-bottom:4px}
-    .m-box .m-val{font-size:19px;font-weight:700;color:var(--blue-dark)}
-    .m-box .m-unit{font-size:12px;color:var(--muted);margin-left:2px}
     .continue-btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
     .continue-btn:active{background:var(--blue-dark)}
     .loading{text-align:center;padding:20px;color:var(--muted);font-size:13px}
 
-    /* ── インセンティブ ── */
-    .incentive-goal{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px}
-    .incentive-hit{background:#fee2e2;color:#b91c1c;border-radius:9px;padding:12px 16px;font-size:14px;font-weight:700;text-align:center}
-    .incentive-ok {background:#f0f0f0;color:var(--muted);border-radius:9px;padding:12px 16px;font-size:14px;font-weight:600;text-align:center}
+    /* ── 実績カード ── */
+    .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:14px}
+    .result-card.incentive{background:#FCEBEB;border:1.5px solid #E24B4A}
+    .result-greeting{font-size:16px;font-weight:700;color:var(--text);text-align:center;line-height:1.7;margin-bottom:14px}
+    .result-divider{border:none;border-top:1px solid var(--border);margin:0 0 14px}
+    .result-goal-line{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:16px}
+    .result-card.incentive .result-goal-line{color:#A32D2D}
+    .result-big-total{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:6px}
+    .result-big-label{font-size:13px;font-weight:600;color:var(--muted)}
+    .result-card.incentive .result-big-label{color:#A32D2D}
+    .result-big-num{font-size:36px;font-weight:800;color:var(--text)}
+    .result-card.incentive .result-big-num{color:#E24B4A}
+    .result-incentive-msg{font-size:15px;font-weight:700;color:#E24B4A;text-align:center;margin-bottom:4px}
+    .result-sub-grid{display:grid;gap:8px;margin-top:14px}
+    .result-sub-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .result-sub-grid.cols-2{grid-template-columns:1fr 1fr}
+    .result-sub-box{background:#fff;border-radius:10px;padding:10px 8px;text-align:center}
+    .result-card.incentive .result-sub-box{background:#f5d5d5}
+    .result-sub-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .result-sub-val{font-size:18px;font-weight:800;color:var(--text)}
+    .result-sub-unit{font-size:12px;color:var(--muted);margin-left:2px}
 
     /* ── 上書きモーダル ── */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
@@ -232,48 +234,12 @@
     </div>
   </div>
 
-  <!-- 本日（看護師） -->
-  <div class="card" id="nurseResult" style="display:none">
-    <div class="section-title">本日の入力内容</div>
-    <div class="stats-grid">
-      <div class="stat-box kaigo-box">
-        <div class="stat-label"><span class="badge-kaigo">介護</span></div>
-        <div class="stat-val" id="r-kaigo">—</div>
-      </div>
-      <div class="stat-box iryo-box">
-        <div class="stat-label"><span class="badge-iryo">医療</span></div>
-        <div class="stat-val" id="r-iryo">—</div>
-      </div>
-      <div class="stat-box total-box">
-        <div class="stat-label">合計</div>
-        <div class="stat-val" id="r-total">—</div>
-      </div>
-    </div>
-  </div>
+  <!-- 実績カード（JS で構築） -->
+  <div id="resultStatsCard" style="display:none"></div>
 
-  <!-- 本日（リハビリ） -->
-  <div class="card" id="rehabResult" style="display:none">
-    <div class="section-title">本日の入力内容</div>
-    <div class="stats-grid" style="grid-template-columns:1fr">
-      <div class="stat-box units-box">
-        <div class="stat-label">訪問単位数</div>
-        <div class="stat-val" id="r-units">—</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 月の実績 -->
-  <div class="card">
-    <div class="section-title" id="monthlyTitle">月の実績</div>
-    <div id="monthlyLoading" class="loading">集計中...</div>
-    <div class="monthly-grid" id="monthlyGrid" style="display:none"></div>
-  </div>
-
-  <!-- インセンティブ -->
-  <div class="card" id="incentiveCard" style="display:none">
-    <div class="section-title">インセンティブ</div>
-    <p class="incentive-goal" id="incentiveGoalLine"></p>
-    <div id="incentiveMsg"></div>
+  <!-- ローディング -->
+  <div class="card" id="resultLoadingCard">
+    <div class="loading">集計中...</div>
   </div>
 
   <div style="padding:0 0 16px">
@@ -498,100 +464,94 @@
     document.getElementById('formView').style.display   = 'none';
     document.getElementById('resultView').style.display = 'block';
     document.getElementById('resultDateLabel').textContent = formatDateJP(date) + ' の記録を送信しました';
+    document.getElementById('resultStatsCard').style.display = 'none';
+    document.getElementById('resultLoadingCard').style.display = 'block';
 
-    if (currentUser.type === 'nurse') {
-      const k = submitted.kaigo !== null && submitted.kaigo !== '' ? Number(submitted.kaigo) : null;
-      const i = submitted.iryo  !== null && submitted.iryo  !== '' ? Number(submitted.iryo)  : null;
-      const total = (k || 0) + (i || 0);
-      document.getElementById('r-kaigo').innerHTML = k != null ? `${k.toFixed(1)}<span class="stat-unit">時間</span>` : '—';
-      document.getElementById('r-iryo').innerHTML  = i != null ? `${i.toFixed(1)}<span class="stat-unit">時間</span>` : '—';
-      document.getElementById('r-total').innerHTML = `${total.toFixed(1)}<span class="stat-unit">時間</span>`;
-      document.getElementById('nurseResult').style.display = 'block';
-    } else {
-      const v = submitted.value !== null && submitted.value !== '' ? Number(submitted.value) : null;
-      document.getElementById('r-units').innerHTML = v != null ? `${v}<span class="stat-unit">単位</span>` : '—';
-      document.getElementById('rehabResult').style.display = 'block';
-    }
-
-    // 月次実績
     const d = new Date(date + 'T00:00:00');
     const year = d.getFullYear(), month = d.getMonth() + 1;
-    document.getElementById('monthlyTitle').textContent = `${month}月の実績`;
-    document.getElementById('monthlyLoading').style.display = 'block';
-    document.getElementById('monthlyGrid').style.display    = 'none';
-
     try {
       const r = await fetch(`/api/monthly-stats?year=${year}&month=${month}`);
-      renderMonthlyStats(await r.json(), month);
+      renderMonthlyStats(await r.json());
     } catch (_) {
-      document.getElementById('monthlyLoading').textContent = '集計の取得に失敗しました';
+      document.getElementById('resultLoadingCard').innerHTML =
+        '<div class="loading">集計の取得に失敗しました</div>';
     }
   }
 
-  function renderMonthlyStats(stats, month) {
-    document.getElementById('monthlyLoading').style.display = 'none';
-    const grid = document.getElementById('monthlyGrid');
-    grid.style.display = 'grid';
-    if (currentUser.type === 'nurse') {
-      grid.innerHTML = `
-        <div class="m-box"><div class="m-label">介護 合計</div>
-          <div class="m-val">${(stats.total_kaigo||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
-        <div class="m-box"><div class="m-label">医療 合計</div>
-          <div class="m-val">${(stats.total_iryo||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
-        <div class="m-box" style="background:var(--ok-bg)"><div class="m-label">合計時間</div>
-          <div class="m-val" style="color:var(--ok)">${(stats.total||0).toFixed(1)}<span class="m-unit">時間</span></div></div>
-        <div class="m-box"><div class="m-label">稼働日数</div>
-          <div class="m-val">${stats.working_days||0}<span class="m-unit">日</span></div></div>`;
-    } else {
-      grid.innerHTML = `
-        <div class="m-box" style="background:var(--ok-bg)"><div class="m-label">合計単位数</div>
-          <div class="m-val" style="color:var(--ok)">${stats.total_units||0}<span class="m-unit">単位</span></div></div>
-        <div class="m-box"><div class="m-label">稼働日数</div>
-          <div class="m-val">${stats.working_days||0}<span class="m-unit">日</span></div></div>`;
-    }
-    renderIncentive(stats);
-  }
-
-  function renderIncentive(stats) {
-    const card = document.getElementById('incentiveCard');
-    if (!stats || stats.incentive_line == null) {
-      card.style.display = 'none';
-      return;
-    }
-    card.style.display = 'block';
-    const line = stats.incentive_line;
+  function renderMonthlyStats(stats) {
+    document.getElementById('resultLoadingCard').style.display = 'none';
+    const isIncentive = !!stats.incentive_triggered;
+    const cls = isIncentive ? ' incentive' : '';
+    const line = stats.incentive_line ?? 0;
     const days = stats.working_days || 0;
-    const goalLine = document.getElementById('incentiveGoalLine');
+
+    let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml;
+
     if (currentUser.type === 'nurse') {
       const target = (line * days).toFixed(1);
       const actual = (stats.total || 0).toFixed(1);
-      goalLine.textContent = `目標：${target}時間　／　実績：${actual}時間`;
+      goalLine = `目標：${target}時間　／　実績：${actual}時間`;
+      bigLabel = '合計時間'; bigNum = (stats.total || 0).toFixed(1); bigUnit = '時間';
+      subCols  = 'cols-3';
+      subHtml  = `
+        <div class="result-sub-box">
+          <div class="result-sub-label">介護</div>
+          <div class="result-sub-val">${(stats.total_kaigo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">医療</div>
+          <div class="result-sub-val">${(stats.total_iryo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">稼働日数</div>
+          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+        </div>`;
     } else {
       const target = (Math.round(line * days * 10) / 10).toFixed(1);
       const actual = stats.total_units || 0;
-      goalLine.textContent = `目標：${target}単位　／　実績：${actual}単位`;
+      goalLine = `目標：${target}単位　／　実績：${actual}単位`;
+      bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
+      subCols  = 'cols-2';
+      subHtml  = `
+        <div class="result-sub-box">
+          <div class="result-sub-label">合計単位数</div>
+          <div class="result-sub-val">${actual}<span class="result-sub-unit">単位</span></div>
+        </div>
+        <div class="result-sub-box">
+          <div class="result-sub-label">稼働日数</div>
+          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+        </div>`;
     }
-    const msg = document.getElementById('incentiveMsg');
-    if (stats.incentive_triggered) {
-      msg.innerHTML = '<div class="incentive-hit">お疲れ様です。インセンティブが発生しています！</div>';
-    } else {
-      msg.innerHTML = '<div class="incentive-ok">入力ありがとうございます。お疲れ様でした。</div>';
-    }
+
+    const incentiveMsg = isIncentive
+      ? '<p class="result-incentive-msg">インセンティブが発生しています💰</p>' : '';
+
+    const card = document.getElementById('resultStatsCard');
+    card.innerHTML = `
+      <div class="result-card${cls}">
+        <p class="result-greeting">ご入力ありがとうございます。<br>お疲れ様でした🙏</p>
+        <hr class="result-divider">
+        <p class="result-goal-line">${goalLine}</p>
+        <div class="result-big-total">
+          <span class="result-big-label">${bigLabel}</span>
+          <span class="result-big-num">${bigNum}</span>
+          <span class="result-big-label">${bigUnit}</span>
+        </div>
+        ${incentiveMsg}
+        <div class="result-sub-grid ${subCols}">${subHtml}</div>
+      </div>`;
+    card.style.display = 'block';
   }
 
   function continueInput() {
-    // ピッカー状態リセット
     pv.kaigo = null; pv.iryo = null; pv.rehab = null;
     selectVal('kaigo', null); selectVal('iryo', null); selectVal('rehab', null);
     updateTotal();
-    // 日付を今日に戻す
     document.getElementById('dateInput').value = toDateStr(new Date());
-    // 結果ビューを隠す
-    document.getElementById('nurseResult').style.display   = 'none';
-    document.getElementById('rehabResult').style.display   = 'none';
-    document.getElementById('incentiveCard').style.display = 'none';
-    document.getElementById('resultView').style.display    = 'none';
-    document.getElementById('formView').style.display     = 'block';
+    document.getElementById('resultStatsCard').style.display  = 'none';
+    document.getElementById('resultLoadingCard').style.display = 'none';
+    document.getElementById('resultView').style.display = 'none';
+    document.getElementById('formView').style.display   = 'block';
     window.scrollTo(0, 0);
   }
 
