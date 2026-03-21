@@ -1,5 +1,5 @@
 // Service Worker（オフライン対応・最小構成）
-const CACHE = 'visit-v1';
+const CACHE = 'visit-v2';
 const PRECACHE = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
