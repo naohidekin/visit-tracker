@@ -23,8 +23,9 @@ app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── 定数 ──────────────────────────────────────────────────────
 const SPREADSHEET_ID  = process.env.SPREADSHEET_ID;
-const STAFF_PATH      = path.join(__dirname, 'staff.json');
-const REGISTRY_PATH   = path.join(__dirname, 'spreadsheet-registry.json');
+const DATA_DIR        = process.env.DATA_DIR || __dirname;
+const STAFF_PATH      = path.join(DATA_DIR, 'staff.json');
+const REGISTRY_PATH   = path.join(DATA_DIR, 'spreadsheet-registry.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
@@ -864,7 +865,23 @@ app.get('/api/admin/registry', requireAdmin, (_req, res) => {
 });
 
 // ─── 起動 ──────────────────────────────────────────────────────
+async function ensureDataDir() {
+  if (DATA_DIR === __dirname) return;
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  // staff.json が DATA_DIR になければ git リポジトリのものをコピー
+  if (!fs.existsSync(STAFF_PATH)) {
+    const src = path.join(__dirname, 'staff.json');
+    if (fs.existsSync(src)) fs.copyFileSync(src, STAFF_PATH);
+  }
+  // spreadsheet-registry.json も同様
+  if (!fs.existsSync(REGISTRY_PATH)) {
+    const src = path.join(__dirname, 'spreadsheet-registry.json');
+    if (fs.existsSync(src)) fs.copyFileSync(src, REGISTRY_PATH);
+  }
+}
+
 async function main() {
+  await ensureDataDir();
   await ensurePasswordsHashed();
 
   // 毎年12/31 23:00に翌年スプレッドシートを自動作成

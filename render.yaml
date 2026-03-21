@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: visit-tracker
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: visit-tracker-data
+      mountPath: /data
+      sizeGB: 1
