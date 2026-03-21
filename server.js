@@ -146,7 +146,7 @@ async function getSheets() {
   return google.sheets({ version: 'v4', auth: getAuth() });
 }
 
-// ─── 起動時：未ハッシュPWをハッシュ化 ──────────────────────────
+// ─── 起動時：未ハッシュPWをハッシュ化 & 旧 'rehab' 職種を 'PT' に移行 ──
 async function ensurePasswordsHashed() {
   const data = loadStaff();
   let changed = false;
@@ -155,8 +155,13 @@ async function ensurePasswordsHashed() {
       s.password_hash = await bcrypt.hash(s.initial_pw, 10);
       changed = true;
     }
+    // 旧データの 'rehab' を 'PT' に移行（PT/OT/ST 細分化対応）
+    if (s.type === 'rehab') {
+      s.type = 'PT';
+      changed = true;
+    }
   }
-  if (changed) { saveStaff(data); console.log('✅ パスワードをハッシュ化しました'); }
+  if (changed) { saveStaff(data); console.log('✅ スタッフデータを更新しました'); }
 }
 
 // ─── 認証ミドルウェア ───────────────────────────────────────────
