@@ -384,13 +384,13 @@
     const today = toDateStr(now);
     const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = toDateStr(tomorrow);
-    const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    const editableFrom = getEditableFromDate();
     const di = document.getElementById('dateInput');
     di.max = tomorrowStr;
-    di.min = firstDay;
+    di.min = editableFrom;
     di.addEventListener('change', onDateChange);
     const dateParam = new URLSearchParams(window.location.search).get('date');
-    if (dateParam && dateParam >= firstDay && dateParam <= tomorrowStr) {
+    if (dateParam && dateParam >= editableFrom && dateParam <= tomorrowStr) {
       di.value = dateParam;
     } else {
       di.value = today;
@@ -416,6 +416,20 @@
   function toDateStr(d) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
+
+  // 締日ルール：毎月15日締め → 修正可能開始日（直近の16日）を返す
+  function getEditableFromDate() {
+    const now = new Date();
+    const day = now.getDate();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+    if (day < 16) {
+      month -= 1;
+      if (month <= 0) { month = 12; year--; }
+    }
+    return `${year}-${String(month).padStart(2,'0')}-16`;
+  }
+
   function formatDateJP(dateStr) {
     const d = new Date(dateStr + 'T00:00:00');
     return `${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;

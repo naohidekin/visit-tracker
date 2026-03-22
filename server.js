@@ -319,10 +319,20 @@ app.post('/api/record', requireStaff, async (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
 
-  // 未来日付チェック
+  // 日付チェック
   const d = new Date(date);
   const today = new Date(); today.setHours(23, 59, 59, 999);
   if (d > today) return res.status(400).json({ error: '未来の日付には記録できません' });
+
+  // 締日チェック：直近の16日より前は修正不可
+  const now = new Date();
+  let editYear = now.getFullYear(), editMonth = now.getMonth() + 1;
+  if (now.getDate() < 16) {
+    editMonth -= 1;
+    if (editMonth <= 0) { editMonth = 12; editYear--; }
+  }
+  const editableFrom = new Date(`${editYear}-${String(editMonth).padStart(2,'0')}-16T00:00:00`);
+  if (d < editableFrom) return res.status(400).json({ error: '締日（15日）以前の日付は修正できません' });
 
   const year  = d.getFullYear();
   const month = d.getMonth() + 1;

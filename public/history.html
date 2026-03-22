@@ -78,6 +78,8 @@
     .btn-edit.disabled{background:#e8edf5;color:#aab2c4;cursor:default}
     /* 注意バナー */
     .prev-notice{background:#f0f4f8;border-radius:8px;padding:8px 12px;font-size:12px;color:var(--muted);margin-bottom:12px}
+    /* 締済バッジ */
+    .closed-label{font-size:11px;font-weight:700;color:#aab2c4;background:#e8edf5;border-radius:5px;padding:3px 8px;white-space:nowrap}
     /* ローディング */
     .loading{text-align:center;padding:32px;color:var(--muted);font-size:13px}
   </style>
@@ -117,7 +119,7 @@
   <div class="card" id="tableSection" style="display:none">
     <div class="section-title">日別明細</div>
     <div class="prev-notice" id="prevNotice" style="display:none">
-      ※ 前月以前のデータは修正できません
+      ※ 締日（15日）以前の行は修正できません（締済）
     </div>
     <div class="table-wrap">
       <table>
@@ -132,6 +134,19 @@
 <script>
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
+
+  // 締日ルール：毎月15日締め → 修正可能開始日（直近の16日）を返す
+  function getEditableFromDate() {
+    const now = new Date();
+    const day = now.getDate();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+    if (day < 16) {
+      month -= 1;
+      if (month <= 0) { month = 12; year--; }
+    }
+    return `${year}-${String(month).padStart(2,'0')}-16`;
+  }
 
   async function init() {
     const res = await fetch('/api/me');
@@ -242,9 +257,11 @@
   function renderTable(data) {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const isCurrentMonth = data.year === now.getFullYear() && data.month === now.getMonth() + 1;
+    const editableFrom = getEditableFromDate();
 
-    document.getElementById('prevNotice').style.display = isCurrentMonth ? 'none' : 'block';
+    // 表示中の月に締済行があるか（= 月の初日が修正可能開始日より前）
+    const viewedFirstDay = `${data.year}-${String(data.month).padStart(2,'0')}-01`;
+    document.getElementById('prevNotice').style.display = viewedFirstDay < editableFrom ? 'block' : 'none';
 
     const head = document.getElementById('tableHead');
     const body = document.getElementById('tableBody');
@@ -254,13 +271,16 @@
       head.innerHTML = '<tr><th>日付</th><th><span class="badge-kaigo">介護</span></th><th><span class="badge-iryo">医療</span></th><th>合計</th><th></th></tr>';
       for (const d of data.days) {
         const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
-        const isFuture = dateStr > todayStr;
-        const hasData  = d.kaigo != null || d.iryo != null;
-        const wdClass  = d.weekday === '土' ? 'sat' : d.weekday === '日' ? 'sun' : '';
-        const trClass  = isFuture ? 'future-row' : (!hasData ? 'no-data-row' : '');
-        const editBtn  = isCurrentMonth && !isFuture
-          ? `<button class="btn-edit active" onclick="editDate('${dateStr}')">修正</button>`
-          : `<button class="btn-edit disabled" disabled>修正</button>`;
+        const isFuture  = dateStr > todayStr;
+        const isClosed  = !isFuture && dateStr < editableFrom;
+        const hasData   = d.kaigo != null || d.iryo != null;
+        const wdClass   = d.weekday === '土' ? 'sat' : d.weekday === '日' ? 'sun' : '';
+        const trClass   = isFuture ? 'future-row' : (!hasData ? 'no-data-row' : '');
+        const editBtn   = isFuture
+          ? `<button class="btn-edit disabled" disabled>修正</button>`
+          : isClosed
+            ? `<span class="closed-label">締済</span>`
+            : `<button class="btn-edit active" onclick="editDate('${dateStr}')">修正</button>`;
         const tr = document.createElement('tr');
         if (trClass) tr.className = trClass;
         tr.innerHTML = `
@@ -276,11 +296,14 @@
       for (const d of data.days) {
         const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
         const isFuture = dateStr > todayStr;
+        const isClosed = !isFuture && dateStr < editableFrom;
         const wdClass  = d.weekday === '土' ? 'sat' : d.weekday === '日' ? 'sun' : '';
         const trClass  = isFuture ? 'future-row' : (d.value == null ? 'no-data-row' : '');
-        const editBtn  = isCurrentMonth && !isFuture
-          ? `<button class="btn-edit active" onclick="editDate('${dateStr}')">修正</button>`
-          : `<button class="btn-edit disabled" disabled>修正</button>`;
+        const editBtn  = isFuture
+          ? `<button class="btn-edit disabled" disabled>修正</button>`
+          : isClosed
+            ? `<span class="closed-label">締済</span>`
+            : `<button class="btn-edit active" onclick="editDate('${dateStr}')">修正</button>`;
         const tr = document.createElement('tr');
         if (trClass) tr.className = trClass;
         tr.innerHTML = `
