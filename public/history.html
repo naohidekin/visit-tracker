@@ -135,13 +135,14 @@
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
 
-  // 締日ルール：毎月15日締め → 修正可能開始日（直近の16日）を返す
+  // 締日ルール：毎月15日締め → 修正可能開始日を返す
+  // 1〜20日：前月16日、21日〜末日：当月16日
   function getEditableFromDate() {
     const now = new Date();
     const day = now.getDate();
     let year = now.getFullYear();
     let month = now.getMonth() + 1;
-    if (day < 16) {
+    if (day <= 20) {
       month -= 1;
       if (month <= 0) { month = 12; year--; }
     }

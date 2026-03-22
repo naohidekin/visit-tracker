@@ -324,10 +324,10 @@ app.post('/api/record', requireStaff, async (req, res) => {
   const today = new Date(); today.setHours(23, 59, 59, 999);
   if (d > today) return res.status(400).json({ error: '未来の日付には記録できません' });
 
-  // 締日チェック：直近の16日より前は修正不可
+  // 締日チェック：1〜20日は前月16日、21日〜末日は当月16日より前は修正不可
   const now = new Date();
   let editYear = now.getFullYear(), editMonth = now.getMonth() + 1;
-  if (now.getDate() < 16) {
+  if (now.getDate() <= 20) {
     editMonth -= 1;
     if (editMonth <= 0) { editMonth = 12; editYear--; }
   }
