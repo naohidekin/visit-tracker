@@ -176,6 +176,29 @@ async function ensurePasswordsHashed() {
   if (changed) { saveStaff(data); console.log('✅ スタッフデータを更新しました'); }
 }
 
+// ─── 起動時：ソース staff.json に新スタッフがいれば DATA_DIR へ追加 ──
+async function syncNewStaffFromSource() {
+  if (DATA_DIR === __dirname) return; // ローカルは同一ファイルなので不要
+  const srcPath = path.join(__dirname, 'staff.json');
+  if (!fs.existsSync(srcPath)) return;
+
+  const srcData  = JSON.parse(fs.readFileSync(srcPath, 'utf8'));
+  const liveData = loadStaff();
+  const liveIds  = new Set(liveData.staff.map(s => s.id));
+
+  const newStaff = srcData.staff.filter(s => !liveIds.has(s.id));
+  if (newStaff.length === 0) return;
+
+  for (const s of newStaff) {
+    if (!s.password_hash && s.initial_pw) {
+      s.password_hash = await bcrypt.hash(s.initial_pw, 10);
+    }
+    liveData.staff.push(s);
+    console.log(`✅ 新スタッフを /data/staff.json に追加しました: ${s.name} (${s.id})`);
+  }
+  saveStaff(liveData);
+}
+
 // ─── 認証ミドルウェア ───────────────────────────────────────────
 function requireStaff(req, res, next) {
   if (!req.session.staffId) return res.status(401).json({ error: 'ログインが必要です' });
@@ -1027,6 +1050,7 @@ async function ensureDataDir() {
 async function main() {
   await ensureDataDir();
   await ensurePasswordsHashed();
+  await syncNewStaffFromSource();
 
   // 毎年12/31 23:00に翌年スプレッドシートを自動作成
   cron.schedule('0 23 31 12 *', async () => {
