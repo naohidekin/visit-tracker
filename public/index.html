@@ -127,6 +127,19 @@
     .result-sub-val{font-size:18px;font-weight:800;color:var(--text)}
     .result-sub-unit{font-size:12px;color:var(--muted);margin-left:2px}
 
+    /* ── 予定アイテム ── */
+    .schedule-item{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+    .schedule-item:last-child{margin-bottom:0}
+    .schedule-item-date{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
+    .schedule-item-values{font-size:13px;color:var(--muted);margin-bottom:10px}
+    .schedule-item-btns{display:flex;gap:8px}
+    .sched-btn{padding:7px 16px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s}
+    .sched-btn:active{opacity:.75}
+    .sched-confirm{background:var(--blue);color:#fff}
+    .sched-confirm:disabled{background:#9ab3d1;cursor:default;opacity:1}
+    .sched-delete{background:#eef0f4;color:var(--muted)}
+    .schedule-reminder{text-align:center;padding:8px 0 4px;font-size:14px;line-height:1.8;color:var(--ok)}
+
     /* ── 上書きモーダル ── */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
     .modal-overlay.show{display:flex}
@@ -155,6 +168,12 @@
 
 <!-- ── 入力フォームビュー ── -->
 <div id="formView" class="container" style="display:none">
+
+  <!-- 未確定の予定 -->
+  <div class="card" id="pendingSchedulesCard" style="display:none">
+    <div class="card-title">📋 未確定の予定</div>
+    <div id="pendingSchedulesList"></div>
+  </div>
 
   <!-- 日付 -->
   <div class="card">
@@ -219,6 +238,7 @@
   <div style="padding:0 0 16px">
     <button class="submit-btn" id="submitBtn" onclick="handleSubmit()">記録する</button>
   </div>
+
 </div>
 
 <!-- ── 送信結果ビュー ── -->
@@ -237,6 +257,11 @@
   <!-- ローディング -->
   <div class="card" id="resultLoadingCard">
     <div class="loading">集計中...</div>
+  </div>
+
+  <!-- 予定登録リマインダー -->
+  <div class="card" id="scheduleReminder" style="display:none">
+    <div class="schedule-reminder">予定として登録しました。<br>翌日に確定してください。</div>
   </div>
 
   <div style="padding:0 0 16px">
@@ -357,12 +382,15 @@
 
     const now = new Date();
     const today = toDateStr(now);
+    const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = toDateStr(tomorrow);
     const firstDay = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
     const di = document.getElementById('dateInput');
-    di.max = today;
+    di.max = tomorrowStr;
     di.min = firstDay;
+    di.addEventListener('change', onDateChange);
     const dateParam = new URLSearchParams(window.location.search).get('date');
-    if (dateParam && dateParam >= firstDay && dateParam <= today) {
+    if (dateParam && dateParam >= firstDay && dateParam <= tomorrowStr) {
       di.value = dateParam;
     } else {
       di.value = today;
@@ -374,6 +402,15 @@
       document.getElementById('rehabCard').style.display = 'block';
     }
     document.getElementById('formView').style.display = 'block';
+    await loadPendingSchedules();
+  }
+
+  function onDateChange() {
+    const date = document.getElementById('dateInput').value;
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = toDateStr(tomorrow);
+    document.getElementById('submitBtn').textContent =
+      date === tomorrowStr ? '予定として登録する' : '記録する';
   }
 
   function toDateStr(d) {
@@ -388,7 +425,6 @@
   async function handleSubmit() {
     const date = document.getElementById('dateInput').value;
     if (!date) { alert('訪問日を入力してください'); return; }
-    if (date > toDateStr(new Date())) { alert('未来の日付は記録できません'); return; }
 
     if (currentUser.type === 'nurse') {
       if (pv.kaigo === null && pv.iryo === null) {
@@ -397,6 +433,15 @@
     } else {
       if (pv.rehab === null) { alert('単位数を選択してください'); return; }
     }
+
+    // 翌日 → 予定として登録
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    if (date === toDateStr(tomorrow)) {
+      await doSaveSchedule(date);
+      return;
+    }
+
+    if (date > toDateStr(new Date())) { alert('未来の日付は記録できません'); return; }
 
     // 上書きチェック
     try {
@@ -413,6 +458,34 @@
     } catch (_) { /* チェック失敗時はそのまま送信 */ }
 
     await doSubmit();
+  }
+
+  async function doSaveSchedule(date) {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = '送信中...';
+
+    const body = currentUser.type === 'nurse'
+      ? { date, kaigo: pv.kaigo, iryo: pv.iryo }
+      : { date, value: pv.rehab };
+
+    const res  = await fetch('/api/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    btn.disabled = false; btn.textContent = '予定として登録する';
+
+    if (!data.success) { alert('エラー: ' + (data.error || '送信失敗')); return; }
+
+    document.getElementById('formView').style.display   = 'none';
+    document.getElementById('resultView').style.display = 'block';
+    document.querySelector('#resultView .check').textContent = '📋';
+    document.querySelector('#resultView h2').textContent    = '予定として登録しました';
+    document.getElementById('resultDateLabel').textContent  = formatDateJP(date) + ' の予定を登録しました';
+    document.getElementById('resultStatsCard').style.display    = 'none';
+    document.getElementById('resultLoadingCard').style.display  = 'none';
+    document.getElementById('scheduleReminder').style.display   = 'block';
   }
 
   function buildOverwriteMsg(ex, date) {
@@ -439,6 +512,7 @@
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.textContent = '送信中...';
 
+
     const date = document.getElementById('dateInput').value;
     const body = currentUser.type === 'nurse'
       ? { date, kaigo: pv.kaigo, iryo: pv.iryo }
@@ -456,13 +530,17 @@
     await showResult(date, data);
   }
 
+
   // ── 結果ビュー ────────────────────────────────────────────
   async function showResult(date, submitted) {
     document.getElementById('formView').style.display   = 'none';
     document.getElementById('resultView').style.display = 'block';
-    document.getElementById('resultDateLabel').textContent = formatDateJP(date) + ' の記録を送信しました';
-    document.getElementById('resultStatsCard').style.display = 'none';
-    document.getElementById('resultLoadingCard').style.display = 'block';
+    document.querySelector('#resultView .check').textContent = '✅';
+    document.querySelector('#resultView h2').textContent    = '記録を送信しました';
+    document.getElementById('resultDateLabel').textContent  = formatDateJP(date) + ' の記録を送信しました';
+    document.getElementById('resultStatsCard').style.display    = 'none';
+    document.getElementById('resultLoadingCard').style.display  = 'block';
+    document.getElementById('scheduleReminder').style.display   = 'none';
 
     const d = new Date(date + 'T00:00:00');
     const year = d.getFullYear(), month = d.getMonth() + 1;
@@ -544,11 +622,72 @@
     selectVal('kaigo', null); selectVal('iryo', null); selectVal('rehab', null);
     updateTotal();
     document.getElementById('dateInput').value = toDateStr(new Date());
-    document.getElementById('resultStatsCard').style.display  = 'none';
+    document.getElementById('submitBtn').textContent = '記録する';
+    document.getElementById('resultStatsCard').style.display   = 'none';
     document.getElementById('resultLoadingCard').style.display = 'none';
+    document.getElementById('scheduleReminder').style.display  = 'none';
     document.getElementById('resultView').style.display = 'none';
     document.getElementById('formView').style.display   = 'block';
+    loadPendingSchedules();
     window.scrollTo(0, 0);
+  }
+
+  // ── 未確定の予定 ──────────────────────────────────────────
+  async function loadPendingSchedules() {
+    try {
+      const res = await fetch('/api/schedules');
+      if (!res.ok) return;
+      renderPendingSchedules(await res.json());
+    } catch (_) {}
+  }
+
+  function renderPendingSchedules(schedules) {
+    const card = document.getElementById('pendingSchedulesCard');
+    const list = document.getElementById('pendingSchedulesList');
+    if (!schedules.length) { card.style.display = 'none'; return; }
+
+    const today = toDateStr(new Date());
+    list.innerHTML = schedules.map(s => {
+      const canConfirm = s.date <= today;
+      let valText = '';
+      if (s.jobType === 'nurse') {
+        const k = s.kaigo != null ? s.kaigo.toFixed(1) + '時間' : '—';
+        const i = s.iryo  != null ? s.iryo.toFixed(1)  + '時間' : '—';
+        valText = `介護：${k} ／ 医療：${i}`;
+      } else {
+        valText = s.units != null ? `${s.units}単位` : '—';
+      }
+      return `
+        <div class="schedule-item">
+          <div class="schedule-item-date">${formatDateJP(s.date)}</div>
+          <div class="schedule-item-values">${valText}</div>
+          <div class="schedule-item-btns">
+            <button class="sched-btn sched-confirm" onclick="confirmSchedule('${s.id}')"
+              ${canConfirm ? '' : 'disabled title="翌日以降はまだ確定できません"'}>確定</button>
+            <button class="sched-btn sched-delete" onclick="deleteSchedule('${s.id}')">削除</button>
+          </div>
+        </div>`;
+    }).join('');
+    card.style.display = 'block';
+  }
+
+  async function confirmSchedule(id) {
+    const res  = await fetch(`/api/schedules/${id}/confirm`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      alert('確定しました');
+      await loadPendingSchedules();
+    } else {
+      alert('エラー: ' + (data.error || '確定失敗'));
+    }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('この予定を削除しますか？')) return;
+    const res  = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { await loadPendingSchedules(); }
+    else alert('エラー: ' + (data.error || '削除失敗'));
   }
 
   async function logout() {

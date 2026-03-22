@@ -26,6 +26,7 @@ const SPREADSHEET_ID  = process.env.SPREADSHEET_ID;
 const DATA_DIR        = process.env.DATA_DIR || __dirname;
 const STAFF_PATH      = path.join(DATA_DIR, 'staff.json');
 const REGISTRY_PATH   = path.join(DATA_DIR, 'spreadsheet-registry.json');
+const SCHEDULES_PATH  = path.join(DATA_DIR, 'schedules.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
@@ -117,6 +118,17 @@ function loadStaff() {
 }
 function saveStaff(data) {
   fs.writeFileSync(STAFF_PATH, JSON.stringify(data, null, 2));
+}
+
+function loadSchedules() {
+  if (!fs.existsSync(SCHEDULES_PATH)) return { schedules: [] };
+  return JSON.parse(fs.readFileSync(SCHEDULES_PATH, 'utf8'));
+}
+function saveSchedules(data) {
+  fs.writeFileSync(SCHEDULES_PATH, JSON.stringify(data, null, 2));
+}
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function colToIdx(col) {
@@ -331,6 +343,127 @@ app.post('/api/record', requireStaff, async (req, res) => {
     console.error('❌ record POST error:', JSON.stringify(e.response?.data ?? e.message));
     res.status(500).json({ error: detail });
   }
+});
+
+// ─── API: 予定管理 ──────────────────────────────────────────────
+app.get('/api/schedules', requireStaff, (req, res) => {
+  const data = loadSchedules();
+  res.json(data.schedules.filter(s => s.staffId === req.session.staffId));
+});
+
+app.post('/api/schedules', requireStaff, (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  const schedDate = new Date(date + 'T00:00:00');
+  if (schedDate <= today) return res.status(400).json({ error: '予定登録は翌日以降の日付のみ可能です' });
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const data = loadSchedules();
+  // 同一スタッフ・同一日付の予定は上書き
+  data.schedules = data.schedules.filter(s => !(s.staffId === req.session.staffId && s.date === date));
+
+  const id = `${req.session.staffId}-${date}-${Date.now()}`;
+  const entry = {
+    id,
+    staffId: req.session.staffId,
+    staffName: req.session.staffName,
+    jobType: staff.type,
+    date,
+    kaigo: null, iryo: null, units: null,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  if (staff.type === 'nurse') {
+    const { kaigo, iryo } = req.body;
+    entry.kaigo = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : null;
+    entry.iryo  = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : null;
+  } else {
+    const { value } = req.body;
+    entry.units = (value !== '' && value !== null && value !== undefined) ? Number(value) : null;
+  }
+
+  data.schedules.push(entry);
+  saveSchedules(data);
+  res.json({ success: true, schedule: entry });
+});
+
+app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
+  const data = loadSchedules();
+  const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
+  if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
+  const schedule = data.schedules[idx];
+
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  const schedDate = new Date(schedule.date + 'T00:00:00');
+  if (schedDate > today) return res.status(400).json({ error: 'まだ確定できません（翌日以降の予定です）' });
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === schedule.staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const d     = new Date(schedule.date + 'T00:00:00');
+  const year  = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const row   = DATA_START_ROW + d.getDate() - 1;
+  const sid   = getSpreadsheetIdForYear(year);
+
+  try {
+    const api = await getSheets();
+    if (staff.type === 'nurse') {
+      const kVal = schedule.kaigo != null ? schedule.kaigo : '';
+      const iVal = schedule.iryo  != null ? schedule.iryo  : '';
+      await api.spreadsheets.values.batchUpdate({
+        spreadsheetId: sid,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kVal]] },
+            { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iVal]] },
+          ],
+        },
+      });
+    } else {
+      const val = schedule.units != null ? schedule.units : '';
+      await api.spreadsheets.values.update({
+        spreadsheetId: sid,
+        range: `${month}月!${staff.col}${row}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[val]] },
+      });
+    }
+    data.schedules.splice(idx, 1);
+    saveSchedules(data);
+    res.json({ success: true });
+  } catch (e) {
+    const detail = e.response?.data?.error?.message || e.message;
+    res.status(500).json({ error: detail });
+  }
+});
+
+app.delete('/api/schedules/:id', requireStaff, (req, res) => {
+  const data = loadSchedules();
+  const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
+  if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
+  data.schedules.splice(idx, 1);
+  saveSchedules(data);
+  res.json({ success: true });
+});
+
+app.get('/api/admin/schedules', requireAdmin, (_req, res) => {
+  res.json(loadSchedules().schedules);
+});
+
+app.delete('/api/admin/schedules/:id', requireAdmin, (req, res) => {
+  const data = loadSchedules();
+  const idx = data.schedules.findIndex(s => s.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
+  data.schedules.splice(idx, 1);
+  saveSchedules(data);
+  res.json({ success: true });
 });
 
 // ─── API: 月別実績 ──────────────────────────────────────────────
@@ -882,6 +1015,12 @@ async function ensureDataDir() {
   if (!fs.existsSync(REGISTRY_PATH)) {
     const src = path.join(__dirname, 'spreadsheet-registry.json');
     if (fs.existsSync(src)) fs.copyFileSync(src, REGISTRY_PATH);
+  }
+  // schedules.json も同様
+  if (!fs.existsSync(SCHEDULES_PATH)) {
+    const src = path.join(__dirname, 'schedules.json');
+    if (fs.existsSync(src)) fs.copyFileSync(src, SCHEDULES_PATH);
+    else fs.writeFileSync(SCHEDULES_PATH, JSON.stringify({ schedules: [] }, null, 2));
   }
 }
 

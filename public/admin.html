@@ -123,6 +123,21 @@
 <!-- メインコンテンツ -->
 <div id="mainContent" class="container">
 
+  <!-- 未確定の予定一覧 -->
+  <div class="card">
+    <h2>📋 未確定の予定一覧</h2>
+    <div class="spinner" id="schedulesSpinner">読み込み中...</div>
+    <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
+    <div class="table-wrap" id="schedulesTableWrap" style="display:none">
+      <table>
+        <thead>
+          <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
+        </thead>
+        <tbody id="schedulesBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- スタッフ一覧 -->
   <div class="card">
     <h2>👥 スタッフ一覧</h2>
@@ -392,6 +407,7 @@
     loadIncentive();
     initAdminMonthlySelectors();
     updateAdminStaffSelect();
+    loadAdminSchedules();
   }
 
   function buildStaffRowHtml(s, badge, colInfo, furi) {
@@ -589,6 +605,61 @@
       showToast('エラー: ' + (data.error || 'リセット失敗'));
       closeResetModal();
     }
+  }
+
+  // ── 予定一覧 ─────────────────────────────────────────────────
+  async function loadAdminSchedules() {
+    document.getElementById('schedulesSpinner').style.display = 'block';
+    document.getElementById('schedulesEmpty').style.display   = 'none';
+    document.getElementById('schedulesTableWrap').style.display = 'none';
+    try {
+      const res  = await fetch('/api/admin/schedules');
+      if (!res.ok) { document.getElementById('schedulesSpinner').style.display = 'none'; return; }
+      const list = await res.json();
+      document.getElementById('schedulesSpinner').style.display = 'none';
+      if (!list.length) {
+        document.getElementById('schedulesEmpty').style.display = 'block';
+        return;
+      }
+      const WEEKDAYS = ['日','月','火','水','木','金','土'];
+      function fmtDateJP(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        return `${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+      }
+      const tbody = document.getElementById('schedulesBody');
+      tbody.innerHTML = '';
+      for (const s of list) {
+        let valText = '';
+        if (s.jobType === 'nurse') {
+          const k = s.kaigo != null ? s.kaigo.toFixed(1) + '時間' : '—';
+          const i = s.iryo  != null ? s.iryo.toFixed(1)  + '時間' : '—';
+          valText = `介護：${k} ／ 医療：${i}`;
+        } else {
+          valText = s.units != null ? `${s.units}単位` : '—';
+        }
+        const createdAt = new Date(s.createdAt).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${s.staffName}</strong></td>
+          <td style="white-space:nowrap">${fmtDateJP(s.date)}</td>
+          <td>${staffTypeBadge(s.jobType)}</td>
+          <td style="font-size:12px">${valText}</td>
+          <td style="font-size:11px;color:var(--muted);white-space:nowrap">${createdAt}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteAdminSchedule('${s.id}','${s.staffName}','${s.date}')">削除</button></td>`;
+        tbody.appendChild(tr);
+      }
+      document.getElementById('schedulesTableWrap').style.display = 'block';
+    } catch (e) {
+      document.getElementById('schedulesSpinner').style.display = 'none';
+    }
+  }
+
+  async function deleteAdminSchedule(id, name, date) {
+    if (!confirm(`${name} の ${date} の予定を削除しますか？`)) return;
+    const res  = await fetch(`/api/admin/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast('🗑️ 予定を削除しました'); loadAdminSchedules(); }
+    else showToast('エラー: ' + (data.error || '削除失敗'));
   }
 
   // ── スタッフ月次実績 ──────────────────────────────────────────
@@ -940,6 +1011,7 @@
         renderTable();
         loadIncentive();
         updateAdminStaffSelect();
+        loadAdminSchedules();
       });
     }
   }).catch(() => {});
