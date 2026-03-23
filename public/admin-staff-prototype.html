@@ -52,7 +52,8 @@
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4;flex-wrap:nowrap}
     .iline-row:last-child{border-bottom:none}
-    .iline-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+    .iline-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+    .iline-name-row{display:flex;align-items:center;gap:5px}
     .iline-name-text{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .iline-select{flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;-webkit-appearance:none}
     .btn-save{padding:6px 10px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;white-space:nowrap;flex-shrink:0}
@@ -163,8 +164,10 @@
     <div class="iline-row">
       <div class="iline-name">
         <div class="name-furi">やまだ はなこ</div>
-        <div class="iline-name-text">山田 花子</div>
-        <span class="type-badge type-nurse">看</span>
+        <div class="iline-name-row">
+          <div class="iline-name-text">山田 花子</div>
+          <span class="type-badge type-nurse">看</span>
+        </div>
       </div>
       <select class="iline-select">
         <option>3.0 時間/日</option>
@@ -177,8 +180,10 @@
     <div class="iline-row">
       <div class="iline-name">
         <div class="name-furi">たなか いちろう</div>
-        <div class="iline-name-text">田中 一郎</div>
-        <span class="type-badge type-rehab">PT</span>
+        <div class="iline-name-row">
+          <div class="iline-name-text">田中 一郎</div>
+          <span class="type-badge type-rehab">PT</span>
+        </div>
       </div>
       <select class="iline-select">
         <option>7.00 単位/日</option>
@@ -191,8 +196,10 @@
     <div class="iline-row">
       <div class="iline-name">
         <div class="name-furi">すずき さくら</div>
-        <div class="iline-name-text">鈴木 さくら</div>
-        <span class="type-badge type-rehab">OT</span>
+        <div class="iline-name-row">
+          <div class="iline-name-text">鈴木 さくら</div>
+          <span class="type-badge type-rehab">OT</span>
+        </div>
       </div>
       <select class="iline-select">
         <option>7.00 単位/日</option>
@@ -205,8 +212,10 @@
     <div class="iline-row">
       <div class="iline-name">
         <div class="name-furi">なかむら よしこ</div>
-        <div class="iline-name-text">中村 良子</div>
-        <span class="type-badge type-nurse">看</span>
+        <div class="iline-name-row">
+          <div class="iline-name-text">中村 良子</div>
+          <span class="type-badge type-nurse">看</span>
+        </div>
       </div>
       <select class="iline-select">
         <option>3.0 時間/日</option>
