@@ -18,7 +18,11 @@
     .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer}
     .container{padding:16px;max-width:900px;margin:0 auto}
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
-    .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e8edf5}
+    .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:0;padding-bottom:8px;border-bottom:2px solid #e8edf5;cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}
+    .card.open h2{margin-bottom:14px}
+    .card-body{overflow:hidden;height:0;transition:height .3s ease}
+    .acc-icon{font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px;transition:transform .25s}
+    .card.open .acc-icon{transform:rotate(180deg)}
     label{display:block;font-size:12px;font-weight:600;color:var(--blue-dark);margin-bottom:5px}
     input,select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--white);outline:none;-webkit-appearance:none}
     input:focus,select:focus{border-color:var(--blue)}
@@ -125,83 +129,78 @@
 
   <!-- 未確定の予定一覧 -->
   <div class="card">
-    <h2>📋 未確定の予定一覧</h2>
-    <div class="spinner" id="schedulesSpinner">読み込み中...</div>
-    <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
-    <div class="table-wrap" id="schedulesTableWrap" style="display:none">
-      <table>
-        <thead>
-          <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
-        </thead>
-        <tbody id="schedulesBody"></tbody>
-      </table>
+    <h2 onclick="toggleAccordion(this)">📋 未確定の予定一覧<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <div class="spinner" id="schedulesSpinner">読み込み中...</div>
+      <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
+      <div class="table-wrap" id="schedulesTableWrap" style="display:none">
+        <table>
+          <thead>
+            <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
+          </thead>
+          <tbody id="schedulesBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <!-- スタッフ一覧 -->
   <div class="card">
-    <h2>👥 スタッフ一覧</h2>
-    <div class="spinner" id="tableSpinner">読み込み中...</div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>名前</th><th>ふりがな</th><th>職種</th><th>ID</th><th>列</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="staffBody"></tbody>
-      </table>
+    <h2 onclick="toggleAccordion(this)">👥 スタッフ一覧<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <div class="spinner" id="tableSpinner">読み込み中...</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>名前</th><th>ふりがな</th><th>職種</th><th>ID</th><th>列</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="staffBody"></tbody>
+        </table>
+      </div>
     </div>
-  </div>
-
-  <!-- 翌年スプレッドシート作成 -->
-  <div class="card">
-    <h2>📅 翌年スプレッドシート作成</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
-      翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
-      作成後、新しいスプレッドシートURLが表示されます。
-    </p>
-    <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()">翌年シートを作成</button>
-    <div id="createSheetResult" style="display:none;margin-top:14px"></div>
   </div>
 
   <!-- スタッフ月次実績 -->
   <div class="card">
-    <h2>📊 スタッフ月次実績</h2>
-    <div class="form-grid">
-      <div class="field" style="grid-column:1/-1">
-        <label>スタッフ</label>
-        <select id="viewStaff"><option value="">スタッフを選択してください</option></select>
+    <h2 onclick="toggleAccordion(this)">📊 スタッフ月次実績<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>スタッフ</label>
+          <select id="viewStaff"><option value="">スタッフを選択してください</option></select>
+        </div>
+        <div class="field">
+          <label>年</label>
+          <select id="viewYear">
+            <option value="2025">2025年</option>
+            <option value="2026">2026年</option>
+            <option value="2027">2027年</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>月</label>
+          <select id="viewMonth">
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label>年</label>
-        <select id="viewYear">
-          <option value="2025">2025年</option>
-          <option value="2026">2026年</option>
-          <option value="2027">2027年</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>月</label>
-        <select id="viewMonth">
-          <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
-          <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
-          <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
-          <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn btn-blue" onclick="loadAdminMonthly()">表示</button>
+      <button class="btn btn-blue" onclick="loadAdminMonthly()">表示</button>
 
-    <div id="adminMonthlyResult" style="display:none;margin-top:18px">
-      <div class="spinner" id="adminMonthlySpinner">読み込み中...</div>
-      <div id="adminStatsSection" style="display:none">
-        <div id="adminStatsCard"></div>
-      </div>
-      <div id="adminTableSection" style="display:none">
-        <div class="a-section-title">日別明細</div>
-        <div class="table-wrap">
-          <table><thead id="adminTableHead"></thead><tbody id="adminTableBody"></tbody></table>
+      <div id="adminMonthlyResult" style="display:none;margin-top:18px">
+        <div class="spinner" id="adminMonthlySpinner">読み込み中...</div>
+        <div id="adminStatsSection" style="display:none">
+          <div id="adminStatsCard"></div>
+        </div>
+        <div id="adminTableSection" style="display:none">
+          <div class="a-section-title">日別明細</div>
+          <div class="table-wrap">
+            <table><thead id="adminTableHead"></thead><tbody id="adminTableBody"></tbody></table>
+          </div>
         </div>
       </div>
     </div>
@@ -209,80 +208,97 @@
 
   <!-- インセンティブ設定 -->
   <div class="card">
-    <h2>💰 インセンティブ設定</h2>
-    <div id="incentiveSpinner" class="spinner">読み込み中...</div>
+    <h2 onclick="toggleAccordion(this)">💰 インセンティブ設定<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <div id="incentiveSpinner" class="spinner">読み込み中...</div>
 
-    <!-- デフォルト設定 -->
-    <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
-      <p class="section-sub">デフォルト設定</p>
-      <div class="form-grid">
-        <div class="field">
-          <label>看護師 デフォルト（時間/日）</label>
-          <select id="defaultNurse"></select>
+      <!-- デフォルト設定 -->
+      <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
+        <p class="section-sub">デフォルト設定</p>
+        <div class="form-grid">
+          <div class="field">
+            <label>看護師 デフォルト（時間/日）</label>
+            <select id="defaultNurse"></select>
+          </div>
+          <div class="field">
+            <label>リハビリ デフォルト（単位/日）</label>
+            <select id="defaultRehab"></select>
+          </div>
         </div>
-        <div class="field">
-          <label>リハビリ デフォルト（単位/日）</label>
-          <select id="defaultRehab"></select>
-        </div>
+        <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
       </div>
-      <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
-    </div>
 
-    <!-- スタッフ個別設定 -->
-    <div id="incentiveStaffSection" style="display:none">
-      <p class="section-sub">スタッフ個別設定</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>名前</th><th>職種</th><th>1日あたりのライン</th><th>操作</th></tr>
-          </thead>
-          <tbody id="incentiveBody"></tbody>
-        </table>
+      <!-- スタッフ個別設定 -->
+      <div id="incentiveStaffSection" style="display:none">
+        <p class="section-sub">スタッフ個別設定</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>名前</th><th>職種</th><th>1日あたりのライン</th><th>操作</th></tr>
+            </thead>
+            <tbody id="incentiveBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- スタッフ追加 -->
   <div class="card">
-    <h2>➕ スタッフ追加</h2>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">追加すると全月シート（1〜12月）の4行目に列が自動作成されます。</p>
-    <div class="msg err" id="addErr"></div>
-    <div class="form-grid">
-      <div class="field">
-        <label>フルネーム</label>
-        <input type="text" id="newName" placeholder="山田 花子">
+    <h2 onclick="toggleAccordion(this)">➕ スタッフ追加<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">追加すると全月シート（1〜12月）の4行目に列が自動作成されます。</p>
+      <div class="msg err" id="addErr"></div>
+      <div class="form-grid">
+        <div class="field">
+          <label>フルネーム</label>
+          <input type="text" id="newName" placeholder="山田 花子">
+        </div>
+        <div class="field">
+          <label>職種</label>
+          <select id="newType" onchange="autoGenerate()">
+            <option value="nurse">看護師</option>
+            <option value="PT">PT</option>
+            <option value="OT">OT</option>
+            <option value="ST">ST</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ふりがな（姓）</label>
+          <input type="text" id="newFkana" placeholder="やまだ" oninput="autoGenerate()">
+        </div>
+        <div class="field">
+          <label>ふりがな（名）</label>
+          <input type="text" id="newGkana" placeholder="はなこ" oninput="autoGenerate()">
+        </div>
+        <div class="field">
+          <label>ログインID</label>
+          <input type="text" id="newLoginId" placeholder="yamada08">
+          <div class="auto-label" id="idAutoLabel"></div>
+        </div>
+        <div class="field">
+          <label>初期パスワード</label>
+          <input type="text" id="newInitialPw" placeholder="HY08">
+          <div class="auto-label" id="pwAutoLabel"></div>
+        </div>
       </div>
-      <div class="field">
-        <label>職種</label>
-        <select id="newType" onchange="autoGenerate()">
-          <option value="nurse">看護師</option>
-          <option value="PT">PT</option>
-          <option value="OT">OT</option>
-          <option value="ST">ST</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>ふりがな（姓）</label>
-        <input type="text" id="newFkana" placeholder="やまだ" oninput="autoGenerate()">
-      </div>
-      <div class="field">
-        <label>ふりがな（名）</label>
-        <input type="text" id="newGkana" placeholder="はなこ" oninput="autoGenerate()">
-      </div>
-      <div class="field">
-        <label>ログインID</label>
-        <input type="text" id="newLoginId" placeholder="yamada08">
-        <div class="auto-label" id="idAutoLabel"></div>
-      </div>
-      <div class="field">
-        <label>初期パスワード</label>
-        <input type="text" id="newInitialPw" placeholder="HY08">
-        <div class="auto-label" id="pwAutoLabel"></div>
+      <button class="btn btn-green btn-full" onclick="addStaff()" id="addBtn">追加する</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">
+        ※ 追加処理には数秒かかります（全月シートの列追加のため）
       </div>
     </div>
-    <button class="btn btn-green btn-full" onclick="addStaff()" id="addBtn">追加する</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:10px">
-      ※ 追加処理には数秒かかります（全月シートの列追加のため）
+  </div>
+
+  <!-- 翌年スプレッドシート作成 -->
+  <div class="card">
+    <h2 onclick="toggleAccordion(this)">📅 翌年スプレッドシート作成<span class="acc-icon">▼</span></h2>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+        翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
+        作成後、新しいスプレッドシートURLが表示されます。
+      </p>
+      <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()">翌年シートを作成</button>
+      <div id="createSheetResult" style="display:none;margin-top:14px"></div>
     </div>
   </div>
 
@@ -317,6 +333,25 @@
 <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
 
 <script>
+  // ── アコーディオン ────────────────────────────────────────────
+  function toggleAccordion(h2) {
+    const card = h2.closest('.card');
+    const body = card.querySelector('.card-body');
+    if (card.classList.contains('open')) {
+      body.style.height = body.scrollHeight + 'px';
+      body.getBoundingClientRect();
+      body.style.height = '0';
+      card.classList.remove('open');
+    } else {
+      card.classList.add('open');
+      body.style.height = body.scrollHeight + 'px';
+      body.addEventListener('transitionend', function handler() {
+        if (card.classList.contains('open')) body.style.height = 'auto';
+        body.removeEventListener('transitionend', handler);
+      });
+    }
+  }
+
   // ── ひらがな → ヘボン式ローマ字 ──────────────────────────────
   const HIRA = {
     'あ':'a','い':'i','う':'u','え':'e','お':'o',
