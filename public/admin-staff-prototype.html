@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>スタッフ一覧 プロトタイプ</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --danger:#c0392b;--radius:12px;--shadow:0 2px 12px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);padding:16px;max-width:900px;margin:0 auto}
+    h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:14px}
+
+    /* ── テーブル ── */
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 14px}
+    table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+    th{background:var(--blue-dark);color:#fff;padding:7px 8px;text-align:left;font-size:12px;white-space:nowrap}
+    td{padding:7px 8px;border-bottom:1px solid #eef0f4;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+
+    /* 列幅 */
+    .col-name { width: auto }
+    .col-type { width: 36px }
+    .col-btns { width: 136px }
+
+    /* 名前セル */
+    .name-furi{font-size:11px;color:var(--muted);line-height:1.3}
+    .name-kanji{font-size:13px;font-weight:700;color:var(--text);line-height:1.4}
+
+    /* 職種バッジ */
+    .type-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 5px;border-radius:5px;white-space:nowrap}
+    .type-nurse{background:#dbeafe;color:#1e40af}
+    .type-rehab{background:#dcfce7;color:#166534}
+
+    /* 列番号 */
+    .col-num{font-size:11px;font-family:monospace;color:var(--muted)}
+
+    /* 操作ボタン群 */
+    .td-btns{display:flex;gap:3px;flex-wrap:nowrap}
+    .btn-xs{padding:4px 6px;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;line-height:1}
+    .btn-edit {background:#6b7a99;color:#fff}
+    .btn-reset{background:#e8a020;color:#fff}
+    .btn-del  {background:#c0392b;color:#fff}
+
+    /* スマホ幅シミュレーション用の注釈 */
+    .note{font-size:11px;color:var(--muted);margin-bottom:10px;background:#fff3cd;padding:8px 10px;border-radius:8px}
+
+    /* ── インセンティブ設定リスト ── */
+    .iline-list{display:flex;flex-direction:column;gap:0}
+    .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4;flex-wrap:nowrap}
+    .iline-row:last-child{border-bottom:none}
+    .iline-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+    .iline-name-text{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .iline-select{flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;-webkit-appearance:none}
+    .btn-save{padding:6px 10px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;white-space:nowrap;flex-shrink:0}
+    .section-title{font-size:12px;font-weight:700;color:var(--blue-dark);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+  </style>
+</head>
+<body>
+
+<div class="note">📱 スマホ幅（375px）でのプロトタイプです。横スクロールなし。</div>
+
+<div class="card">
+  <h2>👥 スタッフ一覧</h2>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-name">名前</th>
+        <th class="col-type">職種</th>
+        <th class="col-btns">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- 看護師 -->
+      <tr>
+        <td class="col-name">
+          <div class="name-furi">やまだ はなこ</div>
+          <div class="name-kanji">山田 花子</div>
+        </td>
+        <td class="col-type"><span class="type-badge type-nurse">看</span></td>
+        <td class="col-btns">
+          <div class="td-btns">
+            <button class="btn-xs btn-edit">編集</button>
+            <button class="btn-xs btn-reset">リセット</button>
+            <button class="btn-xs btn-del">削除</button>
+          </div>
+        </td>
+      </tr>
+      <!-- PT -->
+      <tr>
+        <td class="col-name">
+          <div class="name-furi">たなか いちろう</div>
+          <div class="name-kanji">田中 一郎</div>
+        </td>
+        <td class="col-type"><span class="type-badge type-rehab">PT</span></td>
+        <td class="col-btns">
+          <div class="td-btns">
+            <button class="btn-xs btn-edit">編集</button>
+            <button class="btn-xs btn-reset">リセット</button>
+            <button class="btn-xs btn-del">削除</button>
+          </div>
+        </td>
+      </tr>
+      <!-- OT -->
+      <tr>
+        <td class="col-name">
+          <div class="name-furi">すずき さくら</div>
+          <div class="name-kanji">鈴木 さくら</div>
+        </td>
+        <td class="col-type"><span class="type-badge type-rehab">OT</span></td>
+        <td class="col-btns">
+          <div class="td-btns">
+            <button class="btn-xs btn-edit">編集</button>
+            <button class="btn-xs btn-reset">リセット</button>
+            <button class="btn-xs btn-del">削除</button>
+          </div>
+        </td>
+      </tr>
+      <!-- ST -->
+      <tr>
+        <td class="col-name">
+          <div class="name-furi">きむら たろう</div>
+          <div class="name-kanji">木村 太郎</div>
+        </td>
+        <td class="col-type"><span class="type-badge type-rehab">ST</span></td>
+        <td class="col-btns">
+          <div class="td-btns">
+            <button class="btn-xs btn-edit">編集</button>
+            <button class="btn-xs btn-reset">リセット</button>
+            <button class="btn-xs btn-del">削除</button>
+          </div>
+        </td>
+      </tr>
+      <!-- 看護師2 (長い名前テスト) -->
+      <tr>
+        <td class="col-name">
+          <div class="name-furi">なかむら よしこ</div>
+          <div class="name-kanji">中村 良子</div>
+        </td>
+        <td class="col-type"><span class="type-badge type-nurse">看</span></td>
+        <td class="col-btns">
+          <div class="td-btns">
+            <button class="btn-xs btn-edit">編集</button>
+            <button class="btn-xs btn-reset">リセット</button>
+            <button class="btn-xs btn-del">削除</button>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- インセンティブ設定プロトタイプ -->
+<div class="card" style="margin-top:14px">
+  <h2>💰 インセンティブ設定</h2>
+
+  <p class="section-title">スタッフ個別設定</p>
+  <div class="iline-list">
+
+    <div class="iline-row">
+      <div class="iline-name">
+        <div class="name-furi">やまだ はなこ</div>
+        <div class="iline-name-text">山田 花子</div>
+        <span class="type-badge type-nurse">看</span>
+      </div>
+      <select class="iline-select">
+        <option>3.0 時間/日</option>
+        <option selected>3.5 時間/日</option>
+        <option>4.0 時間/日</option>
+      </select>
+      <button class="btn-save">保存</button>
+    </div>
+
+    <div class="iline-row">
+      <div class="iline-name">
+        <div class="name-furi">たなか いちろう</div>
+        <div class="iline-name-text">田中 一郎</div>
+        <span class="type-badge type-rehab">PT</span>
+      </div>
+      <select class="iline-select">
+        <option>7.00 単位/日</option>
+        <option selected>8.00 単位/日</option>
+        <option>9.00 単位/日</option>
+      </select>
+      <button class="btn-save">保存</button>
+    </div>
+
+    <div class="iline-row">
+      <div class="iline-name">
+        <div class="name-furi">すずき さくら</div>
+        <div class="iline-name-text">鈴木 さくら</div>
+        <span class="type-badge type-rehab">OT</span>
+      </div>
+      <select class="iline-select">
+        <option>7.00 単位/日</option>
+        <option selected>8.00 単位/日</option>
+        <option>9.00 単位/日</option>
+      </select>
+      <button class="btn-save">保存</button>
+    </div>
+
+    <div class="iline-row">
+      <div class="iline-name">
+        <div class="name-furi">なかむら よしこ</div>
+        <div class="iline-name-text">中村 良子</div>
+        <span class="type-badge type-nurse">看</span>
+      </div>
+      <select class="iline-select">
+        <option>3.0 時間/日</option>
+        <option selected>4.0 時間/日</option>
+        <option>4.5 時間/日</option>
+      </select>
+      <button class="btn-save">保存</button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
