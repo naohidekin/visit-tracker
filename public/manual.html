@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>使い方 | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
+    header a{color:#fff;text-decoration:none;font-size:20px;line-height:1}
+    header h1{font-size:16px;font-weight:700}
+    .container{padding:16px;max-width:480px;margin:0 auto}
+
+    /* セクションカード */
+    .section-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+    .section-head{background:var(--blue-dark);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:8px}
+    .section-head .icon{font-size:18px}
+    .section-head h2{font-size:14px;font-weight:700}
+    .section-body{padding:16px}
+    .step{display:flex;gap:12px;margin-bottom:14px}
+    .step:last-child{margin-bottom:0}
+    .step-num{width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .step-content{}
+    .step-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px}
+    .step-desc{font-size:12px;color:var(--muted);line-height:1.7}
+    .step-desc b{color:var(--text);font-weight:700}
+
+    /* ポイントボックス */
+    .point-box{background:#f0f7ff;border-radius:9px;padding:10px 14px;margin-top:10px}
+    .point-box p{font-size:12px;color:var(--blue-dark);line-height:1.8}
+    .point-box p::before{content:"💡 "}
+
+    /* 注意ボックス */
+    .warn-box{background:#fff8e1;border-radius:9px;padding:10px 14px;margin-top:10px}
+    .warn-box p{font-size:12px;color:#b45309;line-height:1.8}
+    .warn-box p::before{content:"⚠️ "}
+
+    /* 計算表 */
+    .calc-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+    .calc-table th{background:#e8edf5;color:var(--blue-dark);padding:6px 10px;text-align:center;font-weight:700;border:1px solid var(--border)}
+    .calc-table td{padding:6px 10px;border:1px solid var(--border);text-align:center}
+    .calc-table tr:nth-child(even) td{background:#f8faff}
+
+    /* 翌日ボックス */
+    .info-box{border:1.5px solid var(--blue);border-radius:9px;padding:10px 14px;margin-top:8px}
+    .info-box p{font-size:12px;color:var(--blue-dark);line-height:1.8}
+
+    .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" aria-label="戻る">←</a>
+    <h1>使い方ガイド</h1>
+  </header>
+
+  <div class="container">
+
+    <!-- ① 基本の流れ -->
+    <div class="section-card">
+      <div class="section-head"><span class="icon">📋</span><h2>基本の流れ</h2></div>
+      <div class="section-body">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">訪問日を選択</div>
+            <div class="step-desc">トップ画面で訪問した日付を選びます。当日・翌日・過去の修正可能な日が選べます。</div>
+            <div class="info-box"><p><b>翌日に関して：</b>翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録しておくことができます。翌日になったら、トップ画面の「未確定の予定」から<b>確定</b>してください。確定するまで実績には反映されません。</p></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">時間 / 単位を入力</div>
+            <div class="step-desc">看護師は「介護」「医療」の合計訪問時間を、リハビリは訪問単位数を入力します。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">「記録する」をタップ</div>
+            <div class="step-desc">入力内容が実績に記録されます。完了画面が表示されたら成功です。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 看護師の入力 -->
+    <div class="section-card">
+      <div class="section-head"><span class="icon">💉</span><h2>看護師の入力方法</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:10px">「介護」「医療」それぞれの<b>合計訪問時間（時間単位）</b>を選択します。</div>
+        <table class="calc-table">
+          <tr><th>訪問時間</th><th>入力する値</th></tr>
+          <tr><td>30分</td><td>0.5</td></tr>
+          <tr><td>60分</td><td>1.0</td></tr>
+          <tr><td>90分</td><td>1.5</td></tr>
+        </table>
+        <div class="point-box"><p>例）合計390分の場合は6.5時間と入力</p></div>
+        <div class="point-box"><p>該当する訪問がない場合（例：その日は医療訪問なし）は「空白」のままでOKです。</p></div>
+      </div>
+    </div>
+
+    <!-- ③ リハビリの入力 -->
+    <div class="section-card">
+      <div class="section-head"><span class="icon">🏃</span><h2>リハビリの入力方法</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:6px"><b>「介護」は10分を「1単位」</b>として単位数を入力します。</div>
+        <div class="step-desc" style="margin-bottom:10px"><b>「医療」は1件「４単位」</b>として計算してください。</div>
+        <div class="point-box"><p>例）介護280分 + 医療1件の場合：28単位 + 4単位 ＝ 32単位と入力</p></div>
+      </div>
+    </div>
+
+    <!-- ④ 締日・修正ルール -->
+    <div class="section-card">
+      <div class="section-head"><span class="icon">📅</span><h2>実績修正ルール</h2></div>
+      <div class="section-body">
+        <div class="step">
+          <div class="step-num">!</div>
+          <div class="step-content">
+            <div class="step-title">毎月15日が締日です</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">!</div>
+          <div class="step-content">
+            <div class="step-title">前月分の修正は当月20日まで</div>
+            <div class="step-desc">前月16日〜当月15日までのデータは当月20日まで修正できます。21日になると前月分（前月16日〜当月15日）は全てロックされ修正できなくなります。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">!</div>
+          <div class="step-content">
+            <div class="step-title">当月分（16日以降）はいつでも修正可能</div>
+            <div class="step-desc">当月16日以降に入力したデータは、翌月20日まで修正できます。</div>
+          </div>
+        </div>
+        <div class="warn-box"><p>修正が必要な場合は早めに申し出て下さい。期限を過ぎた場合は管理者にご連絡ください。</p></div>
+      </div>
+    </div>
+
+    <!-- ⑤ パスワード変更 -->
+    <div class="section-card">
+      <div class="section-head"><span class="icon">🔑</span><h2>パスワード変更</h2></div>
+      <div class="section-body">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">ヘッダーの「PW変更」をタップ</div>
+            <div class="step-desc">画面上部のナビメニューから「PW変更」を選びます。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">現在のパスワードと新しいパスワードを入力</div>
+            <div class="step-desc">パスワードは4〜20文字で設定してください。</div>
+          </div>
+        </div>
+        <div class="point-box"><p>パスワードを忘れた場合はログイン画面の「パスワードを忘れた方はこちら」から管理者に連絡してください。</p></div>
+      </div>
+    </div>
+
+  </div>
+  <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
+</body>
+</html>
