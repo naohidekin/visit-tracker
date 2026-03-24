@@ -106,7 +106,7 @@
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
     .iline-row:last-child{border-bottom:none}
     .iline-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-    .iline-name-row{display:flex;align-items:center;gap:5px}
+    .iline-type{width:36px;flex-shrink:0;display:flex;align-items:center}
     .iline-select{flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;-webkit-appearance:none}
     .btn-save{padding:6px 10px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;white-space:nowrap;flex-shrink:0}
     /* ── 月次実績カード（スタッフビューと共通デザイン） ── */
@@ -981,11 +981,9 @@
       row.innerHTML = `
         <div class="iline-name">
           <div class="name-furi">${furi}</div>
-          <div class="iline-name-row">
-            <div class="name-kanji">${s.name}</div>
-            ${badge}
-          </div>
+          <div class="name-kanji">${s.name}</div>
         </div>
+        <div class="iline-type">${badge}</div>
         <select class="iline-select" id="iline_${s.id}">
           ${buildSelectHtml(opts, effective, unit)}
         </select>
