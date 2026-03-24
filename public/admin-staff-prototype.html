@@ -58,6 +58,26 @@
     .iline-select{flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;-webkit-appearance:none}
     .btn-save{padding:6px 10px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;white-space:nowrap;flex-shrink:0}
     .section-title{font-size:12px;font-weight:700;color:var(--blue-dark);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+
+    /* ── デフォルト設定グリッド ── */
+    label{display:block;font-size:12px;font-weight:600;color:var(--blue-dark);margin-bottom:5px}
+    select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--white);-webkit-appearance:none}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .field{margin-bottom:10px}
+    .btn-blue{padding:10px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}
+    .section-sub{font-size:12px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+    /* ✅ スマホでは1列に */
+    @media (max-width:480px){
+      .form-grid{grid-template-columns:1fr}
+    }
+
+    /* ── Before/After 比較用 ── */
+    .compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+    .compare-label{font-size:11px;font-weight:700;text-align:center;margin-bottom:6px;padding:4px;border-radius:6px}
+    .before-label{background:#fee2e2;color:#b91c1c}
+    .after-label{background:#dcfce7;color:#166534}
+    .compare-box{border:2px dashed var(--border);border-radius:10px;padding:10px}
+    .compare-box.after-box{border-color:#86efac}
   </style>
 </head>
 <body>
@@ -157,6 +177,39 @@
 <!-- インセンティブ設定プロトタイプ -->
 <div class="card" style="margin-top:14px">
   <h2>💰 インセンティブ設定</h2>
+
+  <!-- Before / After 比較（縦並び） -->
+  <div class="compare-label before-label" style="margin-bottom:6px">❌ 修正前（2列固定 → ラベルが折り返す）</div>
+  <div class="compare-box" style="margin-bottom:14px">
+    <p class="section-sub">デフォルト設定</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field">
+        <label>看護師 デフォルト（時間/日）</label>
+        <select><option>3.5 時間/日</option></select>
+      </div>
+      <div class="field">
+        <label>リハビリ デフォルト（単位/日）</label>
+        <select><option>20.00 単位/日</option></select>
+      </div>
+    </div>
+    <button class="btn-blue" style="font-size:12px;padding:8px 14px">デフォルトを保存</button>
+  </div>
+
+  <div class="compare-label after-label" style="margin-bottom:6px">✅ 修正後（ラベルを短縮→2列のまま）</div>
+  <div class="compare-box after-box" style="margin-bottom:14px">
+    <p class="section-sub">デフォルト設定</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field">
+        <label>看護師デフォルト（時間/日）</label>
+        <select><option>3.5 時間/日</option></select>
+      </div>
+      <div class="field">
+        <label>リハデフォルト（単位/日）</label>
+        <select><option>20.00 単位/日</option></select>
+      </div>
+    </div>
+    <button class="btn-blue" style="font-size:12px;padding:8px 14px">デフォルトを保存</button>
+  </div>
 
   <p class="section-title">スタッフ個別設定</p>
   <div class="iline-list">
