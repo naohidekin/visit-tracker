@@ -1027,40 +1027,44 @@ app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) =
   res.json({ success: true, initial_pw: staff.initial_pw });
 });
 
-// ─── API: 一時修正 – 列ズレ修正（森部・佐原バグ対応） ────────────
-// スプレッドシートは fix-columns.js で修正済み。staff.json の列参照のみ更新する。
+// ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
+// 正規エントリ(moribe10/sahara11)の列を確定し、重複エントリを削除する
 app.post('/api/admin/fix-staff-columns', requireAdmin, (req, res) => {
   try {
     const data = loadStaff();
     const changes = [];
 
-    // PT の列を修正（中島:K→O, 小澤:L→P, 大江:M→Q）
-    const fixes = { nakashima05: 'O', ozawa06: 'P', ooe07: 'Q' };
+    // PT の列を修正（既に正しい場合はスキップ）
+    const ptFixes = { nakashima05: 'O', ozawa06: 'P', ooe07: 'Q' };
     for (const s of data.staff) {
-      if (fixes[s.id] && s.col !== fixes[s.id]) {
-        changes.push(`${s.name}: col ${s.col}→${fixes[s.id]}`);
-        s.col = fixes[s.id];
+      if (ptFixes[s.id] && s.col !== ptFixes[s.id]) {
+        changes.push(`${s.name}: col ${s.col}→${ptFixes[s.id]}`);
+        s.col = ptFixes[s.id];
       }
     }
 
-    // 看護師の列を修正（既存エントリがある場合は列参照を更新）
-    const nurseColFixes = {
-      // 旧 kaigo_col → 新 kaigo_col / iryo_col
-      M: { kaigo_col: 'K', iryo_col: 'L' },
-      O: { kaigo_col: 'M', iryo_col: 'N' },
+    // 正規の森部・佐原エントリの列を確定（IDで特定）
+    const nurseFixes = {
+      moribe10: { kaigo_col: 'K', iryo_col: 'L' },
+      sahara11: { kaigo_col: 'M', iryo_col: 'N' },
     };
     for (const s of data.staff) {
-      if (s.type === 'nurse' && nurseColFixes[s.kaigo_col]) {
-        const fix = nurseColFixes[s.kaigo_col];
-        changes.push(`${s.name}: kaigo_col ${s.kaigo_col}→${fix.kaigo_col}`);
-        s.kaigo_col = fix.kaigo_col;
-        s.iryo_col  = fix.iryo_col;
+      if (nurseFixes[s.id]) {
+        const fix = nurseFixes[s.id];
+        if (s.kaigo_col !== fix.kaigo_col) {
+          changes.push(`${s.name}(${s.id}): kaigo_col ${s.kaigo_col}→${fix.kaigo_col}`);
+          s.kaigo_col = fix.kaigo_col;
+          s.iryo_col  = fix.iryo_col;
+        }
       }
     }
 
-    if (changes.length === 0) {
-      return res.json({ success: true, message: '修正対象なし（既に正しい状態です）', staff: data.staff });
-    }
+    // 重複エントリ（morobe08/sahara09）をスタッフリストから削除（スプレッドシートは触らない）
+    const duplicateIds = ['morobe08', 'sahara09'];
+    const before = data.staff.length;
+    data.staff = data.staff.filter(s => !duplicateIds.includes(s.id));
+    const removed = before - data.staff.length;
+    if (removed > 0) changes.push(`重複エントリ削除: ${duplicateIds.join(', ')} (${removed}件)`);
 
     saveStaff(data);
     res.json({ success: true, changes, staff: data.staff });
