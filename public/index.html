@@ -27,9 +27,19 @@
     .header-left{display:flex;flex-direction:column;gap:2px;min-width:0}
     .header-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .header-type{font-size:11px;opacity:.75}
-    .header-nav{display:flex;gap:8px;align-items:center;flex-shrink:0}
-    .header-nav a{color:#fff;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.5);padding:4px 9px;border-radius:6px;white-space:nowrap}
-    .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 9px;border-radius:6px;cursor:pointer;white-space:nowrap}
+    /* ── ハンバーガーメニュー ── */
+    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay.open{display:block}
+    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer .menu-logout{color:#c0392b}
 
     /* ── カード ── */
     .container{padding:16px;max-width:480px;margin:0 auto}
@@ -160,12 +170,17 @@
     <div class="header-name" id="headerName">読み込み中...</div>
     <div class="header-type" id="headerType"></div>
   </div>
-  <nav class="header-nav">
-    <a href="/history">月次実績</a>
-    <a href="/change-password">PW変更</a>
-    <a href="/manual">使い方</a>
-    <button class="logout-btn" onclick="logout()">ログアウト</button>
-  </nav>
+  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-drawer" onclick="event.stopPropagation()">
+      <a href="/history">月次実績</a>
+      <a href="/change-password">PW変更</a>
+      <a href="/manual">使い方</a>
+      <button class="menu-logout" onclick="logout()">ログアウト</button>
+    </div>
+  </div>
 </header>
 
 <!-- ── 入力フォームビュー ── -->
@@ -714,6 +729,17 @@
     const data = await res.json();
     if (data.success) { await loadPendingSchedules(); }
     else alert('エラー: ' + (data.error || '削除失敗'));
+  }
+
+  function toggleMenu() {
+    const btn = document.getElementById('hamburgerBtn');
+    const overlay = document.getElementById('menuOverlay');
+    btn.classList.toggle('open');
+    overlay.classList.toggle('open');
+  }
+  function closeMenu() {
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('menuOverlay').classList.remove('open');
   }
 
   async function logout() {
