@@ -103,7 +103,8 @@
       "seq": 8,
       "initial_pw": "0000",
       "password_hash": "$2a$10$KYpcka43yEQbqf8mVFl1suU0X/hmyZSMPisoRwUZZ26d6fDWXQ2HW",
-      "incentive_line": null
+      "incentive_line": null,
+      "archived": true
     },
     {
       "id": "testpt",
@@ -115,7 +116,8 @@
       "seq": 9,
       "initial_pw": "0000",
       "password_hash": "$2a$10$aE4wgJM4OVFTjKKZ7BCLYOmGeH5mMqYZXHhSY/0vC6noK0Kurpu/i",
-      "incentive_line": null
+      "incentive_line": null,
+      "archived": true
     }
   ]
 }

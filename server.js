@@ -771,8 +771,9 @@ app.get('/api/admin/incentive', requireAdmin, (_req, res) => {
   const data = loadStaff();
   res.json({
     defaults: data.incentive_defaults || { nurse: 3.5, rehab: 20.0 },
-    staff: data.staff.map(s => ({
+    staff: data.staff.filter(s => !s.archived).map(s => ({
       id: s.id, name: s.name, type: s.type,
+      furigana_family: s.furigana_family, furigana_given: s.furigana_given,
       incentive_line: s.incentive_line ?? null,
     })),
   });
@@ -812,8 +813,20 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 // ─── API: スタッフ管理 ──────────────────────────────────────────
-app.get('/api/admin/staff', requireAdmin, (_req, res) => {
-  res.json(loadStaff().staff);
+app.get('/api/admin/staff', requireAdmin, (req, res) => {
+  const data = loadStaff();
+  const includeArchived = req.query.includeArchived === 'true';
+  const staff = includeArchived ? data.staff : data.staff.filter(s => !s.archived);
+  res.json(staff);
+});
+
+app.patch('/api/admin/staff/:id/archive', requireAdmin, (req, res) => {
+  const data  = loadStaff();
+  const staff = data.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  staff.archived = !staff.archived;
+  saveStaff(data);
+  res.json({ success: true, archived: staff.archived, staff: data.staff });
 });
 
 app.post('/api/admin/staff', requireAdmin, async (req, res) => {
