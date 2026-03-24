@@ -1,7 +1,7 @@
 {
   "incentive_defaults": {
     "nurse": 3.5,
-    "rehab": 20.0
+    "rehab": 20
   },
   "staff": [
     {
@@ -62,7 +62,7 @@
       "furigana_family": "なかしま",
       "furigana_given": "だいち",
       "type": "PT",
-      "col": "K",
+      "col": "O",
       "seq": 5,
       "initial_pw": "DN05",
       "password_hash": "$2a$10$9/J6C7HIT2Bkx76VbQ186.x2F1OqASs3VIkaOsLK8RiJk/.rRy.ey",
@@ -74,7 +74,7 @@
       "furigana_family": "おざわ",
       "furigana_given": "ゆうな",
       "type": "PT",
-      "col": "L",
+      "col": "P",
       "seq": 6,
       "initial_pw": "YO06",
       "password_hash": "$2a$10$oCWyFpFJSr3F0IredydJ8etfExRwx5IqsWu6HJ2PowoWsthXimh5e",
@@ -86,7 +86,7 @@
       "furigana_family": "おおえ",
       "furigana_given": "あやこ",
       "type": "PT",
-      "col": "M",
+      "col": "Q",
       "seq": 7,
       "initial_pw": "AO07",
       "password_hash": "$2a$10$OaEhI0Glj2Y/rohCeLe9ZuuGgKON4KPpWyaweBinlhO7INhJqQ1Ou",
@@ -118,6 +118,32 @@
       "password_hash": "$2a$10$aE4wgJM4OVFTjKKZ7BCLYOmGeH5mMqYZXHhSY/0vC6noK0Kurpu/i",
       "incentive_line": null,
       "archived": true
+    },
+    {
+      "id": "morobe08",
+      "name": "森部　真琴",
+      "furigana_family": "もろべ",
+      "furigana_given": "まこと",
+      "type": "nurse",
+      "kaigo_col": "K",
+      "iryo_col": "L",
+      "seq": 8,
+      "initial_pw": "MM08",
+      "password_hash": "",
+      "incentive_line": null
+    },
+    {
+      "id": "sahara09",
+      "name": "佐原　卑弥呼",
+      "furigana_family": "さはら",
+      "furigana_given": "ひみこ",
+      "type": "nurse",
+      "kaigo_col": "M",
+      "iryo_col": "N",
+      "seq": 9,
+      "initial_pw": "HS09",
+      "password_hash": "",
+      "incentive_line": null
     }
   ]
 }
