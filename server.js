@@ -131,6 +131,15 @@ function saveSchedules(data) {
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+// JST（UTC+9）での今日の日付文字列を返す
+function getTodayJST() {
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+// JST での現在日時（Dateオブジェクト）
+function getNowJST() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
 
 function colToIdx(col) {
   let n = 0;
@@ -324,15 +333,14 @@ app.post('/api/record', requireStaff, async (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
 
-  // 日付チェック
+  // 日付チェック（JST基準）
   const d = new Date(date);
-  const today = new Date(); today.setHours(23, 59, 59, 999);
-  if (d > today) return res.status(400).json({ error: '未来の日付には記録できません' });
+  if (date > getTodayJST()) return res.status(400).json({ error: '未来の日付には記録できません' });
 
   // 締日チェック：1〜20日は前月16日、21日〜末日は当月16日より前は修正不可
-  const now = new Date();
-  let editYear = now.getFullYear(), editMonth = now.getMonth() + 1;
-  if (now.getDate() <= 20) {
+  const now = getNowJST();
+  let editYear = now.getUTCFullYear(), editMonth = now.getUTCMonth() + 1;
+  if (now.getUTCDate() <= 20) {
     editMonth -= 1;
     if (editMonth <= 0) { editMonth = 12; editYear--; }
   }
@@ -392,9 +400,7 @@ app.get('/api/schedules', requireStaff, (req, res) => {
 app.post('/api/schedules', requireStaff, (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
-  const today = new Date(); today.setHours(23, 59, 59, 999);
-  const schedDate = new Date(date + 'T00:00:00');
-  if (schedDate <= today) return res.status(400).json({ error: '予定登録は翌日以降の日付のみ可能です' });
+  if (date <= getTodayJST()) return res.status(400).json({ error: '予定登録は翌日以降の日付のみ可能です' });
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -435,9 +441,7 @@ app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
   const schedule = data.schedules[idx];
 
-  const today = new Date(); today.setHours(23, 59, 59, 999);
-  const schedDate = new Date(schedule.date + 'T00:00:00');
-  if (schedDate > today) return res.status(400).json({ error: 'まだ確定できません（翌日以降の予定です）' });
+  if (schedule.date > getTodayJST()) return res.status(400).json({ error: 'まだ確定できません（翌日以降の予定です）' });
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === schedule.staffId);
