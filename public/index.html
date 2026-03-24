@@ -91,8 +91,8 @@
     .total-bar strong{font-size:20px;font-weight:800}
 
     /* ── 注意書き ── */
-    .notes{background:#f8faff;border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:16px}
-    .notes p{font-size:14px;color:var(--text);line-height:1.8}
+    .notes{margin-bottom:16px;padding:2px 4px}
+    .notes p{font-size:12px;color:var(--muted);line-height:2;white-space:nowrap}
 
     /* ── 送信ボタン ── */
     .submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
@@ -184,7 +184,7 @@
 
   <!-- 看護師 -->
   <div class="card" id="nurseCard" style="display:none">
-    <div class="card-title">💉 訪問単位数</div>
+    <div class="card-title">💉 合計訪問時間</div>
     <div class="nurse-grid">
       <div class="nurse-col kaigo">
         <div class="nurse-col-label"><span class="badge-kaigo">介護</span></div>
@@ -208,13 +208,13 @@
       </div>
     </div>
     <div class="total-bar">
-      <span>本日の合計</span>
+      <span id="totalBarLabel">本日の合計</span>
       <div><strong id="totalVal">0.0</strong><span style="font-size:14px;opacity:.75;margin-left:4px">時間</span></div>
     </div>
     <div class="notes">
-      <p>※ 30分＝0.5、30〜60分＝1.0、60〜90分＝1.5で計算</p>
-      <p>※ 合計時間を時間単位で入力（例：390分→6.5時間）</p>
-      <p>※ 該当しない場合は空白のままでOK</p>
+      <p>※ 30分=0.5 ／ 60分=1.0 ／ 90分=1.5</p>
+      <p>※ 時間単位で入力（例：390分→6.5時間）</p>
+      <p>※ 該当なしは空白のままでOK</p>
     </div>
   </div>
 
@@ -364,6 +364,11 @@
   function updateTotal() {
     const total = (pv.kaigo || 0) + (pv.iryo || 0);
     document.getElementById('totalVal').textContent = total.toFixed(1);
+    const d = document.getElementById('dateInput').value;
+    if (d) {
+      const [,m,day] = d.split('-');
+      document.getElementById('totalBarLabel').textContent = `${parseInt(m)}/${parseInt(day)} の合計`;
+    }
   }
 
   // 外側クリックでピッカーを閉じる
@@ -412,6 +417,10 @@
     const tomorrowStr = toDateStr(tomorrow);
     document.getElementById('submitBtn').textContent =
       date === tomorrowStr ? '予定として登録する' : '記録する';
+    if (date) {
+      const [,m,day] = date.split('-');
+      document.getElementById('totalBarLabel').textContent = `${parseInt(m)}/${parseInt(day)} の合計`;
+    }
   }
 
   function toDateStr(d) {
