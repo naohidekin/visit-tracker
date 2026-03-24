@@ -27,6 +27,7 @@ const DATA_DIR        = process.env.DATA_DIR || __dirname;
 const STAFF_PATH      = path.join(DATA_DIR, 'staff.json');
 const REGISTRY_PATH   = path.join(DATA_DIR, 'spreadsheet-registry.json');
 const SCHEDULES_PATH  = path.join(DATA_DIR, 'schedules.json');
+const NOTICES_PATH    = path.join(DATA_DIR, 'notices.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
