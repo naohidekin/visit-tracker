@@ -104,7 +104,7 @@
     .staff-table{table-layout:fixed;min-width:0}
     .staff-table .col-name{width:auto}
     .staff-table .col-type{width:38px}
-    .staff-table .col-btns{width:140px}
+    .staff-table .col-btns{width:166px}
     /* ── インセンティブ個別設定（モバイル最適化） ── */
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
@@ -513,7 +513,7 @@
         <div class="td-btns">
           <button class="btn-xs btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
           <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">リセット</button>
-          <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">格納</button>
+          <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">アーカイブ</button>
         </div>
       </td>`;
   }
