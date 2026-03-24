@@ -118,32 +118,6 @@
       "password_hash": "$2a$10$aE4wgJM4OVFTjKKZ7BCLYOmGeH5mMqYZXHhSY/0vC6noK0Kurpu/i",
       "incentive_line": null,
       "archived": true
-    },
-    {
-      "id": "morobe08",
-      "name": "森部　真琴",
-      "furigana_family": "もろべ",
-      "furigana_given": "まこと",
-      "type": "nurse",
-      "kaigo_col": "K",
-      "iryo_col": "L",
-      "seq": 8,
-      "initial_pw": "MM08",
-      "password_hash": "",
-      "incentive_line": null
-    },
-    {
-      "id": "sahara09",
-      "name": "佐原　卑弥呼",
-      "furigana_family": "さはら",
-      "furigana_given": "ひみこ",
-      "type": "nurse",
-      "kaigo_col": "M",
-      "iryo_col": "N",
-      "seq": 9,
-      "initial_pw": "HS09",
-      "password_hash": "",
-      "incentive_line": null
     }
   ]
 }
