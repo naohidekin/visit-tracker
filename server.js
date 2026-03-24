@@ -859,7 +859,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
     let newEntry;
     if (type === 'nurse') {
       // C(index 2) + 看護師人数 × 2列 = 新看護師の介護列
-      const nurseCount = data.staff.filter(s => s.type === 'nurse').length;
+      const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
       const kaigoIdx = 2 + nurseCount * 2;
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
@@ -895,8 +895,8 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 
     } else {
       // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
-      const nurseCount = data.staff.filter(s => s.type === 'nurse').length;
-      const rehabCount = data.staff.filter(s => s.type !== 'nurse').length;
+      const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
+      const rehabCount = data.staff.filter(s => s.type !== 'nurse' && !s.archived).length;
       const newColIdx = 2 + nurseCount * 2 + rehabCount;
       const newCol    = idxToCol(newColIdx);
 
