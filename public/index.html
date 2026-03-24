@@ -150,6 +150,13 @@
     .sched-delete{background:#eef0f4;color:var(--muted)}
     .schedule-reminder{text-align:center;padding:8px 0 4px;font-size:14px;line-height:1.8;color:var(--ok)}
 
+    /* ── 修正期間アラートバナー ── */
+    .alert-banner{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin:12px 16px 0;box-shadow:0 2px 8px rgba(245,158,11,.15)}
+    .alert-banner-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+    .alert-banner-title{font-size:13px;font-weight:700;color:#92400e}
+    .alert-banner-desc{font-size:12px;color:#b45309;margin-top:3px;line-height:1.6}
+    .alert-banner-desc b{color:#dc2626}
+
     /* ── 上書きモーダル ── */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
     .modal-overlay.show{display:flex}
@@ -182,6 +189,15 @@
     </div>
   </div>
 </header>
+
+<!-- ── 修正期間アラート（毎月16〜20日のみ表示） ── -->
+<div class="alert-banner" id="alertBanner" style="display:none">
+  <div class="alert-banner-icon">⚠️</div>
+  <div>
+    <div class="alert-banner-title">前月分の修正期間中です</div>
+    <div class="alert-banner-desc" id="alertBannerDesc"></div>
+  </div>
+</div>
 
 <!-- ── 入力フォームビュー ── -->
 <div id="formView" class="container" style="display:none">
@@ -730,6 +746,25 @@
     if (data.success) { await loadPendingSchedules(); }
     else alert('エラー: ' + (data.error || '削除失敗'));
   }
+
+  // ── 修正期間アラートバナー（毎月16〜20日のみ表示） ──
+  function checkAlertBanner() {
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000); // JST
+    const day   = now.getUTCDate();
+    const month = now.getUTCMonth() + 1;
+    const year  = now.getUTCFullYear();
+    if (day < 16 || day > 20) return;
+
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const deadline  = new Date(Date.UTC(year, month - 1, 20));
+    const wd = ['日','月','火','水','木','金','土'][deadline.getUTCDay()];
+    const curMonth15 = month; // 当月15日までが前月分の対象
+
+    document.getElementById('alertBannerDesc').innerHTML =
+      `${prevMonth}月分（${prevMonth}/16〜${curMonth15}/15）の実績は <b>${month}月20日（${wd}）</b> まで修正できます。お早めにご確認ください。`;
+    document.getElementById('alertBanner').style.display = 'flex';
+  }
+  checkAlertBanner();
 
   function toggleMenu() {
     const btn = document.getElementById('hamburgerBtn');
