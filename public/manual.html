@@ -44,6 +44,10 @@
     .calc-table td{padding:6px 10px;border:1px solid var(--border);text-align:center}
     .calc-table tr:nth-child(even) td{background:#f8faff}
 
+    /* 翌日ボックス */
+    .info-box{border:1.5px solid var(--blue);border-radius:9px;padding:10px 14px;margin-top:8px}
+    .info-box p{font-size:12px;color:var(--blue-dark);line-height:1.8}
+
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
   </style>
 </head>
@@ -63,7 +67,8 @@
           <div class="step-num">1</div>
           <div class="step-content">
             <div class="step-title">訪問日を選択</div>
-            <div class="step-desc">トップ画面で訪問した日付を選びます。当日・翌日・過去の修正可能な日が選べます。<br><b>翌日に関して：</b>翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録しておくことができます。翌日になったら、トップ画面の「未確定の予定」から<b>確定</b>してください。確定するまでスプレッドシートには反映されません。</div>
+            <div class="step-desc">トップ画面で訪問した日付を選びます。当日・翌日・過去の修正可能な日が選べます。</div>
+            <div class="info-box"><p><b>翌日に関して：</b>翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録しておくことができます。翌日になったら、トップ画面の「未確定の予定」から<b>確定</b>してください。確定するまでスプレッドシートには反映されません。</p></div>
           </div>
         </div>
         <div class="step">
@@ -110,13 +115,13 @@
 
     <!-- ④ 締日・修正ルール -->
     <div class="section-card">
-      <div class="section-head"><span class="icon">📅</span><h2>締日・修正ルール</h2></div>
+      <div class="section-head"><span class="icon">📅</span><h2>実績修正ルール</h2></div>
       <div class="section-body">
         <div class="step">
           <div class="step-num">!</div>
           <div class="step-content">
             <div class="step-title">毎月15日が締日です</div>
-            <div class="step-desc">毎月1〜15日分のデータは「締済」となり、修正できません。16日以降のデータは修正可能です。</div>
+            <div class="step-desc">前月1〜15日分のデータは「締済」となり、修正できません。前月16日以降のデータは修正可能です。</div>
           </div>
         </div>
         <div class="step">
