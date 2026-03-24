@@ -18,11 +18,8 @@
     .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer}
     .container{padding:16px;max-width:900px;margin:0 auto}
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
-    .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:0;padding-bottom:8px;border-bottom:2px solid #e8edf5;cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}
-    .card.open h2{margin-bottom:14px}
-    .card-body{overflow:hidden;height:0;transition:height .3s ease}
-    .acc-icon{font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px;transition:transform .25s}
-    .card.open .acc-icon{transform:rotate(180deg)}
+    .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e8edf5}
+    #loginCard h2{border-bottom:2px solid #e8edf5;padding-bottom:8px;margin-bottom:14px}
     label{display:block;font-size:12px;font-weight:600;color:var(--blue-dark);margin-bottom:5px}
     input,select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);background:var(--white);outline:none;-webkit-appearance:none}
     input:focus,select:focus{border-color:var(--blue)}
@@ -63,9 +60,12 @@
     .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700}
     .badge-nurse{background:#dbeafe;color:#1e40af}
     .badge-rehab{background:#dcfce7;color:#166534}
-    .td-btns{display:flex;gap:6px;flex-wrap:wrap}
+    .td-btns{display:flex;gap:3px;flex-wrap:nowrap}
     .edit-input{padding:5px 8px;font-size:13px;border:1.5px solid var(--blue);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;width:100%;min-width:80px;box-sizing:border-box}
     .btn-edit{background:#6b7a99;color:#fff}
+    .btn-xs{padding:4px 6px;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;line-height:1}
+    .name-furi{font-size:11px;color:var(--muted);line-height:1.3}
+    .name-kanji{font-size:13px;font-weight:700;line-height:1.4}
     /* ── メッセージ ── */
     .msg{display:none;border-radius:8px;padding:9px 13px;font-size:13px;margin-bottom:12px}
     .msg.err{background:#fee;color:var(--danger)}
@@ -83,12 +83,32 @@
     .m-del   {background:var(--danger);color:#fff}
     /* ── PWリセット結果 ── */
     .pw-result{display:none;background:var(--ok-bg);border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:var(--ok)}
+    /* ── アコーディオン ── */
+    .card-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding-bottom:8px;border-bottom:2px solid #e8edf5;margin-bottom:0;user-select:none}
+    .card-header h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin:0;padding:0;border:none}
+    .acc-icon{font-size:13px;color:var(--muted);flex-shrink:0;margin-left:8px}
+    .card-body{overflow:hidden;max-height:0;transition:max-height .35s ease}
+    .card-body.open{max-height:9999px}
+    .card-body > *:first-child{margin-top:14px}
     /* ── ローディング ── */
     .spinner{text-align:center;padding:14px;color:var(--muted);font-size:12px;display:none}
     /* ── 自動生成ラベル ── */
     .auto-label{font-size:10px;color:var(--muted);margin-top:3px}
     /* ── インセンティブ ── */
     .section-sub{font-size:12px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+    /* ── スタッフ一覧（モバイル最適化） ── */
+    .staff-table{table-layout:fixed;min-width:0}
+    .staff-table .col-name{width:auto}
+    .staff-table .col-type{width:38px}
+    .staff-table .col-btns{width:140px}
+    /* ── インセンティブ個別設定（モバイル最適化） ── */
+    .iline-list{display:flex;flex-direction:column;gap:0}
+    .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
+    .iline-row:last-child{border-bottom:none}
+    .iline-name{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+    .iline-name-row{display:flex;align-items:center;gap:5px}
+    .iline-select{flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;-webkit-appearance:none}
+    .btn-save{padding:6px 10px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;white-space:nowrap;flex-shrink:0}
     /* ── 月次実績カード（スタッフビューと共通デザイン） ── */
     .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:14px}
     .result-goal-line{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:16px}
@@ -129,7 +149,10 @@
 
   <!-- 未確定の予定一覧 -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">📋 未確定の予定一覧<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📋 未確定の予定一覧</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
       <div class="spinner" id="schedulesSpinner">読み込み中...</div>
       <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
@@ -146,14 +169,20 @@
 
   <!-- スタッフ一覧 -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">👥 スタッフ一覧<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>👥 スタッフ一覧</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
       <div class="spinner" id="tableSpinner">読み込み中...</div>
       <div class="table-wrap">
-        <table>
+        <table class="staff-table">
+          <colgroup>
+            <col class="col-name"><col class="col-type"><col class="col-btns">
+          </colgroup>
           <thead>
             <tr>
-              <th>名前</th><th>ふりがな</th><th>職種</th><th>ID</th><th>列</th><th>操作</th>
+              <th>名前</th><th>職種</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="staffBody"></tbody>
@@ -164,7 +193,10 @@
 
   <!-- スタッフ月次実績 -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">📊 スタッフ月次実績<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📊 スタッフ月次実績</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
       <div class="form-grid">
         <div class="field" style="grid-column:1/-1">
@@ -208,7 +240,10 @@
 
   <!-- インセンティブ設定 -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">💰 インセンティブ設定<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>💰 インセンティブ設定</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
       <div id="incentiveSpinner" class="spinner">読み込み中...</div>
 
@@ -231,23 +266,19 @@
       <!-- スタッフ個別設定 -->
       <div id="incentiveStaffSection" style="display:none">
         <p class="section-sub">スタッフ個別設定</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>名前</th><th>職種</th><th>1日あたりのライン</th><th>操作</th></tr>
-            </thead>
-            <tbody id="incentiveBody"></tbody>
-          </table>
-        </div>
+        <div class="iline-list" id="incentiveBody"></div>
       </div>
     </div>
   </div>
 
   <!-- スタッフ追加 -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">➕ スタッフ追加<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>➕ スタッフ追加</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">追加すると全月シート（1〜12月）の4行目に列が自動作成されます。</p>
+      <p style="font-size:12px;color:var(--muted)">追加すると全月シート（1〜12月）の4行目に列が自動作成されます。</p>
       <div class="msg err" id="addErr"></div>
       <div class="form-grid">
         <div class="field">
@@ -289,15 +320,18 @@
     </div>
   </div>
 
-  <!-- 翌年スプレッドシート作成 -->
+  <!-- 翌年スプレッドシート作成（一番下） -->
   <div class="card">
-    <h2 onclick="toggleAccordion(this)">📅 翌年スプレッドシート作成<span class="acc-icon">▼</span></h2>
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📅 翌年スプレッドシート作成</h2>
+      <span class="acc-icon">▼</span>
+    </div>
     <div class="card-body">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+      <p style="font-size:13px;color:var(--muted)">
         翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
         作成後、新しいスプレッドシートURLが表示されます。
       </p>
-      <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()">翌年シートを作成</button>
+      <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()" style="margin-top:14px">翌年シートを作成</button>
       <div id="createSheetResult" style="display:none;margin-top:14px"></div>
     </div>
   </div>
@@ -333,22 +367,16 @@
 <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
 
 <script>
-  // ── アコーディオン ────────────────────────────────────────────
-  function toggleAccordion(h2) {
-    const card = h2.closest('.card');
-    const body = card.querySelector('.card-body');
-    if (card.classList.contains('open')) {
-      body.style.height = body.scrollHeight + 'px';
-      body.getBoundingClientRect();
-      body.style.height = '0';
-      card.classList.remove('open');
+  // ── アコーディオン ──────────────────────────────────────────
+  function toggleAccordion(header) {
+    const body = header.nextElementSibling;
+    const icon = header.querySelector('.acc-icon');
+    if (body.classList.contains('open')) {
+      body.classList.remove('open');
+      icon.textContent = '▼';
     } else {
-      card.classList.add('open');
-      body.style.height = body.scrollHeight + 'px';
-      body.addEventListener('transitionend', function handler() {
-        if (card.classList.contains('open')) body.style.height = 'auto';
-        body.removeEventListener('transitionend', handler);
-      });
+      body.classList.add('open');
+      icon.textContent = '▲';
     }
   }
 
@@ -395,7 +423,7 @@
   // ── ユーティリティ ────────────────────────────────────────
   function staffTypeBadge(type) {
     return type === 'nurse'
-      ? '<span class="badge badge-nurse">看護師</span>'
+      ? '<span class="badge badge-nurse">看</span>'
       : `<span class="badge badge-rehab">${type}</span>`;
   }
 
@@ -447,16 +475,16 @@
 
   function buildStaffRowHtml(s, badge, colInfo, furi) {
     return `
-      <td><strong>${s.name}</strong></td>
-      <td style="font-size:12px;color:var(--muted)">${furi}</td>
+      <td>
+        <div class="name-furi">${furi}</div>
+        <div class="name-kanji">${s.name}</div>
+      </td>
       <td>${badge}</td>
-      <td style="font-size:12px;font-family:monospace">${s.id}</td>
-      <td>${colInfo}</td>
       <td>
         <div class="td-btns">
-          <button class="btn btn-sm btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
-          <button class="btn btn-sm btn-reset" onclick="askReset('${s.id}','${s.name}')">PWリセット</button>
-          <button class="btn btn-sm btn-danger" onclick="askDelete('${s.id}','${s.name}')">削除</button>
+          <button class="btn-xs btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
+          <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">リセット</button>
+          <button class="btn-xs btn-danger" onclick="askDelete('${s.id}','${s.name}')">削除</button>
         </div>
       </td>`;
   }
@@ -467,12 +495,9 @@
     for (const s of staffList) {
       const furi  = (s.furigana_family || '') + (s.furigana_given || '');
       const badge = staffTypeBadge(s.type);
-      const colInfo = s.type === 'nurse'
-        ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
-        : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
       const tr = document.createElement('tr');
       tr.dataset.staffId = s.id;
-      tr.innerHTML = buildStaffRowHtml(s, badge, colInfo, furi);
+      tr.innerHTML = buildStaffRowHtml(s, badge, null, furi);
       tbody.appendChild(tr);
     }
   }
@@ -485,16 +510,16 @@
     const furi_f = s.furigana_family || '';
     const furi_g = s.furigana_given  || '';
     tr.innerHTML = `
-      <td><input class="edit-input" id="edit-name-${id}" value="${s.name}"></td>
       <td>
+        <input class="edit-input" id="edit-name-${id}" value="${s.name}" placeholder="フルネーム" style="margin-bottom:4px">
         <input class="edit-input" id="edit-furi-f-${id}" value="${furi_f}" placeholder="姓ふりがな" style="margin-bottom:4px">
         <input class="edit-input" id="edit-furi-g-${id}" value="${furi_g}" placeholder="名ふりがな">
       </td>
-      <td colspan="3" style="font-size:12px;color:var(--muted)">種別・ID・列は変更不可</td>
+      <td style="font-size:11px;color:var(--muted)">変更不可</td>
       <td>
         <div class="td-btns">
-          <button class="btn btn-sm btn-green" onclick="saveStaffRow('${id}')">保存</button>
-          <button class="btn btn-sm" onclick="cancelStaffEdit('${id}')">キャンセル</button>
+          <button class="btn-xs btn-green" onclick="saveStaffRow('${id}')">保存</button>
+          <button class="btn-xs btn-edit" onclick="cancelStaffEdit('${id}')">戻す</button>
         </div>
       </td>`;
   }
@@ -504,12 +529,9 @@
     if (!s) return;
     const tr = document.querySelector(`tr[data-staff-id="${id}"]`);
     if (!tr) return;
-    const furi    = (s.furigana_family || '') + (s.furigana_given || '');
-    const badge   = staffTypeBadge(s.type);
-    const colInfo = s.type === 'nurse'
-      ? `<span style="font-family:monospace;font-size:11px">${s.kaigo_col}/${s.iryo_col}</span>`
-      : `<span style="font-family:monospace;font-size:11px">${s.col}</span>`;
-    tr.innerHTML = buildStaffRowHtml(s, badge, colInfo, furi);
+    const furi  = (s.furigana_family || '') + (s.furigana_given || '');
+    const badge = staffTypeBadge(s.type);
+    tr.innerHTML = buildStaffRowHtml(s, badge, null, furi);
   }
 
   async function saveStaffRow(id) {
@@ -944,8 +966,8 @@
   }
 
   function renderIncentiveTable(nurseOpts, rehabOpts) {
-    const tbody = document.getElementById('incentiveBody');
-    tbody.innerHTML = '';
+    const container = document.getElementById('incentiveBody');
+    container.innerHTML = '';
     const def = incentiveData.defaults;
     for (const s of incentiveData.staff) {
       const badge = staffTypeBadge(s.type);
@@ -953,15 +975,22 @@
       const unit = s.type === 'nurse' ? 'h' : 'u';
       const effective = (s.incentive_line != null) ? s.incentive_line
         : (s.type === 'nurse' ? def.nurse : def.rehab);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><strong>${s.name}</strong></td>
-        <td>${badge}</td>
-        <td><select id="iline_${s.id}" style="width:auto;min-width:130px">
+      const furi = (s.furigana_family || '') + (s.furigana_given || '');
+      const row = document.createElement('div');
+      row.className = 'iline-row';
+      row.innerHTML = `
+        <div class="iline-name">
+          <div class="name-furi">${furi}</div>
+          <div class="iline-name-row">
+            <div class="name-kanji">${s.name}</div>
+            ${badge}
+          </div>
+        </div>
+        <select class="iline-select" id="iline_${s.id}">
           ${buildSelectHtml(opts, effective, unit)}
-        </select></td>
-        <td><button class="btn btn-sm btn-blue" onclick="saveStaffIncentive('${s.id}','${s.name}')">保存</button></td>`;
-      tbody.appendChild(tr);
+        </select>
+        <button class="btn-save" onclick="saveStaffIncentive('${s.id}','${s.name}')">保存</button>`;
+      container.appendChild(row);
     }
   }
 
