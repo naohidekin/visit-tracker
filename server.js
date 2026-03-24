@@ -221,6 +221,10 @@ app.get('/history', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'history.html'));
 });
+app.get('/manual', (req, res) => {
+  if (!req.session.staffId) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'manual.html'));
+});
 app.get('/', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
