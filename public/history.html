@@ -33,6 +33,13 @@
     .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
     .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
     .menu-drawer .menu-logout{color:#c0392b}
+    /* ── PC: スマホ幅中央固定 ── */
+    .page-wrapper{width:100%;min-height:100vh}
+    .menu-overlay-inner{max-width:390px;margin:0 auto;height:100%;position:relative}
+    @media(min-width:480px){
+      body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
+      .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
+    }
     .container{padding:16px;max-width:480px;margin:0 auto}
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
     .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px}
@@ -97,6 +104,7 @@
   </style>
 </head>
 <body>
+<div class="page-wrapper">
 
 <header>
   <div class="header-brand">
@@ -110,12 +118,14 @@
     <span></span><span></span><span></span>
   </button>
   <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-overlay-inner">
     <div class="menu-drawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" onclick="logout()">ログアウト</button>
+    </div>
     </div>
   </div>
 </header>
@@ -359,5 +369,6 @@
   init();
 </script>
 <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
+</div><!-- /page-wrapper -->
 </body>
 </html>
