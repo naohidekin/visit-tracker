@@ -890,11 +890,15 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const NURSE_KAIGO_BG = { red: 221/255,    green: 238/255,    blue: 1.0        };
       const NURSE_IRYO_BG  = { red: 234/255,    green: 244/255,    blue: 1.0        };
       const TOTAL_BG       = { red: 1.0,        green: 242/255,    blue: 204/255    };
+      const SUN_BG         = { red: 0.9882353,  green: 0.89411765, blue: 0.8392157  };
+      // ssId → 年 の逆引きマップ
+      const yearBySsId = Object.fromEntries(Object.entries(registry).map(([y, id]) => [id, parseInt(y)]));
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
 
       for (const ssId of allSids) {
+        const ssYear = yearBySsId[ssId] || new Date().getFullYear();
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
@@ -974,6 +978,23 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
                 cell: { userEnteredFormat: { backgroundColor: NURSE_IRYO_BG,
                   horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,horizontalAlignment)' } },
+            // 日曜行のカラー（既存看護師と同じピンク）
+            ...(() => {
+              const monthNum = parseInt(m);
+              const daysInMonth = new Date(ssYear, monthNum, 0).getDate();
+              const sunReqs = [];
+              for (let d = 1; d <= daysInMonth; d++) {
+                if (new Date(ssYear, monthNum - 1, d).getDay() !== 0) continue;
+                const rowIdx = DATA_START_ROW - 1 + (d - 1);
+                sunReqs.push(
+                  { repeatCell: { range: { sheetId: sid, startRowIndex: rowIdx, endRowIndex: rowIdx + 1,
+                      startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                      cell: { userEnteredFormat: { backgroundColor: SUN_BG } },
+                      fields: 'userEnteredFormat.backgroundColor' } }
+                );
+              }
+              return sunReqs;
+            })(),
             // 旧太線を解除
             ...(oldDividerIdx !== null ? [
               { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
