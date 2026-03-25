@@ -182,6 +182,38 @@
     </div>
   </div>
 
+  <!-- お知らせ管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📢 お知らせ管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:14px">
+        <div class="field">
+          <label>タイトル</label>
+          <input id="noticeTitle" placeholder="お知らせのタイトル">
+        </div>
+        <div class="field">
+          <label>本文</label>
+          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
+        </div>
+        <div id="noticeMsg" class="msg"></div>
+        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
+      </div>
+      <div class="spinner" id="noticesSpinner">読み込み中...</div>
+      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
+      <div class="table-wrap" id="noticesTableWrap" style="display:none">
+        <table>
+          <thead>
+            <tr><th>タイトル</th><th>日付</th><th>操作</th></tr>
+          </thead>
+          <tbody id="noticesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- スタッフ一覧 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -262,6 +294,25 @@
     </div>
     <div class="card-body">
       <p style="font-size:12px;color:var(--muted);margin-bottom:12px">電子カルテから出力した「訪問件数詳細」Excelをアップロードすると、職員別の訪問時間・単位数を自動集計します。</p>
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="field">
+          <label>年</label>
+          <select id="excelYear">
+            <option value="2025">2025年</option>
+            <option value="2026">2026年</option>
+            <option value="2027">2027年</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>月</label>
+          <select id="excelMonth">
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+        </div>
+      </div>
       <div id="excelDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:30px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s">
         <div style="font-size:28px;margin-bottom:8px">📎</div>
         <div style="font-size:13px;font-weight:600;color:var(--blue-dark)">Excelファイルをドロップ</div>
@@ -291,6 +342,60 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Excel集計履歴 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📊 電子カルテ集計履歴</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="field">
+          <label>年</label>
+          <select id="histYear">
+            <option value="2025">2025年</option>
+            <option value="2026">2026年</option>
+            <option value="2027">2027年</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>月</label>
+          <select id="histMonth">
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-blue" onclick="loadExcelHistory()">表示</button>
+      <div class="spinner" id="histSpinner" style="display:none">読み込み中...</div>
+      <div class="msg err" id="histErr" style="display:none"></div>
+      <div id="histResult" style="display:none;margin-top:16px">
+        <div class="a-section-title" id="histTitle"></div>
+        <div id="histNurseSection" style="display:none;margin-bottom:16px">
+          <p class="section-sub">看護師 — 訪問時間</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名前</th><th style="text-align:right">訪問回数</th><th style="text-align:right">合計時間</th></tr></thead>
+              <tbody id="histNurseBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="histRehabSection" style="display:none;margin-bottom:16px">
+          <p class="section-sub">リハビリ職 — 訪問単位数</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名前</th><th style="text-align:right">職種</th><th style="text-align:right">訪問回数</th><th style="text-align:right">合計単位</th></tr></thead>
+              <tbody id="histRehabBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <p id="histMeta" style="font-size:11px;color:var(--muted);margin-top:8px"></p>
       </div>
     </div>
   </div>
@@ -529,8 +634,10 @@
     renderTable();
     loadIncentive();
     initAdminMonthlySelectors();
+    initExcelSelectors();
     updateAdminStaffSelect();
     loadAdminSchedules();
+    loadAdminNotices();
   }
 
   function toggleArchivedView() {
@@ -812,6 +919,131 @@
     const data = await res.json();
     if (data.success) { showToast('🗑️ 予定を削除しました'); loadAdminSchedules(); }
     else showToast('エラー: ' + (data.error || '削除失敗'));
+  }
+
+  // ── お知らせ管理 ────────────────────────────────────────────
+  let editingNoticeId = null;
+  let noticesCache = [];
+
+  async function loadAdminNotices() {
+    const spinner = document.getElementById('noticesSpinner');
+    const empty   = document.getElementById('noticesEmpty');
+    const wrap    = document.getElementById('noticesTableWrap');
+    const body    = document.getElementById('noticesBody');
+    spinner.style.display = 'block';
+    empty.style.display   = 'none';
+    wrap.style.display    = 'none';
+
+    const res  = await fetch('/api/admin/notices');
+    const data = await res.json();
+    spinner.style.display = 'none';
+    noticesCache = data.notices || [];
+
+    if (!noticesCache.length) {
+      empty.style.display = 'block';
+      return;
+    }
+    wrap.style.display = 'block';
+    body.innerHTML = noticesCache.map(n => `
+      <tr>
+        <td style="font-size:13px;font-weight:600">${esc(n.title)}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--muted)">${n.date || ''}</td>
+        <td class="td-btns">
+          <button class="btn-xs btn-edit" onclick="startEditNotice('${n.id}')">編集</button>
+          <button class="btn-xs btn-danger" onclick="deleteNotice('${n.id}')">削除</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function startEditNotice(id) {
+    const n = noticesCache.find(x => x.id === id);
+    if (!n) return;
+    editingNoticeId = id;
+    document.getElementById('noticeTitle').value = n.title;
+    document.getElementById('noticeBody').value  = n.body;
+    const msgEl = document.getElementById('noticeMsg');
+    msgEl.style.display = 'block';
+    msgEl.className = 'msg ok';
+    msgEl.textContent = '編集モード: 内容を変更して「更新」を押してください';
+    // change button
+    const btn = document.querySelector('#noticeMsg').nextElementSibling;
+    btn.textContent = '更新';
+    btn.setAttribute('onclick', 'updateNotice()');
+  }
+
+  async function createNotice() {
+    const title = document.getElementById('noticeTitle').value.trim();
+    const body  = document.getElementById('noticeBody').value.trim();
+    const msgEl = document.getElementById('noticeMsg');
+    if (!title || !body) {
+      msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = 'タイトルと本文を入力してください';
+      return;
+    }
+    const res = await fetch('/api/admin/notices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('📢 お知らせを作成しました');
+      document.getElementById('noticeTitle').value = '';
+      document.getElementById('noticeBody').value  = '';
+      msgEl.style.display = 'none';
+      loadAdminNotices();
+    } else {
+      msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = data.error || '作成失敗';
+    }
+  }
+
+  async function updateNotice() {
+    if (!editingNoticeId) return;
+    const title = document.getElementById('noticeTitle').value.trim();
+    const body  = document.getElementById('noticeBody').value.trim();
+    const msgEl = document.getElementById('noticeMsg');
+    if (!title || !body) {
+      msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = 'タイトルと本文を入力してください';
+      return;
+    }
+    const res = await fetch(`/api/admin/notices/${editingNoticeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('📢 お知らせを更新しました');
+      cancelEditNotice();
+      loadAdminNotices();
+    } else {
+      msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = data.error || '更新失敗';
+    }
+  }
+
+  function cancelEditNotice() {
+    editingNoticeId = null;
+    document.getElementById('noticeTitle').value = '';
+    document.getElementById('noticeBody').value  = '';
+    const msgEl = document.getElementById('noticeMsg');
+    msgEl.style.display = 'none';
+    const btn = msgEl.nextElementSibling;
+    btn.textContent = '新規作成';
+    btn.setAttribute('onclick', 'createNotice()');
+  }
+
+  async function deleteNotice(id) {
+    if (!confirm('このお知らせを削除しますか？')) return;
+    const res = await fetch(`/api/admin/notices/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) { showToast('🗑️ お知らせを削除しました'); loadAdminNotices(); }
+    else showToast('エラー: ' + (data.error || '削除失敗'));
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
   }
 
   // ── スタッフ月次実績 ──────────────────────────────────────────
@@ -1126,6 +1358,7 @@
 
   // 年・月の初期値をページ読み込み時に設定
   initAdminMonthlySelectors();
+  initExcelSelectors();
 
   // ── 翌年スプレッドシート作成 ──────────────────────────────────
   document.getElementById('nextYearLabel').textContent = new Date().getFullYear() + 1;
@@ -1184,6 +1417,9 @@
       try {
         const fd = new FormData();
         fd.append('file', file);
+        const y = document.getElementById('excelYear').value;
+        const m = document.getElementById('excelMonth').value;
+        fd.append('yearMonth', `${y}-${String(m).padStart(2,'0')}`);
         const r = await fetch('/api/admin/analyze-excel', { method: 'POST', body: fd });
         const data = await r.json();
         spinner.style.display = 'none';
@@ -1224,6 +1460,78 @@
       resultEl.style.display = 'block';
     }
   })();
+
+  // ── Excel集計履歴 ──────────────────────────────────────────
+  function initExcelSelectors() {
+    const now = new Date();
+    const y = String(now.getFullYear());
+    const m = String(now.getMonth() + 1);
+    document.getElementById('excelYear').value = y;
+    document.getElementById('excelMonth').value = m;
+    document.getElementById('histYear').value = y;
+    document.getElementById('histMonth').value = m;
+  }
+
+  async function loadExcelHistory() {
+    const y = document.getElementById('histYear').value;
+    const m = document.getElementById('histMonth').value;
+    const ym = `${y}-${String(m).padStart(2,'0')}`;
+
+    document.getElementById('histErr').style.display = 'none';
+    document.getElementById('histResult').style.display = 'none';
+    document.getElementById('histSpinner').style.display = 'block';
+
+    try {
+      const res = await fetch(`/api/admin/excel-results/${ym}`);
+      document.getElementById('histSpinner').style.display = 'none';
+      if (!res.ok) {
+        const data = await res.json();
+        document.getElementById('histErr').textContent = data.error || 'データがありません';
+        document.getElementById('histErr').style.display = 'block';
+        return;
+      }
+      const entry = await res.json();
+      renderHistoryResult(entry, ym);
+    } catch (e) {
+      document.getElementById('histSpinner').style.display = 'none';
+      document.getElementById('histErr').textContent = e.message;
+      document.getElementById('histErr').style.display = 'block';
+    }
+  }
+
+  function renderHistoryResult(entry, ym) {
+    const results = entry.results;
+    const nurses = results.filter(r => r.isNurse);
+    const rehabs = results.filter(r => !r.isNurse);
+
+    const [yy, mm] = ym.split('-');
+    document.getElementById('histTitle').textContent = `${yy}年${parseInt(mm)}月 集計結果`;
+
+    const nurseSection = document.getElementById('histNurseSection');
+    const nurseBody = document.getElementById('histNurseBody');
+    if (nurses.length) {
+      nurseBody.innerHTML = nurses.map(n =>
+        `<tr><td>${n.staffName}</td><td style="text-align:right">${n.visitCount}回</td><td style="text-align:right;font-weight:700">${n.totalHours}時間</td></tr>`
+      ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td style="text-align:right;font-weight:700">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
+      nurseSection.style.display = 'block';
+    } else {
+      nurseSection.style.display = 'none';
+    }
+
+    const rehabSection = document.getElementById('histRehabSection');
+    const rehabBody = document.getElementById('histRehabBody');
+    if (rehabs.length) {
+      rehabBody.innerHTML = rehabs.map(r =>
+        `<tr><td>${r.staffName}</td><td style="text-align:right">${r.qualification}</td><td style="text-align:right">${r.visitCount}回</td><td style="text-align:right;font-weight:700">${r.totalUnits}単位</td></tr>`
+      ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td></td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
+      rehabSection.style.display = 'block';
+    } else {
+      rehabSection.style.display = 'none';
+    }
+
+    document.getElementById('histMeta').textContent = `ファイル: ${entry.fileName} / 集計日時: ${new Date(entry.analyzedAt).toLocaleString('ja-JP')}`;
+    document.getElementById('histResult').style.display = 'block';
+  }
 
   // ── セッション確認（管理者セッションが既にある場合） ──────────
   fetch('/api/admin/staff').then(r => {

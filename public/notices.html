@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>お知らせ | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .header-brand{display:flex;align-items:stretch;gap:10px}
+    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.5);flex-shrink:0}
+    .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
+    .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay.open{display:block}
+    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer .menu-logout{color:#c0392b}
+    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
+    .unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    /* ── PC: スマホ幅中央固定 ── */
+    .page-wrapper{width:100%;min-height:100vh}
+    .menu-overlay-inner{max-width:390px;margin:0 auto;height:100%;position:relative}
+    @media(min-width:480px){
+      body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
+      .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
+    }
+    .container{padding:16px;max-width:480px;margin:0 auto}
+
+    /* ── お知らせカード ── */
+    .notice-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:box-shadow .15s;position:relative}
+    .notice-card:active{box-shadow:0 1px 8px rgba(0,0,0,.06)}
+    .notice-card.unread{border-left:4px solid var(--blue)}
+    .notice-card.unread .notice-title{font-weight:800}
+    .notice-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .notice-title{font-size:15px;font-weight:600;color:var(--text);line-height:1.4}
+    .notice-date{font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0;margin-top:2px}
+    .notice-body{display:none;margin-top:12px;font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;border-top:1px solid #f0f4f8;padding-top:12px}
+    .notice-card.expanded .notice-body{display:block}
+    .notice-chevron{font-size:11px;color:var(--muted);transition:transform .2s;flex-shrink:0;margin-top:4px}
+    .notice-card.expanded .notice-chevron{transform:rotate(180deg)}
+    .unread-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:6px}
+    .read-dot{width:8px;height:8px;flex-shrink:0}
+
+    .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:40px 0}
+    .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+<header>
+  <div class="header-brand">
+    <div class="header-accent"></div>
+    <div class="header-brand-text">
+      <span class="header-app-name">にこっと Web App</span>
+      <span class="header-page-name">お知らせ</span>
+    </div>
+  </div>
+  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-overlay-inner">
+    <div class="menu-drawer" onclick="event.stopPropagation()">
+      <a href="/">入力画面</a>
+      <a href="/history">月次実績</a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
+      <a href="/change-password">PW変更</a>
+      <a href="/manual">使い方</a>
+      <button class="menu-logout" onclick="logout()">ログアウト</button>
+    </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="spinner" id="spinner">読み込み中...</div>
+  <div id="noticesList"></div>
+  <div class="empty-msg" id="emptyMsg" style="display:none">お知らせはありません</div>
+</div>
+</div>
+
+<script>
+  async function init() {
+    const me = await fetch('/api/me').then(r => r.json());
+    if (!me.staffId) { location.href = '/login'; return; }
+
+    await loadNotices();
+    await updateMenuBadge();
+  }
+
+  async function loadNotices() {
+    const res = await fetch('/api/notices');
+    const { notices } = await res.json();
+    const list = document.getElementById('noticesList');
+    const spinner = document.getElementById('spinner');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    spinner.style.display = 'none';
+
+    if (!notices.length) {
+      emptyMsg.style.display = 'block';
+      return;
+    }
+
+    list.innerHTML = notices.map(n => `
+      <div class="notice-card ${n.isRead ? '' : 'unread'}" data-id="${n.id}" onclick="toggleNotice(this, '${n.id}', ${n.isRead})">
+        <div class="notice-header">
+          ${n.isRead ? '<div class="read-dot"></div>' : '<div class="unread-dot"></div>'}
+          <div style="flex:1;min-width:0">
+            <div class="notice-title">${esc(n.title)}</div>
+          </div>
+          <span class="notice-date">${formatDate(n.date)}</span>
+          <span class="notice-chevron">▼</span>
+        </div>
+        <div class="notice-body">${esc(n.body)}</div>
+      </div>
+    `).join('');
+  }
+
+  async function toggleNotice(el, id, wasRead) {
+    const isExpanding = !el.classList.contains('expanded');
+    // collapse all others
+    document.querySelectorAll('.notice-card.expanded').forEach(c => {
+      if (c !== el) c.classList.remove('expanded');
+    });
+    el.classList.toggle('expanded');
+
+    if (isExpanding && !wasRead) {
+      await fetch(`/api/notices/${id}/read`, { method: 'POST' });
+      el.classList.remove('unread');
+      const dot = el.querySelector('.unread-dot');
+      if (dot) { dot.className = 'read-dot'; }
+      // update data so re-toggle doesn't re-send
+      el.setAttribute('onclick', `toggleNotice(this, '${id}', true)`);
+      await updateMenuBadge();
+    }
+  }
+
+  async function updateMenuBadge() {
+    try {
+      const res = await fetch('/api/notices/unread-count');
+      const { count } = await res.json();
+      const badge = document.getElementById('menuBadge');
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    } catch {}
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  function toggleMenu() {
+    document.getElementById('hamburgerBtn').classList.toggle('open');
+    document.getElementById('menuOverlay').classList.toggle('open');
+  }
+  function closeMenu() {
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('menuOverlay').classList.remove('open');
+  }
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+  }
+
+  init();
+</script>
+</body>
+</html>

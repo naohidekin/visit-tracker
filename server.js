@@ -35,6 +35,7 @@ const STAFF_PATH      = path.join(DATA_DIR, 'staff.json');
 const REGISTRY_PATH   = path.join(DATA_DIR, 'spreadsheet-registry.json');
 const SCHEDULES_PATH  = path.join(DATA_DIR, 'schedules.json');
 const NOTICES_PATH    = path.join(DATA_DIR, 'notices.json');
+const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
@@ -157,6 +158,13 @@ function loadNotices() {
 }
 function saveNotices(data) {
   fs.writeFileSync(NOTICES_PATH, JSON.stringify(data, null, 2));
+}
+function loadExcelResults() {
+  if (!fs.existsSync(EXCEL_RESULTS_PATH)) return {};
+  return JSON.parse(fs.readFileSync(EXCEL_RESULTS_PATH, 'utf8'));
+}
+function saveExcelResults(data) {
+  fs.writeFileSync(EXCEL_RESULTS_PATH, JSON.stringify(data, null, 2));
 }
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1735,11 +1743,42 @@ app.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (req, 
       return 0;
     });
 
-    res.json({ success: true, results });
+    // Auto-save results
+    const ym = req.body.yearMonth || (() => {
+      const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      return `${jst.getFullYear()}-${String(jst.getMonth()+1).padStart(2,'0')}`;
+    })();
+    const allResults = loadExcelResults();
+    allResults[ym] = {
+      analyzedAt: new Date().toISOString(),
+      fileName: req.file.originalname || '',
+      results,
+    };
+    saveExcelResults(allResults);
+
+    res.json({ success: true, results, savedYearMonth: ym });
   } catch (e) {
     console.error('Excel analyze error:', e);
     res.status(500).json({ error: 'Excel解析に失敗しました: ' + e.message });
   }
+});
+
+// ─── API: Excel集計履歴 ──────────────────────────────────────
+app.get('/api/admin/excel-results', requireAdmin, (_req, res) => {
+  const data = loadExcelResults();
+  const periods = Object.keys(data).sort().reverse().map(ym => ({
+    yearMonth: ym,
+    analyzedAt: data[ym].analyzedAt,
+    fileName: data[ym].fileName,
+  }));
+  res.json(periods);
+});
+
+app.get('/api/admin/excel-results/:yearMonth', requireAdmin, (req, res) => {
+  const data = loadExcelResults();
+  const entry = data[req.params.yearMonth];
+  if (!entry) return res.status(404).json({ error: '該当期間のデータがありません' });
+  res.json(entry);
 });
 
 // ─── API: お知らせ（スタッフ向け） ─────────────────────────────
@@ -1837,6 +1876,12 @@ async function ensureDataDir() {
     const src = path.join(__dirname, 'schedules.json');
     if (fs.existsSync(src)) fs.copyFileSync(src, SCHEDULES_PATH);
     else fs.writeFileSync(SCHEDULES_PATH, JSON.stringify({ schedules: [] }, null, 2));
+  }
+  // notices.json も同様
+  if (!fs.existsSync(NOTICES_PATH)) {
+    const src = path.join(__dirname, 'notices.json');
+    if (fs.existsSync(src)) fs.copyFileSync(src, NOTICES_PATH);
+    else fs.writeFileSync(NOTICES_PATH, JSON.stringify({ notices: [], readStatus: {} }, null, 2));
   }
 }
 
