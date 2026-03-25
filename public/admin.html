@@ -254,6 +254,47 @@
     </div>
   </div>
 
+  <!-- Excel集計 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📂 電子カルテExcel集計</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">電子カルテから出力した「訪問件数詳細」Excelをアップロードすると、職員別の訪問時間・単位数を自動集計します。</p>
+      <div id="excelDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:30px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s">
+        <div style="font-size:28px;margin-bottom:8px">📎</div>
+        <div style="font-size:13px;font-weight:600;color:var(--blue-dark)">Excelファイルをドロップ</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">またはクリックして選択</div>
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none">
+      </div>
+      <div id="excelFileName" style="display:none;font-size:12px;color:var(--muted);margin-top:8px;text-align:center"></div>
+      <div class="spinner" id="excelSpinner" style="display:none">解析中...</div>
+      <div class="msg err" id="excelErr" style="display:none"></div>
+      <div id="excelResult" style="display:none;margin-top:16px">
+        <div class="a-section-title">集計結果</div>
+        <div id="excelNurseSection" style="display:none;margin-bottom:16px">
+          <p class="section-sub">看護師 — 訪問時間</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名前</th><th style="text-align:right">訪問回数</th><th style="text-align:right">合計時間</th></tr></thead>
+              <tbody id="excelNurseBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="excelRehabSection" style="display:none;margin-bottom:16px">
+          <p class="section-sub">リハビリ職 — 訪問単位数</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名前</th><th style="text-align:right">職種</th><th style="text-align:right">訪問回数</th><th style="text-align:right">合計単位</th></tr></thead>
+              <tbody id="excelRehabBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- インセンティブ設定 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -1116,6 +1157,73 @@
     box.style.display = 'block';
     btn.disabled = false; btn.textContent = '翌年シートを作成';
   }
+
+  // ── Excel集計 ────────────────────────────────────────────────
+  (function() {
+    const dropZone = document.getElementById('excelDropZone');
+    const fileInput = document.getElementById('excelFileInput');
+    const spinner = document.getElementById('excelSpinner');
+    const errEl = document.getElementById('excelErr');
+    const resultEl = document.getElementById('excelResult');
+    const fileNameEl = document.getElementById('excelFileName');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--blue)'; dropZone.style.background = '#f0f6ff'; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border)'; dropZone.style.background = ''; });
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border)'; dropZone.style.background = '';
+      if (e.dataTransfer.files.length) analyzeExcel(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) analyzeExcel(fileInput.files[0]); });
+
+    async function analyzeExcel(file) {
+      errEl.style.display = 'none'; resultEl.style.display = 'none';
+      fileNameEl.textContent = '📄 ' + file.name; fileNameEl.style.display = 'block';
+      spinner.style.display = 'block';
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch('/api/admin/analyze-excel', { method: 'POST', body: fd });
+        const data = await r.json();
+        spinner.style.display = 'none';
+        if (!r.ok || !data.success) { errEl.textContent = data.error || 'エラー'; errEl.style.display = 'block'; return; }
+        renderExcelResult(data.results);
+      } catch (e) {
+        spinner.style.display = 'none';
+        errEl.textContent = e.message; errEl.style.display = 'block';
+      }
+    }
+
+    function renderExcelResult(results) {
+      const nurses = results.filter(r => r.isNurse);
+      const rehabs = results.filter(r => !r.isNurse);
+      const nurseSection = document.getElementById('excelNurseSection');
+      const rehabSection = document.getElementById('excelRehabSection');
+      const nurseBody = document.getElementById('excelNurseBody');
+      const rehabBody = document.getElementById('excelRehabBody');
+
+      if (nurses.length) {
+        nurseBody.innerHTML = nurses.map(n =>
+          `<tr><td>${n.staffName}</td><td style="text-align:right">${n.visitCount}回</td><td style="text-align:right;font-weight:700">${n.totalHours}時間</td></tr>`
+        ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td style="text-align:right;font-weight:700">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
+        nurseSection.style.display = 'block';
+      } else {
+        nurseSection.style.display = 'none';
+      }
+
+      if (rehabs.length) {
+        rehabBody.innerHTML = rehabs.map(r =>
+          `<tr><td>${r.staffName}</td><td style="text-align:right">${r.qualification}</td><td style="text-align:right">${r.visitCount}回</td><td style="text-align:right;font-weight:700">${r.totalUnits}単位</td></tr>`
+        ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td></td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
+        rehabSection.style.display = 'block';
+      } else {
+        rehabSection.style.display = 'none';
+      }
+
+      resultEl.style.display = 'block';
+    }
+  })();
 
   // ── セッション確認（管理者セッションが既にある場合） ──────────
   fetch('/api/admin/staff').then(r => {
