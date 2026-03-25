@@ -883,8 +883,9 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 
       const NURSE_DARK_BG  = { red: 0.18431373, green: 0.45882353, blue: 0.70980392 };
       const NURSE_NAME_BG  = { red: 0.8392157,  green: 0.89411765, blue: 0.9411765  };
-      const NURSE_KAIGO_BG = { red: 0.8666667,  green: 0.9294118,  blue: 1.0        };
-      const NURSE_IRYO_BG  = { red: 0.9176471,  green: 0.9607843,  blue: 1.0        };
+      const NURSE_KAIGO_BG = { red: 221/255,    green: 238/255,    blue: 1.0        };
+      const NURSE_IRYO_BG  = { red: 234/255,    green: 244/255,    blue: 1.0        };
+      const TOTAL_BG       = { red: 1.0,        green: 242/255,    blue: 204/255    };
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
@@ -985,9 +986,76 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
             { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
                 startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
                 left: SOLID_MEDIUM } },
+            // 列幅を既存看護師と同じ 48px に設定
+            { updateDimensionProperties: {
+                range: { sheetId: sid, dimension: 'COLUMNS',
+                  startIndex: kaigoIdx, endIndex: kaigoIdx + 2 },
+                properties: { pixelSize: 48 },
+                fields: 'pixelSize' } },
           ];
         });
         await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: fmtReqs } });
+
+        // 4. 合計行・個人計行のフォーマットと数式を設定
+        for (const m of vm) {
+          const sheetVals = await api.spreadsheets.values.get({
+            spreadsheetId: ssId, range: `${m}!A1:A40` });
+          const totalRowIdx = (sheetVals.data.values || []).findIndex(r => r[0]?.includes('合'));
+          if (totalRowIdx < 0) continue;
+          const tI = totalRowIdx;
+          const kI = totalRowIdx + 1;
+          const tRow = tI + 1; // 1-based
+          const kRow = kI + 1;
+          const dataEnd = tI; // データ最終行（1-based）
+          const sid = sm[m];
+
+          // 合計行 新列のフォーマット
+          const totalFmt = [
+            { repeatCell: { range: { sheetId: sid, startRowIndex: tI, endRowIndex: tI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: TOTAL_BG,
+                  textFormat: { fontFamily: 'Meiryo', fontSize: 11, bold: true },
+                  horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            { updateBorders: { range: { sheetId: sid, startRowIndex: tI, endRowIndex: tI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                top: SOLID_MEDIUM, bottom: SOLID_MEDIUM, left: SOLID, right: SOLID } },
+            // 個人計行 新列を結合・フォーマット
+            { unmergeCells: { range: { sheetId: sid, startRowIndex: kI, endRowIndex: kI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 } } },
+            { mergeCells: { range: { sheetId: sid, startRowIndex: kI, endRowIndex: kI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                mergeType: 'MERGE_ALL' } },
+            { repeatCell: { range: { sheetId: sid, startRowIndex: kI, endRowIndex: kI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_KAIGO_BG,
+                  textFormat: { fontFamily: 'Meiryo', fontSize: 11, bold: true },
+                  horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            { updateBorders: { range: { sheetId: sid, startRowIndex: kI, endRowIndex: kI + 1,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                top: SOLID, bottom: SOLID_MEDIUM, left: SOLID,
+                right: (kaigoIdx + 1 === newDividerIdx) ? SOLID_MEDIUM : SOLID } },
+            // 旧個人計の右ボーダーを修正（前の看護師の結合セル右端）
+            ...(oldDividerIdx !== null ? [
+              { updateBorders: { range: { sheetId: sid, startRowIndex: kI, endRowIndex: kI + 1,
+                  startColumnIndex: oldDividerIdx - 1, endColumnIndex: oldDividerIdx + 1 },
+                  right: SOLID } },
+            ] : []),
+          ];
+          await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: totalFmt } });
+
+          // 合計行 数式、個人計行 数式
+          await api.spreadsheets.values.batchUpdate({ spreadsheetId: ssId, requestBody: {
+            valueInputOption: 'USER_ENTERED', data: [
+              { range: `${m}!${kaigoCol}${tRow}`,
+                values: [[`=SUM(${kaigoCol}5:${kaigoCol}${dataEnd})`]] },
+              { range: `${m}!${iryoCol}${tRow}`,
+                values: [[`=SUM(${iryoCol}5:${iryoCol}${dataEnd})`]] },
+              { range: `${m}!${kaigoCol}${kRow}`,
+                values: [[`=${kaigoCol}${tRow}+${iryoCol}${tRow}`]] },
+            ]}});
+        }
       }
       for (const s of data.staff)
         if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
