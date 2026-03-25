@@ -93,7 +93,7 @@ async function createSpreadsheetForYear(year) {
     const m           = mi + 1;
     const daysInMonth = new Date(year, m, 0).getDate();
     const values      = [
-      [`${year}年 ${MONTHS[mi]} 訪問件数`], [], [],
+      [`${year}年${m}月実績表`], [], [],
       headerRow,
     ];
     for (let d = 1; d <= daysInMonth; d++) {
@@ -105,6 +105,20 @@ async function createSpreadsheetForYear(year) {
   await api.spreadsheets.values.batchUpdate({
     spreadsheetId: newId,
     requestBody: { valueInputOption: 'USER_ENTERED', data: batchData },
+  });
+
+  // タイトル行（行1）を中央揃えに設定
+  await api.spreadsheets.batchUpdate({
+    spreadsheetId: newId,
+    requestBody: {
+      requests: MONTHS.map((_, i) => ({
+        repeatCell: {
+          range: { sheetId: i, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+          cell: { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
+          fields: 'userEnteredFormat.horizontalAlignment',
+        },
+      })),
+    },
   });
 
   registry[String(year)] = newId;
