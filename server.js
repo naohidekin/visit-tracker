@@ -1827,6 +1827,7 @@ app.post('/api/admin/notices', requireAdmin, (req, res) => {
     date: now.toISOString().slice(0, 10),
     title,
     body,
+    source: 'admin',
     createdAt: now.toISOString()
   };
   data.notices.push(notice);
@@ -1838,6 +1839,7 @@ app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
   const data = loadNotices();
   const notice = data.notices.find(n => n.id === req.params.id);
   if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
+  if (notice.source === 'system') return res.status(403).json({ error: '運営からのお知らせは編集できません' });
   if (req.body.title) notice.title = req.body.title;
   if (req.body.body) notice.body = req.body.body;
   saveNotices(data);
@@ -1848,6 +1850,7 @@ app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
   const data = loadNotices();
   const idx = data.notices.findIndex(n => n.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });
+  if (data.notices[idx].source === 'system') return res.status(403).json({ error: '運営からのお知らせは削除できません' });
   data.notices.splice(idx, 1);
   // readStatus からも削除
   for (const staffId in data.readStatus) {
@@ -1856,6 +1859,24 @@ app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
   saveNotices(data);
   res.json({ ok: true });
 });
+
+// ─── 運営お知らせ自動発信 ────────────────────────────────────────
+function createSystemNotice(title, body) {
+  const data = loadNotices();
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const notice = {
+    id: 'sys-' + Date.now(),
+    date: now.toISOString().slice(0, 10),
+    title,
+    body,
+    source: 'system',
+    createdAt: now.toISOString()
+  };
+  data.notices.push(notice);
+  saveNotices(data);
+  console.log(`[system] 運営お知らせ作成: ${title}`);
+  return notice;
+}
 
 // ─── 起動 ──────────────────────────────────────────────────────
 async function ensureDataDir() {
@@ -1906,6 +1927,18 @@ async function main() {
     }
   });
   console.log('📅 自動作成スケジュール: 毎年 12/31 23:00 に翌年スプレッドシートを作成');
+
+  // 毎月16日 8:00 に修正可能期間のお知らせを自動発信
+  cron.schedule('0 8 16 * *', () => {
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const m = now.getMonth() + 1;
+    const y = now.getFullYear();
+    createSystemNotice(
+      `修正可能期間のお知らせ（${m}月）`,
+      `${y}年${m}月の修正可能期間は ${m}月16日〜${m}月20日 です。\n\n締日（${m}月15日）以前のデータに修正がある方は、この期間内に修正をお願いします。\n20日を過ぎると修正できなくなりますのでご注意ください。`
+    );
+  });
+  console.log('📢 運営お知らせスケジュール: 毎月16日 8:00 に修正可能期間を自動通知');
 
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }

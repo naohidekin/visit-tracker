@@ -56,6 +56,9 @@
     .notice-card.expanded .notice-chevron{transform:rotate(180deg)}
     .unread-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0;margin-top:6px}
     .read-dot{width:8px;height:8px;flex-shrink:0}
+    .source-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;margin-right:6px;vertical-align:middle}
+    .source-badge.system{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+    .source-badge.admin{background:#e8f4fd;color:#1565c0;border:1px solid #90caf9}
 
     .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:40px 0}
     .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
@@ -123,7 +126,7 @@
         <div class="notice-header">
           ${n.isRead ? '<div class="read-dot"></div>' : '<div class="unread-dot"></div>'}
           <div style="flex:1;min-width:0">
-            <div class="notice-title">${esc(n.title)}</div>
+            <div class="notice-title">${n.source === 'system' ? '<span class="source-badge system">運営</span>' : ''}${esc(n.title)}</div>
           </div>
           <span class="notice-date">${formatDate(n.date)}</span>
           <span class="notice-chevron">▼</span>
