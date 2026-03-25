@@ -6,6 +6,10 @@ const path       = require('path');
 const bcrypt     = require('bcryptjs');
 const csession   = require('cookie-session');
 const cron       = require('node-cron');
+const multer     = require('multer');
+const XLSX       = require('xlsx');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -886,11 +890,15 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const NURSE_KAIGO_BG = { red: 221/255,    green: 238/255,    blue: 1.0        };
       const NURSE_IRYO_BG  = { red: 234/255,    green: 244/255,    blue: 1.0        };
       const TOTAL_BG       = { red: 1.0,        green: 242/255,    blue: 204/255    };
+      const SUN_BG         = { red: 0.9882353,  green: 0.89411765, blue: 0.8392157  };
+      // ssId → 年 の逆引きマップ
+      const yearBySsId = Object.fromEntries(Object.entries(registry).map(([y, id]) => [id, parseInt(y)]));
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
 
       for (const ssId of allSids) {
+        const ssYear = yearBySsId[ssId] || new Date().getFullYear();
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
@@ -970,6 +978,23 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
                 cell: { userEnteredFormat: { backgroundColor: NURSE_IRYO_BG,
                   horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,horizontalAlignment)' } },
+            // 日曜行のカラー（既存看護師と同じピンク）
+            ...(() => {
+              const monthNum = parseInt(m);
+              const daysInMonth = new Date(ssYear, monthNum, 0).getDate();
+              const sunReqs = [];
+              for (let d = 1; d <= daysInMonth; d++) {
+                if (new Date(ssYear, monthNum - 1, d).getDay() !== 0) continue;
+                const rowIdx = DATA_START_ROW - 1 + (d - 1);
+                sunReqs.push(
+                  { repeatCell: { range: { sheetId: sid, startRowIndex: rowIdx, endRowIndex: rowIdx + 1,
+                      startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                      cell: { userEnteredFormat: { backgroundColor: SUN_BG } },
+                      fields: 'userEnteredFormat.backgroundColor' } }
+                );
+              }
+              return sunReqs;
+            })(),
             // 旧太線を解除
             ...(oldDividerIdx !== null ? [
               { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
@@ -1318,6 +1343,124 @@ app.get('/api/admin/registry', requireAdmin, (_req, res) => {
     year, spreadsheetId: id,
     url: `https://docs.google.com/spreadsheets/d/${id}`,
   })));
+});
+
+// ─── API: Excel集計（visitCntDetail） ────────────────────────────
+app.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'ファイルが必要です' });
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+    const results = [];
+
+    // Load registered (non-archived) staff for filtering
+    const staffData = JSON.parse(fs.readFileSync(STAFF_PATH, 'utf8'));
+    const registeredNames = staffData.staff
+      .filter(s => !s.archived)
+      .map(s => s.name.replace(/\s+/g, ''));
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      // Fix !ref: the exported Excel often has truncated range
+      let maxR = 0, maxC = 0;
+      for (const key of Object.keys(ws)) {
+        if (key[0] === '!') continue;
+        const cell = XLSX.utils.decode_cell(key);
+        if (cell.r > maxR) maxR = cell.r;
+        if (cell.c > maxC) maxC = cell.c;
+      }
+      if (maxR > 0) ws['!ref'] = 'A1:' + XLSX.utils.encode_cell({ r: maxR, c: maxC });
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      if (rows.length < 6) continue;
+
+      // Row 1 (index 1): name and qualification
+      const nameQual = String(rows[1]?.[0] || '');
+      const qualMatch = nameQual.match(/[（(](看護師|PT|OT|ST)[）)]/);
+      if (!qualMatch) continue;
+
+      const staffName = nameQual.replace(/[（(](看護師|PT|OT|ST)[）)]/, '').trim();
+
+      // Only include registered (full-time) staff
+      const normalized = staffName.replace(/\s+/g, '');
+      if (!registeredNames.includes(normalized)) continue;
+      const qualification = qualMatch[1];
+      const isNurse = qualification === '看護師';
+
+      // Header row at index 5, data starts at index 6
+      const headerRow = rows[5];
+      if (!headerRow) continue;
+      // Find column indices
+      let colTime = -1, colInsurance = -1;
+      for (let c = 0; c < headerRow.length; c++) {
+        const h = String(headerRow[c] || '');
+        if (h === '提供時間' && colTime < 0) colTime = c;
+        if (h === '保険適用') colInsurance = c;
+      }
+      if (colTime < 0 || colInsurance < 0) continue;
+
+      let totalMinutes = 0;      // for nurses
+      let totalUnits = 0;        // for rehab
+      let visitCount = 0;
+      const visits = [];
+
+      for (let r = 6; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row[colTime] == null) continue;
+        // Skip summary/total rows
+        const firstCell = String(row[0] || '');
+        if (firstCell === '合計' || firstCell === '小計') continue;
+        const rawMin = parseInt(row[colTime], 10);
+        if (isNaN(rawMin) || rawMin <= 0) continue;
+        const insurance = String(row[colInsurance] || '');
+        visitCount++;
+
+        if (isNurse) {
+          // Round: 29→30, 59→60, 89→90
+          let rounded = rawMin;
+          if (rawMin >= 25 && rawMin <= 34) rounded = 30;
+          else if (rawMin >= 55 && rawMin <= 64) rounded = 60;
+          else if (rawMin >= 85 && rawMin <= 94) rounded = 90;
+          totalMinutes += rounded;
+          visits.push({ raw: rawMin, rounded, insurance });
+        } else {
+          // Rehab: medical=4 units, kaigo=minutes/10
+          let units = 0;
+          if (insurance === '医療') {
+            units = 4;
+          } else {
+            units = Math.round(rawMin / 10);
+          }
+          totalUnits += units;
+          visits.push({ raw: rawMin, units, insurance });
+        }
+      }
+
+      const entry = {
+        sheetName,
+        staffName,
+        qualification,
+        isNurse,
+        visitCount,
+      };
+      if (isNurse) {
+        entry.totalMinutes = totalMinutes;
+        entry.totalHours = Math.round(totalMinutes / 60 * 10) / 10;
+      } else {
+        entry.totalUnits = totalUnits;
+      }
+      results.push(entry);
+    }
+
+    // Sort: nurses first, then rehab
+    results.sort((a, b) => {
+      if (a.isNurse !== b.isNurse) return a.isNurse ? -1 : 1;
+      return 0;
+    });
+
+    res.json({ success: true, results });
+  } catch (e) {
+    console.error('Excel analyze error:', e);
+    res.status(500).json({ error: 'Excel解析に失敗しました: ' + e.message });
+  }
 });
 
 // ─── 起動 ──────────────────────────────────────────────────────
