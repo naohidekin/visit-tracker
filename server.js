@@ -917,7 +917,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
                 cell: { userEnteredFormat: { backgroundColor: NURSE_DARK_BG,
                   textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
-            // 行3 氏名セルを結合・色付け
+            // 行3 氏名セルを結合・色付け（Meiryo/10/bold/center）
             { unmergeCells: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
                 startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 } } },
             { mergeCells: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
@@ -926,19 +926,22 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
             { repeatCell: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
                 startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
                 cell: { userEnteredFormat: { backgroundColor: NURSE_NAME_BG,
-                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                  textFormat: { fontFamily: 'Meiryo', fontSize: 10, bold: true },
+                  horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
-            // 行4 介護列
+            // 行4 介護列（Meiryo/9/bold/center）
             { repeatCell: { range: { sheetId: sid, startRowIndex: 3, endRowIndex: 4,
                 startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 1 },
                 cell: { userEnteredFormat: { backgroundColor: NURSE_KAIGO_BG,
-                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                  textFormat: { fontFamily: 'Meiryo', fontSize: 9, bold: true },
+                  horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
-            // 行4 医療列
+            // 行4 医療列（Meiryo/9/bold/center）
             { repeatCell: { range: { sheetId: sid, startRowIndex: 3, endRowIndex: 4,
                 startColumnIndex: kaigoIdx + 1, endColumnIndex: kaigoIdx + 2 },
                 cell: { userEnteredFormat: { backgroundColor: NURSE_IRYO_BG,
-                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                  textFormat: { fontFamily: 'Meiryo', fontSize: 9, bold: true },
+                  horizontalAlignment: 'CENTER' } },
                 fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
             // 行5以降 データ列（介護）
             { repeatCell: { range: { sheetId: sid, startRowIndex: 4, endRowIndex: 36,
