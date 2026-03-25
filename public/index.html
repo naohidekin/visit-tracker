@@ -419,9 +419,10 @@
     if (!res.ok) { location.href = '/login'; return; }
     currentUser = await res.json();
 
-    document.getElementById('headerName').textContent = currentUser.name;
-    document.getElementById('headerType').textContent =
-      currentUser.type === 'nurse' ? '看護師' : currentUser.type;
+    const elName = document.getElementById('headerName');
+    const elType = document.getElementById('headerType');
+    if (elName) elName.textContent = currentUser.name;
+    if (elType) elType.textContent = currentUser.type === 'nurse' ? '看護師' : currentUser.type;
 
     const now = new Date();
     const today = toDateStr(now);
