@@ -863,12 +863,25 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const kaigoIdx = 2 + nurseCount * 2;
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
+      // 太線の旧位置（追加前の最終iryo列）
+      const oldDividerIdx = nurseCount > 0 ? kaigoIdx - 1 : null;
+      const newDividerIdx = kaigoIdx + 1;
+
+      const NURSE_DARK_BG  = { red: 0.184, green: 0.459, blue: 0.710 };
+      const NURSE_NAME_BG  = { red: 0.839, green: 0.886, blue: 0.937 };
+      const NURSE_KAIGO_BG = { red: 0.870, green: 0.929, blue: 1.0   };
+      const NURSE_IRYO_BG  = { red: 0.918, green: 0.961, blue: 1.0   };
+      const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
+      const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
+      const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
 
       for (const ssId of allSids) {
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
         const vm = MONTHS.filter(m => sm[m] !== undefined);
+
+        // 1. 列を挿入
         await api.spreadsheets.batchUpdate({
           spreadsheetId: ssId,
           requestBody: { requests: vm.map(m => ({
@@ -876,13 +889,88 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
               startIndex: kaigoIdx, endIndex: kaigoIdx + 2 }, inheritFromBefore: false },
           })) },
         });
+
+        // 2. 行3（氏名）・行4（介護/医療）の値を書き込み
         await api.spreadsheets.values.batchUpdate({
           spreadsheetId: ssId,
-          requestBody: { valueInputOption: 'USER_ENTERED', data: vm.map(m => ({
-            range: `${m}!${kaigoCol}${HEADER_ROW}:${iryoCol}${HEADER_ROW}`,
-            values: [[`${name}(介護)`, `${name}(医療)`]],
-          })) },
+          requestBody: { valueInputOption: 'USER_ENTERED', data: vm.flatMap(m => ([
+            { range: `${m}!${kaigoCol}3:${iryoCol}3`,
+              values: [[familyName, '']] },
+            { range: `${m}!${kaigoCol}${HEADER_ROW}:${iryoCol}${HEADER_ROW}`,
+              values: [['介護', '医療']] },
+          ])) },
         });
+
+        // 3. フォーマット・太線・ヘッダー結合を各シートに適用
+        const fmtReqs = vm.flatMap(m => {
+          const sid = sm[m];
+          return [
+            // 行2 看護ヘッダー結合を拡張（C〜新iryo列）
+            { unmergeCells: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 2,
+                startColumnIndex: 2, endColumnIndex: kaigoIdx + 2 } } },
+            { mergeCells:   { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 2,
+                startColumnIndex: 2, endColumnIndex: kaigoIdx + 2 },
+                mergeType: 'MERGE_ALL' } },
+            // 行2 色（新列）
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 2,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_DARK_BG,
+                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            // 行3 氏名セルを結合・色付け
+            { unmergeCells: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 } } },
+            { mergeCells: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                mergeType: 'MERGE_ALL' } },
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 2, endRowIndex: 3,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_NAME_BG,
+                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            // 行4 介護列
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 3, endRowIndex: 4,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 1 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_KAIGO_BG,
+                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            // 行4 医療列
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 3, endRowIndex: 4,
+                startColumnIndex: kaigoIdx + 1, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_IRYO_BG,
+                  textFormat: { bold: true }, horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)' } },
+            // 行5以降 データ列（介護）
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 4, endRowIndex: 36,
+                startColumnIndex: kaigoIdx, endColumnIndex: kaigoIdx + 1 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_KAIGO_BG,
+                  horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,horizontalAlignment)' } },
+            // 行5以降 データ列（医療）
+            { repeatCell: { range: { sheetId: sid, startRowIndex: 4, endRowIndex: 36,
+                startColumnIndex: kaigoIdx + 1, endColumnIndex: kaigoIdx + 2 },
+                cell: { userEnteredFormat: { backgroundColor: NURSE_IRYO_BG,
+                  horizontalAlignment: 'CENTER' } },
+                fields: 'userEnteredFormat(backgroundColor,horizontalAlignment)' } },
+            // 旧太線を解除
+            ...(oldDividerIdx !== null ? [
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: oldDividerIdx, endColumnIndex: oldDividerIdx + 1 },
+                  right: SOLID } },
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: oldDividerIdx + 1, endColumnIndex: oldDividerIdx + 2 },
+                  left: SOLID } },
+            ] : []),
+            // 新太線を設定（新iryo列右・PT先頭列左）
+            { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
+                right: SOLID_MEDIUM } },
+            { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
+                left: SOLID_MEDIUM } },
+          ];
+        });
+        await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: fmtReqs } });
       }
       for (const s of data.staff)
         if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
@@ -961,6 +1049,11 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
 
     if (removed.type === 'nurse') {
       const delStart = colToIdx(removed.kaigo_col);
+      // 削除前の太線位置（最終看護師iryo列）
+      const activeNursesBeforeDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
+      const oldDividerIdx = activeNursesBeforeDel.length > 0
+        ? Math.max(...activeNursesBeforeDel.map(s => colToIdx(s.iryo_col))) : null;
+
       // 全スプレッドシートから介護・医療の2列を削除
       for (const ssId of allSids) {
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
@@ -985,6 +1078,43 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
       // 全リハビリの列を -2 シフト（リハビリは常に看護師の後ろ）
       for (const s of data.staff) {
         if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
+      }
+      // 削除後の太線位置を計算して更新
+      const activeNursesAfterDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
+      const newDividerIdx = activeNursesAfterDel.length > 0
+        ? Math.max(...activeNursesAfterDel.map(s => colToIdx(s.iryo_col))) : null;
+      const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
+      const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
+      for (const ssId of allSids) {
+        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+        const sm = {};
+        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+        const vm = MONTHS.filter(m => sm[m] !== undefined);
+        const borderReqs = vm.flatMap(m => {
+          const sid = sm[m];
+          return [
+            // 旧太線を解除（列削除後の新インデックスで）
+            ...(oldDividerIdx !== null ? [
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: oldDividerIdx - 2, endColumnIndex: oldDividerIdx - 1 },
+                  right: SOLID } },
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: oldDividerIdx - 1, endColumnIndex: oldDividerIdx },
+                  left: SOLID } },
+            ] : []),
+            // 新太線を設定
+            ...(newDividerIdx !== null ? [
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
+                  right: SOLID_MEDIUM } },
+              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                  startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
+                  left: SOLID_MEDIUM } },
+            ] : []),
+          ];
+        });
+        if (borderReqs.length > 0)
+          await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: borderReqs } });
       }
     } else {
       const delIdx = colToIdx(removed.col);
