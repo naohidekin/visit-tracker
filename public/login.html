@@ -56,6 +56,12 @@
       </div>
       <button type="submit" class="btn" id="loginBtn">ログイン</button>
     </form>
+    <div id="faceIdSection" style="display:none">
+      <div style="text-align:center;margin:16px 0 8px;font-size:12px;color:var(--muted)">または</div>
+      <button type="button" id="faceIdBtn" class="btn" style="background:#1a1a2e" onclick="startFaceIdLogin()">
+        🔐 Face ID でログイン
+      </button>
+    </div>
     <div class="forgot">
       <a onclick="document.getElementById('forgotModal').classList.add('show')">パスワードを忘れた方はこちら</a>
     </div>
@@ -72,6 +78,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
   <script>
     document.getElementById('loginForm').addEventListener('submit', async e => {
       e.preventDefault();
@@ -102,6 +109,73 @@
     document.getElementById('loginId').addEventListener('keydown', e => {
       if (e.key === 'Enter') document.getElementById('password').focus();
     });
+
+    // ── FaceID / WebAuthn ──
+    let faceIdCheckTimer;
+    document.getElementById('loginId').addEventListener('input', () => {
+      clearTimeout(faceIdCheckTimer);
+      faceIdCheckTimer = setTimeout(checkFaceId, 500);
+    });
+    // ページロード時もチェック（ブラウザの自動入力対応）
+    setTimeout(checkFaceId, 300);
+
+    async function checkFaceId() {
+      const section = document.getElementById('faceIdSection');
+      section.style.display = 'none';
+      if (typeof SimpleWebAuthnBrowser === 'undefined') return;
+      if (!SimpleWebAuthnBrowser.browserSupportsWebAuthn()) return;
+      try {
+        const hasPlatform = await SimpleWebAuthnBrowser.platformAuthenticatorIsAvailable();
+        if (!hasPlatform) return;
+      } catch { return; }
+
+      const loginId = document.getElementById('loginId').value.trim();
+      if (!loginId) return;
+
+      try {
+        const resp = await fetch('/api/webauthn/has-credential?loginId=' + encodeURIComponent(loginId));
+        const data = await resp.json();
+        if (data.has) section.style.display = 'block';
+      } catch {}
+    }
+
+    async function startFaceIdLogin() {
+      const loginId = document.getElementById('loginId').value.trim();
+      const btn = document.getElementById('faceIdBtn');
+      const err = document.getElementById('errMsg');
+      btn.disabled = true;
+      err.style.display = 'none';
+
+      try {
+        const optResp = await fetch('/api/webauthn/login-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId }),
+        });
+        const options = await optResp.json();
+        if (!optResp.ok) throw new Error(options.error);
+
+        const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+        const verifyResp = await fetch('/api/webauthn/login-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(authResp),
+        });
+        const result = await verifyResp.json();
+        if (result.success) {
+          location.href = '/';
+        } else {
+          throw new Error(result.error || '認証に失敗しました');
+        }
+      } catch (e) {
+        err.textContent = e.name === 'NotAllowedError'
+          ? 'Face IDがキャンセルされました'
+          : (e.message || '認証に失敗しました');
+        err.style.display = 'block';
+      }
+      btn.disabled = false;
+    }
   </script>
 </body>
 </html>

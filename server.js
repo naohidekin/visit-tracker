@@ -8,6 +8,9 @@ const csession   = require('cookie-session');
 const cron       = require('node-cron');
 const multer     = require('multer');
 const XLSX       = require('xlsx');
+const { generateRegistrationOptions, verifyRegistrationResponse,
+        generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
+const { isoBase64URL } = require('@simplewebauthn/server/helpers');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -146,6 +149,15 @@ function loadSchedules() {
 function saveSchedules(data) {
   fs.writeFileSync(SCHEDULES_PATH, JSON.stringify(data, null, 2));
 }
+function loadNotices() {
+  if (!fs.existsSync(NOTICES_PATH)) return { notices: [], readStatus: {} };
+  const data = JSON.parse(fs.readFileSync(NOTICES_PATH, 'utf8'));
+  if (!data.readStatus) data.readStatus = {};
+  return data;
+}
+function saveNotices(data) {
+  fs.writeFileSync(NOTICES_PATH, JSON.stringify(data, null, 2));
+}
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
@@ -237,6 +249,107 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// ─── WebAuthn Credential Storage (Google Sheets) ────────────────
+const WEBAUTHN_SHEET = 'WebAuthn';
+
+async function ensureWebAuthnSheet() {
+  const api = await getSheets();
+  const ss = await api.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const exists = ss.data.sheets.some(s => s.properties.title === WEBAUTHN_SHEET);
+  if (!exists) {
+    await api.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title: WEBAUTHN_SHEET } } }] },
+    });
+    await api.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${WEBAUTHN_SHEET}!A1:F1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['staffId', 'credentialID', 'publicKey', 'counter', 'transports', 'registeredAt']] },
+    });
+  }
+}
+
+async function loadCredentials(staffId) {
+  await ensureWebAuthnSheet();
+  const api = await getSheets();
+  const resp = await api.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${WEBAUTHN_SHEET}!A2:F`,
+  });
+  const rows = resp.data.values || [];
+  return rows
+    .filter(r => r[0] === staffId)
+    .map(r => ({
+      id: r[1],
+      publicKey: isoBase64URL.toBuffer(r[2]),
+      counter: Number(r[3]),
+      transports: JSON.parse(r[4] || '[]'),
+    }));
+}
+
+async function saveCredential(staffId, credential) {
+  await ensureWebAuthnSheet();
+  const api = await getSheets();
+  await api.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${WEBAUTHN_SHEET}!A:F`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[
+      staffId,
+      credential.id,
+      isoBase64URL.fromBuffer(credential.publicKey),
+      credential.counter,
+      JSON.stringify(credential.transports || []),
+      new Date().toISOString(),
+    ]] },
+  });
+}
+
+async function updateCredentialCounter(credentialID, newCounter) {
+  const api = await getSheets();
+  const resp = await api.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${WEBAUTHN_SHEET}!B2:B`,
+  });
+  const rows = resp.data.values || [];
+  const idx = rows.findIndex(r => r[0] === credentialID);
+  if (idx >= 0) {
+    await api.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${WEBAUTHN_SHEET}!D${idx + 2}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[newCounter]] },
+    });
+  }
+}
+
+async function deleteCredentials(staffId) {
+  const api = await getSheets();
+  const resp = await api.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${WEBAUTHN_SHEET}!A2:F`,
+  });
+  const rows = resp.data.values || [];
+  // 該当行を空配列に置換
+  const updated = rows.map(r => r[0] === staffId ? ['', '', '', '', '', ''] : r);
+  if (rows.length > 0) {
+    await api.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${WEBAUTHN_SHEET}!A2:F${rows.length + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: updated },
+    });
+  }
+}
+
+async function hasCredentials(staffId) {
+  try {
+    const creds = await loadCredentials(staffId);
+    return creds.length > 0;
+  } catch { return false; }
+}
+
 // ─── HTMLルーティング ───────────────────────────────────────────
 app.get('/login',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/change-password', (req, res) => {
@@ -251,6 +364,10 @@ app.get('/history', (req, res) => {
 app.get('/manual', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'manual.html'));
+});
+app.get('/notices', (req, res) => {
+  if (!req.session.staffId) return res.redirect('/login');
+  res.sendFile(path.join(__dirname, 'public', 'notices.html'));
 });
 app.get('/', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
@@ -286,6 +403,168 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/me', (req, res) => {
   if (!req.session.staffId) return res.status(401).json({ error: '未ログイン' });
   res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType });
+});
+
+// ─── API: WebAuthn (FaceID/TouchID) ─────────────────────────────
+function getWebAuthnRpId(req) {
+  return req.hostname;
+}
+function getWebAuthnOrigin(req) {
+  // localhost は http 許可、本番は https
+  const proto = req.hostname === 'localhost' ? 'http' : 'https';
+  const port = req.hostname === 'localhost' && process.env.PORT ? `:${process.env.PORT}` : '';
+  return `${proto}://${req.hostname}${port}`;
+}
+
+app.get('/api/webauthn/has-credential', async (req, res) => {
+  try {
+    const { loginId } = req.query;
+    if (!loginId) return res.json({ has: false });
+    const has = await hasCredentials(loginId);
+    res.json({ has });
+  } catch (e) {
+    console.error('WebAuthn has-credential error:', e.message);
+    res.json({ has: false });
+  }
+});
+
+app.post('/api/webauthn/register-options', requireStaff, async (req, res) => {
+  try {
+    const staffId = req.session.staffId;
+    const staffName = req.session.staffName;
+    const existingCreds = await loadCredentials(staffId);
+
+    const options = await generateRegistrationOptions({
+      rpName: 'にこっとweb App',
+      rpID: getWebAuthnRpId(req),
+      userName: staffId,
+      userDisplayName: staffName,
+      attestationType: 'none',
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        userVerification: 'required',
+      },
+      excludeCredentials: existingCreds.map(c => ({
+        id: c.id,
+        transports: c.transports,
+      })),
+    });
+
+    req.session.webauthnChallenge = options.challenge;
+    res.json(options);
+  } catch (e) {
+    console.error('WebAuthn register-options error:', e.message);
+    res.status(500).json({ error: '登録オプションの生成に失敗しました' });
+  }
+});
+
+app.post('/api/webauthn/register-verify', requireStaff, async (req, res) => {
+  const expectedChallenge = req.session.webauthnChallenge;
+  req.session.webauthnChallenge = null;
+
+  try {
+    const verification = await verifyRegistrationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin: getWebAuthnOrigin(req),
+      expectedRPID: getWebAuthnRpId(req),
+    });
+
+    if (!verification.verified) {
+      return res.status(400).json({ error: '登録に失敗しました' });
+    }
+
+    const { credential } = verification.registrationInfo;
+    await saveCredential(req.session.staffId, credential);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('WebAuthn register-verify error:', e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/webauthn/login-options', async (req, res) => {
+  try {
+    const { loginId } = req.body;
+    if (!loginId) return res.status(400).json({ error: 'ログインIDが必要です' });
+
+    const creds = await loadCredentials(loginId);
+    if (creds.length === 0) {
+      return res.status(400).json({ error: 'パスキーが登録されていません' });
+    }
+
+    const options = await generateAuthenticationOptions({
+      rpID: getWebAuthnRpId(req),
+      allowCredentials: creds.map(c => ({
+        id: c.id,
+        transports: c.transports,
+      })),
+      userVerification: 'required',
+    });
+
+    req.session.webauthnChallenge = options.challenge;
+    req.session.webauthnLoginId = loginId;
+    res.json(options);
+  } catch (e) {
+    console.error('WebAuthn login-options error:', e.message);
+    res.status(500).json({ error: '認証オプションの生成に失敗しました' });
+  }
+});
+
+app.post('/api/webauthn/login-verify', async (req, res) => {
+  const expectedChallenge = req.session.webauthnChallenge;
+  const loginId = req.session.webauthnLoginId;
+  req.session.webauthnChallenge = null;
+  req.session.webauthnLoginId = null;
+
+  if (!expectedChallenge || !loginId) {
+    return res.status(400).json({ error: '認証セッションが無効です' });
+  }
+
+  try {
+    const creds = await loadCredentials(loginId);
+    const credential = creds.find(c => c.id === req.body.id);
+    if (!credential) {
+      return res.status(400).json({ error: '不明な認証情報です' });
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin: getWebAuthnOrigin(req),
+      expectedRPID: getWebAuthnRpId(req),
+      credential,
+    });
+
+    if (!verification.verified) {
+      return res.status(401).json({ error: '認証に失敗しました' });
+    }
+
+    await updateCredentialCounter(credential.id, verification.authenticationInfo.newCounter);
+
+    const data = loadStaff();
+    const staff = data.staff.find(s => s.id === loginId);
+    if (!staff) return res.status(401).json({ error: 'スタッフが見つかりません' });
+
+    req.session.staffId = staff.id;
+    req.session.staffName = staff.name;
+    req.session.staffType = staff.type;
+    res.json({ success: true });
+  } catch (e) {
+    console.error('WebAuthn login-verify error:', e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/webauthn/delete', requireStaff, async (req, res) => {
+  try {
+    await deleteCredentials(req.session.staffId);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('WebAuthn delete error:', e.message);
+    res.status(500).json({ error: '削除に失敗しました' });
+  }
 });
 
 // ─── API: パスワード変更 ────────────────────────────────────────
@@ -1461,6 +1740,82 @@ app.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (req, 
     console.error('Excel analyze error:', e);
     res.status(500).json({ error: 'Excel解析に失敗しました: ' + e.message });
   }
+});
+
+// ─── API: お知らせ（スタッフ向け） ─────────────────────────────
+app.get('/api/notices', requireStaff, (_req, res) => {
+  const { notices, readStatus } = loadNotices();
+  const staffId = _req.session.staffId;
+  const readIds = readStatus[staffId] || [];
+  const list = notices
+    .map(n => ({ ...n, isRead: readIds.includes(n.id) }))
+    .sort((a, b) => (b.createdAt || b.date || '').localeCompare(a.createdAt || a.date || ''));
+  res.json({ notices: list });
+});
+
+app.get('/api/notices/unread-count', requireStaff, (req, res) => {
+  const { notices, readStatus } = loadNotices();
+  const readIds = readStatus[req.session.staffId] || [];
+  const count = notices.filter(n => !readIds.includes(n.id)).length;
+  res.json({ count });
+});
+
+app.post('/api/notices/:id/read', requireStaff, (req, res) => {
+  const data = loadNotices();
+  const staffId = req.session.staffId;
+  if (!data.readStatus[staffId]) data.readStatus[staffId] = [];
+  if (!data.readStatus[staffId].includes(req.params.id)) {
+    data.readStatus[staffId].push(req.params.id);
+    saveNotices(data);
+  }
+  res.json({ ok: true });
+});
+
+// ─── API: お知らせ（管理者向け） ──────────────────────────────
+app.get('/api/admin/notices', requireAdmin, (_req, res) => {
+  const { notices } = loadNotices();
+  const sorted = [...notices].sort((a, b) => (b.createdAt || b.date || '').localeCompare(a.createdAt || a.date || ''));
+  res.json({ notices: sorted });
+});
+
+app.post('/api/admin/notices', requireAdmin, (req, res) => {
+  const { title, body } = req.body;
+  if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
+  const data = loadNotices();
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const notice = {
+    id: String(Date.now()),
+    date: now.toISOString().slice(0, 10),
+    title,
+    body,
+    createdAt: now.toISOString()
+  };
+  data.notices.push(notice);
+  saveNotices(data);
+  res.json({ ok: true, notice });
+});
+
+app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
+  const data = loadNotices();
+  const notice = data.notices.find(n => n.id === req.params.id);
+  if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
+  if (req.body.title) notice.title = req.body.title;
+  if (req.body.body) notice.body = req.body.body;
+  saveNotices(data);
+  res.json({ ok: true, notice });
+});
+
+app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
+  const data = loadNotices();
+  const idx = data.notices.findIndex(n => n.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });
+  data.notices.splice(idx, 1);
+  // readStatus からも削除
+  for (const staffId in data.readStatus) {
+    data.readStatus[staffId] = data.readStatus[staffId].filter(id => id !== req.params.id);
+  }
+  saveNotices(data);
+  res.json({ ok: true });
 });
 
 // ─── 起動 ──────────────────────────────────────────────────────
