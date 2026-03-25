@@ -867,10 +867,10 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const oldDividerIdx = nurseCount > 0 ? kaigoIdx - 1 : null;
       const newDividerIdx = kaigoIdx + 1;
 
-      const NURSE_DARK_BG  = { red: 0.184, green: 0.459, blue: 0.710 };
-      const NURSE_NAME_BG  = { red: 0.839, green: 0.886, blue: 0.937 };
-      const NURSE_KAIGO_BG = { red: 0.870, green: 0.929, blue: 1.0   };
-      const NURSE_IRYO_BG  = { red: 0.918, green: 0.961, blue: 1.0   };
+      const NURSE_DARK_BG  = { red: 0.18431373, green: 0.45882353, blue: 0.70980392 };
+      const NURSE_NAME_BG  = { red: 0.8392157,  green: 0.89411765, blue: 0.9411765  };
+      const NURSE_KAIGO_BG = { red: 0.8666667,  green: 0.9294118,  blue: 1.0        };
+      const NURSE_IRYO_BG  = { red: 0.9176471,  green: 0.9607843,  blue: 1.0        };
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
