@@ -9,9 +9,22 @@
     *{box-sizing:border-box;margin:0;padding:0}
     :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)}
     body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
-    header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
-    header a{color:#fff;text-decoration:none;font-size:20px;line-height:1}
+    header{background:var(--blue);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .header-left{display:flex;align-items:center;gap:10px}
+    .back-btn{color:#fff;text-decoration:none;font-size:20px;line-height:1;flex-shrink:0}
     header h1{font-size:16px;font-weight:700}
+    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay.open{display:block}
+    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer .menu-logout{color:#c0392b}
     .container{padding:16px;max-width:480px;margin:0 auto}
 
     /* セクションカード */
@@ -53,8 +66,21 @@
 </head>
 <body>
   <header>
-    <a href="/" aria-label="戻る">←</a>
-    <h1>使い方ガイド</h1>
+    <div class="header-left">
+      <a href="/" class="back-btn" aria-label="戻る">←</a>
+      <h1>使い方ガイド</h1>
+    </div>
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+      <div class="menu-drawer" onclick="event.stopPropagation()">
+        <a href="/">入力画面</a>
+        <a href="/history">月次実績</a>
+        <a href="/change-password">PW変更</a>
+        <button class="menu-logout" onclick="logout()">ログアウト</button>
+      </div>
+    </div>
   </header>
 
   <div class="container">
@@ -166,5 +192,19 @@
 
   </div>
   <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
+<script>
+  function toggleMenu() {
+    document.getElementById('hamburgerBtn').classList.toggle('open');
+    document.getElementById('menuOverlay').classList.toggle('open');
+  }
+  function closeMenu() {
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('menuOverlay').classList.remove('open');
+  }
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+  }
+</script>
 </body>
 </html>
