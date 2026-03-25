@@ -102,7 +102,7 @@
       "iryo_col": "O",
       "seq": 8,
       "initial_pw": "0000",
-      "password_hash": "$2a$10$KYpcka43yEQbqf8mVFl1suU0X/hmyZSMPisoRwUZZ26d6fDWXQ2HW",
+      "password_hash": "$2a$10$P6H5CPtg0oJ65lUC13QXuuTkPzk.gI1YtFAeMXM0Z7VsWXtwDjHqq",
       "incentive_line": null,
       "archived": true
     },
@@ -115,7 +115,7 @@
       "col": "P",
       "seq": 9,
       "initial_pw": "0000",
-      "password_hash": "$2a$10$aE4wgJM4OVFTjKKZ7BCLYOmGeH5mMqYZXHhSY/0vC6noK0Kurpu/i",
+      "password_hash": "$2a$10$P6H5CPtg0oJ65lUC13QXuuTkPzk.gI1YtFAeMXM0Z7VsWXtwDjHqq",
       "incentive_line": null,
       "archived": true
     }
