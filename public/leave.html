@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>有給申請 | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10);
+      --green:#375623;--ok:#27ae60;--warn:#f39c12;--danger:#c0392b
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .header-brand{display:flex;align-items:stretch;gap:10px}
+    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.5);flex-shrink:0}
+    .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
+    .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay.open{display:block}
+    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer .menu-logout{color:#c0392b}
+    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
+    .unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .page-wrapper{width:100%;min-height:100vh}
+    .menu-overlay-inner{max-width:390px;margin:0 auto;height:100%;position:relative}
+    @media(min-width:480px){
+      body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
+      .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
+    }
+    .container{padding:16px;max-width:480px;margin:0 auto}
+
+    /* ── 残日数カード ── */
+    .balance-card{background:linear-gradient(135deg,#2E75B6 0%,#1F497D 100%);color:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;text-align:center;box-shadow:var(--shadow)}
+    .balance-number{font-size:48px;font-weight:900;line-height:1}
+    .balance-unit{font-size:16px;font-weight:600;margin-left:4px}
+    .balance-label{font-size:12px;opacity:.8;margin-bottom:8px}
+    .balance-detail{display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:11px;opacity:.85}
+    .balance-detail-item{display:flex;flex-direction:column;align-items:center;gap:2px}
+    .balance-detail-val{font-size:16px;font-weight:700}
+
+    /* ── カード共通 ── */
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+    .card-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+
+    /* ── フォーム ── */
+    .form-group{margin-bottom:14px}
+    .form-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:block}
+    .form-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);outline:none;transition:border .15s}
+    .form-input:focus{border-color:var(--blue)}
+    .type-selector{display:flex;gap:8px}
+    .type-btn{flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;color:var(--text)}
+    .type-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .btn-submit{width:100%;padding:14px;border:none;border-radius:12px;background:var(--blue);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;transition:opacity .15s}
+    .btn-submit:disabled{opacity:.5;cursor:not-allowed}
+    .btn-submit:active:not(:disabled){opacity:.8}
+
+    /* ── 申請履歴 ── */
+    .request-item{border-bottom:1px solid #f0f4f8;padding:12px 0}
+    .request-item:last-child{border-bottom:none}
+    .request-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .request-dates{font-size:14px;font-weight:700;color:var(--text)}
+    .request-type{font-size:11px;color:var(--muted)}
+    .request-meta{display:flex;align-items:center;gap:8px;margin-top:4px}
+    .request-created{font-size:11px;color:var(--muted)}
+    .request-reason{font-size:12px;color:var(--muted);margin-top:4px}
+    .request-comment{font-size:12px;color:var(--text);margin-top:4px;padding:6px 10px;background:#f8f9fb;border-radius:8px}
+
+    .status-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px}
+    .status-pending{background:#fef3c7;color:#9a3412}
+    .status-approved{background:#dcfce7;color:#166534}
+    .status-rejected{background:#fee2e2;color:#b91c1c}
+    .status-cancelled{background:#f0f0f0;color:#6b7a99}
+
+    .btn-cancel{padding:5px 10px;border:1px solid var(--danger);border-radius:8px;background:#fff;color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+    .btn-cancel:active{background:#fee2e2}
+
+    .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:24px 0}
+    .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+<header>
+  <div class="header-brand">
+    <div class="header-accent"></div>
+    <div class="header-brand-text">
+      <span class="header-app-name">にこっと Web App</span>
+      <span class="header-page-name">有給申請</span>
+    </div>
+  </div>
+  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-overlay-inner">
+    <div class="menu-drawer" onclick="event.stopPropagation()">
+      <a href="/">入力画面</a>
+      <a href="/history">月次実績</a>
+      <a href="/leave">有給申請</a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
+      <a href="/change-password">PW変更</a>
+      <a href="/manual">使い方</a>
+      <button class="menu-logout" onclick="logout()">ログアウト</button>
+    </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="spinner" id="spinner">読み込み中...</div>
+
+  <!-- 残日数カード -->
+  <div class="balance-card" id="balanceCard" style="display:none">
+    <div class="balance-label">有給残日数</div>
+    <div><span class="balance-number" id="balanceNum">-</span><span class="balance-unit">日</span></div>
+    <div class="balance-detail">
+      <div class="balance-detail-item"><span>付与</span><span class="balance-detail-val" id="balGranted">-</span></div>
+      <div class="balance-detail-item"><span>繰越</span><span class="balance-detail-val" id="balCarried">-</span></div>
+      <div class="balance-detail-item"><span>調整</span><span class="balance-detail-val" id="balAdj">-</span></div>
+      <div class="balance-detail-item"><span>使用済</span><span class="balance-detail-val" id="balUsed">-</span></div>
+    </div>
+  </div>
+
+  <!-- 申請フォーム -->
+  <div class="card" id="formCard" style="display:none">
+    <div class="card-title">有給申請</div>
+    <div class="form-group">
+      <label class="form-label">種別</label>
+      <div class="type-selector">
+        <button class="type-btn active" data-type="full" onclick="selectType(this)">全日</button>
+        <button class="type-btn" data-type="half_am" onclick="selectType(this)">午前半休</button>
+        <button class="type-btn" data-type="half_pm" onclick="selectType(this)">午後半休</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">開始日</label>
+      <input type="date" class="form-input" id="startDate">
+    </div>
+    <div class="form-group" id="endDateGroup">
+      <label class="form-label">終了日（複数日の場合）</label>
+      <input type="date" class="form-input" id="endDate">
+    </div>
+    <div class="form-group">
+      <label class="form-label">理由（任意）</label>
+      <input type="text" class="form-input" id="reason" placeholder="例: 私用、通院 等">
+    </div>
+    <button class="btn-submit" id="submitBtn" onclick="submitRequest()">申請する</button>
+  </div>
+
+  <!-- 申請履歴 -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title">申請履歴</div>
+    <div id="requestsList"></div>
+    <div class="empty-msg" id="emptyMsg" style="display:none">申請履歴はありません</div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let selectedType = 'full';
+  let currentBalance = 0;
+
+  async function init() {
+    const me = await fetch('/api/me').then(r => r.json());
+    if (!me.staffId) { location.href = '/login'; return; }
+
+    // 明日以降の日付をデフォルトに
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    document.getElementById('startDate').min = tomorrowStr;
+    document.getElementById('endDate').min = tomorrowStr;
+    document.getElementById('startDate').value = tomorrowStr;
+
+    document.getElementById('spinner').style.display = 'none';
+    await Promise.all([loadBalance(), loadRequests(), updateMenuBadge()]);
+    document.getElementById('balanceCard').style.display = '';
+    document.getElementById('formCard').style.display = '';
+    document.getElementById('historyCard').style.display = '';
+  }
+
+  async function loadBalance() {
+    const res = await fetch('/api/leave/balance');
+    const data = await res.json();
+    currentBalance = data.balance;
+    document.getElementById('balanceNum').textContent = data.balance;
+    document.getElementById('balGranted').textContent = data.granted + '日';
+    document.getElementById('balCarried').textContent = data.carried_over + '日';
+    document.getElementById('balAdj').textContent = (data.manual_adjustment >= 0 ? '+' : '') + data.manual_adjustment + '日';
+    document.getElementById('balUsed').textContent = data.used + '日';
+  }
+
+  async function loadRequests() {
+    const res = await fetch('/api/leave/requests');
+    const { requests } = await res.json();
+    const list = document.getElementById('requestsList');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    if (!requests.length) {
+      list.innerHTML = '';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    emptyMsg.style.display = 'none';
+
+    list.innerHTML = requests.map(r => {
+      const dateStr = r.dates.length === 1
+        ? formatDate(r.dates[0])
+        : formatDate(r.dates[0]) + '〜' + formatDate(r.dates[r.dates.length - 1]);
+      const typeLabel = r.type === 'full' ? '全日' : r.type === 'half_am' ? '午前半休' : '午後半休';
+      const statusLabel = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' }[r.status];
+      const dayCount = r.type === 'full' ? r.dates.length : r.dates.length * 0.5;
+      const canCancel = r.status === 'pending' || r.status === 'approved';
+
+      return `
+        <div class="request-item">
+          <div class="request-header">
+            <div>
+              <div class="request-dates">${dateStr}</div>
+              <div class="request-type">${typeLabel}（${dayCount}日）</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="status-badge status-${r.status}">${statusLabel}</span>
+              ${canCancel ? `<button class="btn-cancel" onclick="cancelRequest('${r.id}')">取消</button>` : ''}
+            </div>
+          </div>
+          ${r.reason ? `<div class="request-reason">理由: ${esc(r.reason)}</div>` : ''}
+          ${r.adminComment ? `<div class="request-comment">コメント: ${esc(r.adminComment)}</div>` : ''}
+          <div class="request-meta">
+            <span class="request-created">申請日: ${formatDateTime(r.createdAt)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function selectType(btn) {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedType = btn.dataset.type;
+    // 半休の場合は終了日を非表示
+    document.getElementById('endDateGroup').style.display =
+      selectedType === 'full' ? '' : 'none';
+  }
+
+  async function submitRequest() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const reason = document.getElementById('reason').value;
+
+    if (!startDate) { showToast('開始日を選択してください'); return; }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+
+    try {
+      const body = { type: selectedType, startDate, reason };
+      if (selectedType === 'full' && endDate) body.endDate = endDate;
+
+      const res = await fetch('/api/leave/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'エラーが発生しました'); return; }
+
+      showToast('申請しました');
+      document.getElementById('reason').value = '';
+      await Promise.all([loadBalance(), loadRequests()]);
+    } catch (e) {
+      showToast('エラーが発生しました');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function cancelRequest(id) {
+    if (!confirm('この申請を取り消しますか？')) return;
+    try {
+      const res = await fetch(`/api/leave/requests/${id}/cancel`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'エラーが発生しました'); return; }
+      showToast('取り消しました');
+      await Promise.all([loadBalance(), loadRequests()]);
+    } catch {
+      showToast('エラーが発生しました');
+    }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return `${Number(m)}/${Number(d)}`;
+  }
+
+  function formatDateTime(isoStr) {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  async function updateMenuBadge() {
+    try {
+      const res = await fetch('/api/notices/unread-count');
+      const { count } = await res.json();
+      const badge = document.getElementById('menuBadge');
+      if (count > 0) { badge.textContent = count; badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    } catch {}
+  }
+
+  function toggleMenu() {
+    document.getElementById('hamburgerBtn').classList.toggle('open');
+    document.getElementById('menuOverlay').classList.toggle('open');
+  }
+  function closeMenu() {
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('menuOverlay').classList.remove('open');
+  }
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+  }
+
+  init();
+</script>
+</body>
+</html>
