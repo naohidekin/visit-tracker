@@ -589,6 +589,17 @@
           <input type="text" id="newInitialPw" placeholder="HY08">
           <div class="auto-label" id="pwAutoLabel"></div>
         </div>
+        <div class="field">
+          <label>入社日</label>
+          <input type="date" id="newHireDate">
+        </div>
+        <div class="field" id="oncallField" style="display:none">
+          <label>オンコール</label>
+          <select id="newOncall">
+            <option value="有">有</option>
+            <option value="無" selected>無</option>
+          </select>
+        </div>
       </div>
       <button class="btn btn-green btn-full" onclick="addStaff()" id="addBtn">追加する</button>
       <div style="font-size:11px;color:var(--muted);margin-top:10px">
@@ -893,17 +904,22 @@
       document.getElementById('newInitialPw').value = pw;
       document.getElementById('pwAutoLabel').textContent = `自動生成: ${pw}`;
     }
+    // 看護師のみオンコール欄を表示
+    const type = document.getElementById('newType').value;
+    document.getElementById('oncallField').style.display = type === 'nurse' ? '' : 'none';
   }
 
   async function addStaff() {
-    const name    = document.getElementById('newName').value.trim();
-    const fkana   = document.getElementById('newFkana').value.trim();
-    const gkana   = document.getElementById('newGkana').value.trim();
-    const type    = document.getElementById('newType').value;
-    const loginId = document.getElementById('newLoginId').value.trim();
-    const initPw  = document.getElementById('newInitialPw').value.trim();
-    const err     = document.getElementById('addErr');
-    const btn     = document.getElementById('addBtn');
+    const name     = document.getElementById('newName').value.trim();
+    const fkana    = document.getElementById('newFkana').value.trim();
+    const gkana    = document.getElementById('newGkana').value.trim();
+    const type     = document.getElementById('newType').value;
+    const loginId  = document.getElementById('newLoginId').value.trim();
+    const initPw   = document.getElementById('newInitialPw').value.trim();
+    const hireDate = document.getElementById('newHireDate').value || null;
+    const oncall   = type === 'nurse' ? document.getElementById('newOncall').value : undefined;
+    const err      = document.getElementById('addErr');
+    const btn      = document.getElementById('addBtn');
     err.style.display = 'none';
 
     if (!name || !loginId || !initPw) {
@@ -915,7 +931,8 @@
     const res  = await fetch('/api/admin/staff', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, furigana_family: fkana, furigana_given: gkana,
-                             type, loginId, initialPw: initPw }),
+                             type, loginId, initialPw: initPw,
+                             hire_date: hireDate, oncall }),
     });
     const data = await res.json();
     btn.disabled = false; btn.textContent = '追加する';
@@ -924,11 +941,13 @@
       staffList = data.staff;
       renderTable();
       // フォームリセット
-      ['newName','newFkana','newGkana','newLoginId','newInitialPw'].forEach(id => {
+      ['newName','newFkana','newGkana','newLoginId','newInitialPw','newHireDate'].forEach(id => {
         document.getElementById(id).value = '';
       });
       document.getElementById('idAutoLabel').textContent = '';
       document.getElementById('pwAutoLabel').textContent = '';
+      document.getElementById('newOncall').value = '無';
+      document.getElementById('oncallField').style.display = 'none';
       showToast(`✅ ${name} を追加しました`);
     } else {
       err.textContent = 'エラー: ' + (data.error || '追加失敗');
