@@ -87,6 +87,19 @@
     .btn-cancel{padding:5px 10px;border:1px solid var(--danger);border-radius:8px;background:#fff;color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
     .btn-cancel:active{background:#fee2e2}
 
+    /* ── 付与情報カード ── */
+    .info-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;margin-bottom:16px}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f4f8}
+    .info-row:last-child{border-bottom:none}
+    .info-label{font-size:12px;color:var(--muted);font-weight:600}
+    .info-value{font-size:14px;font-weight:700;color:var(--text)}
+    .info-countdown{display:flex;align-items:center;gap:6px}
+    .countdown-num{font-size:22px;font-weight:900;color:var(--blue)}
+    .countdown-unit{font-size:12px;color:var(--muted)}
+    .countdown-sub{font-size:11px;color:var(--muted)}
+    .celebration-badge{display:inline-block;background:#fff3cd;color:#856404;border:1px solid #ffc107;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+    .celebration-expired{background:#f0f0f0;color:#6b7a99;border-color:#d0d7e3}
+
     .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:24px 0}
     .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
@@ -133,6 +146,28 @@
       <div class="balance-detail-item"><span>繰越</span><span class="balance-detail-val" id="balCarried">-</span></div>
       <div class="balance-detail-item"><span>調整</span><span class="balance-detail-val" id="balAdj">-</span></div>
       <div class="balance-detail-item"><span>使用済</span><span class="balance-detail-val" id="balUsed">-</span></div>
+    </div>
+  </div>
+
+  <!-- 付与情報カード -->
+  <div class="info-card" id="infoCard" style="display:none">
+    <div class="info-row">
+      <span class="info-label">入職日</span>
+      <span class="info-value" id="infoHireDate">-</span>
+    </div>
+    <div class="info-row" id="infoCelebrationRow" style="display:none">
+      <span class="info-label">お祝い休暇（3日）</span>
+      <span class="info-value" id="infoCelebration">-</span>
+    </div>
+    <div class="info-row" id="infoNextGrantRow">
+      <span class="info-label">次回有給付与</span>
+      <div style="text-align:right">
+        <div class="info-countdown">
+          <span class="countdown-num" id="infoCountdown">-</span>
+          <span class="countdown-unit">日後</span>
+        </div>
+        <div class="countdown-sub" id="infoNextDetail">-</div>
+      </div>
     </div>
   </div>
 
@@ -192,6 +227,7 @@
     document.getElementById('spinner').style.display = 'none';
     await Promise.all([loadBalance(), loadRequests(), updateMenuBadge()]);
     document.getElementById('balanceCard').style.display = '';
+    document.getElementById('infoCard').style.display = '';
     document.getElementById('formCard').style.display = '';
     document.getElementById('historyCard').style.display = '';
   }
@@ -205,6 +241,41 @@
     document.getElementById('balCarried').textContent = data.carried_over + '日';
     document.getElementById('balAdj').textContent = (data.manual_adjustment >= 0 ? '+' : '') + data.manual_adjustment + '日';
     document.getElementById('balUsed').textContent = data.used + '日';
+
+    // 付与情報カード
+    if (data.hire_date) {
+      document.getElementById('infoHireDate').textContent = formatDateFull(data.hire_date);
+    } else {
+      document.getElementById('infoHireDate').textContent = '未設定';
+    }
+
+    const ng = data.next_grant;
+    if (ng) {
+      // お祝い休暇
+      const celRow = document.getElementById('infoCelebrationRow');
+      celRow.style.display = '';
+      if (ng.celebration_active) {
+        document.getElementById('infoCelebration').innerHTML =
+          '<span class="celebration-badge">残り ' + ng.celebration_days_left + ' 日で期限</span>';
+      } else {
+        document.getElementById('infoCelebration').innerHTML =
+          '<span class="celebration-badge celebration-expired">期限終了</span>';
+      }
+
+      // 次回付与
+      document.getElementById('infoCountdown').textContent = ng.days_until_next;
+      document.getElementById('infoNextDetail').textContent =
+        formatDateFull(ng.next_grant_date) + ' に ' + ng.next_grant_days + '日 付与';
+    } else {
+      document.getElementById('infoNextGrantRow').style.display = 'none';
+      document.getElementById('infoCelebrationRow').style.display = 'none';
+    }
+  }
+
+  function formatDateFull(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return y + '年' + Number(m) + '月' + Number(d) + '日';
   }
 
   async function loadRequests() {

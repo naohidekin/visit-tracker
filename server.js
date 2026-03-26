@@ -168,7 +168,17 @@ function saveLeave(data) {
   fs.writeFileSync(LEAVE_PATH, JSON.stringify(data, null, 2));
 }
 
-// 労基法ベースの有給付与日数計算
+// Yuw connect 有給付与テーブル（10→12→14→16→18→20、毎年+2）
+const LEAVE_GRANT_TABLE = [
+  { years: 0.5, days: 10 },
+  { years: 1.5, days: 12 },
+  { years: 2.5, days: 14 },
+  { years: 3.5, days: 16 },
+  { years: 4.5, days: 18 },
+  { years: 5.5, days: 20 },
+];
+
+// 現在の付与日数を計算
 function calcLeaveGrantDays(hireDate) {
   if (!hireDate) return 0;
   const hire = new Date(hireDate);
@@ -176,21 +186,59 @@ function calcLeaveGrantDays(hireDate) {
   const diffMs = now - hire;
   const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
   if (diffYears < 0.5) return 0;
-  // 勤続年数ごとの付与テーブル
-  const table = [
-    { years: 0.5, days: 10 },
-    { years: 1.5, days: 11 },
-    { years: 2.5, days: 12 },
-    { years: 3.5, days: 14 },
-    { years: 4.5, days: 16 },
-    { years: 5.5, days: 18 },
-    { years: 6.5, days: 20 },
-  ];
   let granted = 0;
-  for (const t of table) {
+  for (const t of LEAVE_GRANT_TABLE) {
     if (diffYears >= t.years) granted = t.days;
   }
   return granted;
+}
+
+// 次回有給付与日・付与日数・お祝い休暇情報を計算
+function calcNextGrant(hireDate) {
+  if (!hireDate) return null;
+  const hire = new Date(hireDate);
+  const now  = new Date(getTodayJST());
+  const diffMs = now - hire;
+  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+
+  // お祝い休暇（入職〜6ヶ月）
+  const celebrationExpiry = new Date(hire);
+  celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+  const celebrationActive = now < celebrationExpiry;
+
+  // 次回付与を探す
+  for (const t of LEAVE_GRANT_TABLE) {
+    if (diffYears < t.years) {
+      const nextDate = new Date(hire);
+      const months = Math.round(t.years * 12);
+      nextDate.setMonth(nextDate.getMonth() + months);
+      const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
+      return {
+        next_grant_date: toDateStr(nextDate),
+        next_grant_days: t.days,
+        days_until_next: daysUntil,
+        celebration_expiry: toDateStr(celebrationExpiry),
+        celebration_active: celebrationActive,
+        celebration_days_left: celebrationActive ? Math.ceil((celebrationExpiry - now) / (24 * 60 * 60 * 1000)) : 0,
+      };
+    }
+  }
+  // 既に最大付与(20日)に到達 → 次回は直近の付与周期から1年後
+  const lastEntry = LEAVE_GRANT_TABLE[LEAVE_GRANT_TABLE.length - 1];
+  const lastMonths = Math.round(lastEntry.years * 12);
+  const yearsSinceMax = diffYears - lastEntry.years;
+  const completedYears = Math.floor(yearsSinceMax);
+  const nextDate = new Date(hire);
+  nextDate.setMonth(nextDate.getMonth() + lastMonths + (completedYears + 1) * 12);
+  const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
+  return {
+    next_grant_date: toDateStr(nextDate),
+    next_grant_days: lastEntry.days,
+    days_until_next: daysUntil,
+    celebration_expiry: toDateStr(celebrationExpiry),
+    celebration_active: false,
+    celebration_days_left: 0,
+  };
 }
 
 // スタッフの有給残日数を計算（承認済み使用日数を考慮）
@@ -1873,6 +1921,8 @@ app.get('/api/leave/balance', requireStaff, (req, res) => {
   const balance     = granted + carriedOver + manualAdj - usedDays;
   const autoGrantDays = calcLeaveGrantDays(staff.hire_date);
 
+  const nextGrant = calcNextGrant(staff.hire_date);
+
   res.json({
     balance,
     granted,
@@ -1882,6 +1932,7 @@ app.get('/api/leave/balance', requireStaff, (req, res) => {
     hire_date: staff.hire_date,
     auto_grant_days: autoGrantDays,
     grant_date: staff.leave_grant_date,
+    next_grant: nextGrant,
   });
 });
 
