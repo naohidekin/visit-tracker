@@ -37,6 +37,7 @@ const SCHEDULES_PATH  = path.join(DATA_DIR, 'schedules.json');
 const NOTICES_PATH    = path.join(DATA_DIR, 'notices.json');
 const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
 const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
+const ONCALL_PATH        = path.join(DATA_DIR, 'oncall-records.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
@@ -1257,7 +1258,7 @@ app.patch('/api/admin/staff/:id/archive', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/staff', requireAdmin, async (req, res) => {
-  const { name, furigana_family, furigana_given, type, loginId, initialPw } = req.body;
+  const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
 
@@ -1490,6 +1491,8 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: 'nurse', kaigo_col: kaigoCol, iryo_col: iryoCol,
         seq: nextSeq, initial_pw: initialPw,
+        hire_date: hire_date || null,
+        oncall: oncall || '無',
         password_hash: await bcrypt.hash(initialPw, 10) };
 
     } else {
@@ -1522,6 +1525,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: type, col: newCol,
         seq: nextSeq, initial_pw: initialPw,
+        hire_date: hire_date || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
     }
 
