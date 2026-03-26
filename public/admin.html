@@ -576,6 +576,7 @@
                 <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">時間</th>
                 <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">交通費</th>
                 <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">日数</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">OC有給</th>
               </tr>
             </thead>
             <tbody id="oncallBody"></tbody>
@@ -635,8 +636,8 @@
         <div class="field" id="oncallField" style="display:none">
           <label>オンコール</label>
           <select id="newOncall">
-            <option value="有">有</option>
-            <option value="無" selected>無</option>
+            <option value="有" selected>有</option>
+            <option value="無">無</option>
           </select>
         </div>
       </div>
@@ -1794,9 +1795,10 @@
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${(s.totalMinutes/60).toFixed(1)}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalTransportCount}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.recordDays}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center;color:var(--ok);font-weight:700">${s.oncallLeaveDays || 0}日</td>
         </tr>
       `).join('');
-      const t = summary.reduce((a, s) => ({ c: a.c+s.totalCount, m: a.m+s.totalMinutes, tr: a.tr+s.totalTransportCount, d: a.d+s.recordDays }), { c:0, m:0, tr:0, d:0 });
+      const t = summary.reduce((a, s) => ({ c: a.c+s.totalCount, m: a.m+s.totalMinutes, tr: a.tr+s.totalTransportCount, d: a.d+s.recordDays, ol: a.ol+(s.oncallLeaveDays||0) }), { c:0, m:0, tr:0, d:0, ol:0 });
       document.getElementById('oncallFoot').innerHTML = `
         <tr style="background:#f0f4f8;font-weight:800">
           <td style="padding:8px 6px;border-top:2px solid var(--border)">合計</td>
@@ -1804,6 +1806,7 @@
           <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${(t.m/60).toFixed(1)}</td>
           <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.tr}</td>
           <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.d}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center;color:var(--ok);font-weight:700">${t.ol}日</td>
         </tr>`;
       document.getElementById('oncallSpinner').style.display = 'none';
       document.getElementById('oncallContent').style.display = '';
