@@ -182,38 +182,6 @@
     </div>
   </div>
 
-  <!-- お知らせ管理 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📢 お知らせ管理</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <div style="margin-bottom:14px">
-        <div class="field">
-          <label>タイトル</label>
-          <input id="noticeTitle" placeholder="お知らせのタイトル">
-        </div>
-        <div class="field">
-          <label>本文</label>
-          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
-        </div>
-        <div id="noticeMsg" class="msg"></div>
-        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
-      </div>
-      <div class="spinner" id="noticesSpinner">読み込み中...</div>
-      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
-      <div class="table-wrap" id="noticesTableWrap" style="display:none">
-        <table>
-          <thead>
-            <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
-          </thead>
-          <tbody id="noticesBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <!-- スタッフ一覧 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -396,6 +364,38 @@
           </div>
         </div>
         <p id="histMeta" style="font-size:11px;color:var(--muted);margin-top:8px"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- お知らせ管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📢 お知らせ管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:14px">
+        <div class="field">
+          <label>タイトル</label>
+          <input id="noticeTitle" placeholder="お知らせのタイトル">
+        </div>
+        <div class="field">
+          <label>本文</label>
+          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
+        </div>
+        <div id="noticeMsg" class="msg"></div>
+        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
+      </div>
+      <div class="spinner" id="noticesSpinner">読み込み中...</div>
+      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
+      <div class="table-wrap" id="noticesTableWrap" style="display:none">
+        <table>
+          <thead>
+            <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
+          </thead>
+          <tbody id="noticesBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
