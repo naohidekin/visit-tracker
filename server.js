@@ -36,6 +36,7 @@ const REGISTRY_PATH   = path.join(DATA_DIR, 'spreadsheet-registry.json');
 const SCHEDULES_PATH  = path.join(DATA_DIR, 'schedules.json');
 const NOTICES_PATH    = path.join(DATA_DIR, 'notices.json');
 const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
+const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
@@ -159,6 +160,104 @@ function loadNotices() {
 function saveNotices(data) {
   fs.writeFileSync(NOTICES_PATH, JSON.stringify(data, null, 2));
 }
+function loadLeave() {
+  if (!fs.existsSync(LEAVE_PATH)) return { requests: [] };
+  return JSON.parse(fs.readFileSync(LEAVE_PATH, 'utf8'));
+}
+function saveLeave(data) {
+  fs.writeFileSync(LEAVE_PATH, JSON.stringify(data, null, 2));
+}
+
+// Yuw connect 有給付与テーブル（10→12→14→16→18→20、毎年+2）
+const LEAVE_GRANT_TABLE = [
+  { years: 0.5, days: 10 },
+  { years: 1.5, days: 12 },
+  { years: 2.5, days: 14 },
+  { years: 3.5, days: 16 },
+  { years: 4.5, days: 18 },
+  { years: 5.5, days: 20 },
+];
+
+// 現在の付与日数を計算
+function calcLeaveGrantDays(hireDate) {
+  if (!hireDate) return 0;
+  const hire = new Date(hireDate);
+  const now  = new Date(getTodayJST());
+  const diffMs = now - hire;
+  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+  if (diffYears < 0.5) return 0;
+  let granted = 0;
+  for (const t of LEAVE_GRANT_TABLE) {
+    if (diffYears >= t.years) granted = t.days;
+  }
+  return granted;
+}
+
+// 次回有給付与日・付与日数・お祝い休暇情報を計算
+function calcNextGrant(hireDate) {
+  if (!hireDate) return null;
+  const hire = new Date(hireDate);
+  const now  = new Date(getTodayJST());
+  const diffMs = now - hire;
+  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+
+  // お祝い休暇（入職〜6ヶ月）
+  const celebrationExpiry = new Date(hire);
+  celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+  const celebrationActive = now < celebrationExpiry;
+
+  // 次回付与を探す
+  for (const t of LEAVE_GRANT_TABLE) {
+    if (diffYears < t.years) {
+      const nextDate = new Date(hire);
+      const months = Math.round(t.years * 12);
+      nextDate.setMonth(nextDate.getMonth() + months);
+      const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
+      return {
+        next_grant_date: toDateStr(nextDate),
+        next_grant_days: t.days,
+        days_until_next: daysUntil,
+        celebration_expiry: toDateStr(celebrationExpiry),
+        celebration_active: celebrationActive,
+        celebration_days_left: celebrationActive ? Math.ceil((celebrationExpiry - now) / (24 * 60 * 60 * 1000)) : 0,
+      };
+    }
+  }
+  // 既に最大付与(20日)に到達
+  const lastEntry = LEAVE_GRANT_TABLE[LEAVE_GRANT_TABLE.length - 1];
+  const lastMonths = Math.round(lastEntry.years * 12);
+  const yearsSinceMax = diffYears - lastEntry.years;
+  const completedYears = Math.floor(yearsSinceMax);
+  const nextDate = new Date(hire);
+  nextDate.setMonth(nextDate.getMonth() + lastMonths + (completedYears + 1) * 12);
+  const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
+  return {
+    next_grant_date: toDateStr(nextDate),
+    next_grant_days: lastEntry.days,
+    days_until_next: daysUntil,
+    celebration_expiry: toDateStr(celebrationExpiry),
+    celebration_active: false,
+    celebration_days_left: 0,
+  };
+}
+
+// スタッフの有給残日数を計算（承認済み使用日数を考慮）
+function calcLeaveBalance(staff) {
+  const leaveData = loadLeave();
+  const approved = leaveData.requests.filter(r =>
+    r.staffId === staff.id && r.status === 'approved'
+  );
+  let usedDays = 0;
+  for (const r of approved) {
+    const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+    usedDays += r.dates.length * perDate;
+  }
+  const granted = staff.leave_granted || 0;
+  const carriedOver = staff.leave_carried_over || 0;
+  const manualAdj = staff.leave_manual_adjustment || 0;
+  return granted + carriedOver + manualAdj - usedDays;
+}
+
 function loadExcelResults() {
   if (!fs.existsSync(EXCEL_RESULTS_PATH)) return {};
   return JSON.parse(fs.readFileSync(EXCEL_RESULTS_PATH, 'utf8'));
@@ -222,6 +321,20 @@ async function ensurePasswordsHashed() {
     }
   }
   if (changed) { saveStaff(data); console.log('✅ スタッフデータを更新しました'); }
+}
+
+// ─── 起動時：有給フィールドがないスタッフにデフォルト値を追加 ───
+function ensureLeaveFields() {
+  const data = loadStaff();
+  let changed = false;
+  for (const s of data.staff) {
+    if (s.hire_date === undefined)              { s.hire_date = null;              changed = true; }
+    if (s.leave_granted === undefined)          { s.leave_granted = 0;             changed = true; }
+    if (s.leave_grant_date === undefined)       { s.leave_grant_date = null;       changed = true; }
+    if (s.leave_carried_over === undefined)     { s.leave_carried_over = 0;        changed = true; }
+    if (s.leave_manual_adjustment === undefined){ s.leave_manual_adjustment = 0;   changed = true; }
+  }
+  if (changed) { saveStaff(data); console.log('✅ 有給フィールドを初期化しました'); }
 }
 
 // ─── 起動時：ソース staff.json に新スタッフがいれば DATA_DIR へ追加 ──
@@ -1810,6 +1923,130 @@ app.post('/api/notices/:id/read', requireStaff, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── API: 有給休暇（管理者向け） ───────────────────────────────
+app.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
+  const leaveData = loadLeave();
+  let requests = leaveData.requests;
+  if (req.query.status) {
+    requests = requests.filter(r => r.status === req.query.status);
+  }
+  requests.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  res.json({ requests });
+});
+
+app.post('/api/admin/leave/requests/:id/approve', requireAdmin, (req, res) => {
+  const leaveData = loadLeave();
+  const request = leaveData.requests.find(r => r.id === req.params.id);
+  if (!request) return res.status(404).json({ error: '申請が見つかりません' });
+  if (request.status !== 'pending')
+    return res.status(400).json({ error: '承認待ちの申請のみ承認できます' });
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === request.staffId);
+  if (staff) {
+    const balance = calcLeaveBalance(staff);
+    const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
+      ? request.dates.length * 0.5 : request.dates.length;
+    if (balance < requestDays)
+      return res.status(400).json({ error: '残日数が不足しています' });
+  }
+
+  request.status = 'approved';
+  request.adminComment = req.body.comment || null;
+  request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  saveLeave(leaveData);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/leave/requests/:id/reject', requireAdmin, (req, res) => {
+  const leaveData = loadLeave();
+  const request = leaveData.requests.find(r => r.id === req.params.id);
+  if (!request) return res.status(404).json({ error: '申請が見つかりません' });
+  if (request.status !== 'pending')
+    return res.status(400).json({ error: '承認待ちの申請のみ却下できます' });
+
+  request.status = 'rejected';
+  request.adminComment = req.body.comment || null;
+  request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  saveLeave(leaveData);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
+  const staffData = loadStaff();
+  const leaveData = loadLeave();
+  const summary = staffData.staff
+    .filter(s => !s.archived)
+    .map(s => {
+      const approved = leaveData.requests.filter(r =>
+        r.staffId === s.id && r.status === 'approved'
+      );
+      let usedDays = 0;
+      for (const r of approved) {
+        const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        usedDays += r.dates.length * per;
+      }
+      const pending = leaveData.requests.filter(r =>
+        r.staffId === s.id && r.status === 'pending'
+      );
+      let pendingDays = 0;
+      for (const r of pending) {
+        const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        pendingDays += r.dates.length * per;
+      }
+      const granted     = s.leave_granted || 0;
+      const carriedOver = s.leave_carried_over || 0;
+      const manualAdj   = s.leave_manual_adjustment || 0;
+      const balance     = granted + carriedOver + manualAdj - usedDays;
+      return {
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        hire_date: s.hire_date,
+        auto_grant_days: calcLeaveGrantDays(s.hire_date),
+        granted,
+        carried_over: carriedOver,
+        manual_adjustment: manualAdj,
+        used: usedDays,
+        pending: pendingDays,
+        balance,
+        grant_date: s.leave_grant_date,
+      };
+    });
+  res.json({ summary });
+});
+
+app.post('/api/admin/staff/:id/leave-balance', requireAdmin, (req, res) => {
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const { granted, carried_over, manual_adjustment, grant_date } = req.body;
+  if (granted !== undefined)          staff.leave_granted = Number(granted);
+  if (carried_over !== undefined)     staff.leave_carried_over = Number(carried_over);
+  if (manual_adjustment !== undefined) staff.leave_manual_adjustment = Number(manual_adjustment);
+  if (grant_date !== undefined)       staff.leave_grant_date = grant_date;
+
+  saveStaff(staffData);
+  res.json({ ok: true, balance: calcLeaveBalance(staff) });
+});
+
+app.post('/api/admin/staff/:id/hire-date', requireAdmin, (req, res) => {
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const { hire_date, auto_apply } = req.body;
+  staff.hire_date = hire_date || null;
+  if (auto_apply && hire_date) {
+    const autoGrant = calcLeaveGrantDays(hire_date);
+    staff.leave_granted = autoGrant;
+    staff.leave_grant_date = getTodayJST();
+  }
+  saveStaff(staffData);
+  res.json({ ok: true, auto_grant_days: calcLeaveGrantDays(hire_date) });
+});
+
 // ─── API: お知らせ（管理者向け） ──────────────────────────────
 app.get('/api/admin/notices', requireAdmin, (_req, res) => {
   const { notices } = loadNotices();
@@ -1903,11 +2140,16 @@ async function ensureDataDir() {
     if (fs.existsSync(src)) fs.copyFileSync(src, NOTICES_PATH);
     else fs.writeFileSync(NOTICES_PATH, JSON.stringify({ notices: [], readStatus: {} }, null, 2));
   }
+  // leave-requests.json
+  if (!fs.existsSync(LEAVE_PATH)) {
+    fs.writeFileSync(LEAVE_PATH, JSON.stringify({ requests: [] }, null, 2));
+  }
 }
 
 async function main() {
   await ensureDataDir();
   await ensurePasswordsHashed();
+  ensureLeaveFields();
   await syncNewStaffFromSource();
 
   // 毎年12/31 23:00に翌年スプレッドシートを自動作成
