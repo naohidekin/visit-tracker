@@ -182,6 +182,38 @@
     </div>
   </div>
 
+  <!-- お知らせ管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📢 お知らせ管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:14px">
+        <div class="field">
+          <label>タイトル</label>
+          <input id="noticeTitle" placeholder="お知らせのタイトル">
+        </div>
+        <div class="field">
+          <label>本文</label>
+          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
+        </div>
+        <div id="noticeMsg" class="msg"></div>
+        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
+      </div>
+      <div class="spinner" id="noticesSpinner">読み込み中...</div>
+      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
+      <div class="table-wrap" id="noticesTableWrap" style="display:none">
+        <table>
+          <thead>
+            <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
+          </thead>
+          <tbody id="noticesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- スタッフ一覧 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -257,11 +289,11 @@
   <!-- Excel集計 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📂 電子カルテExcel集計</h2>
+      <h2>📂 iBow Excel集計</h2>
       <span class="acc-icon">▼</span>
     </div>
     <div class="card-body">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">電子カルテから出力した「訪問件数詳細」Excelをアップロードすると、職員別の訪問時間・単位数を自動集計します。</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">iBowから出力した「訪問件数詳細」Excelをアップロードすると、職員別の訪問時間・単位数を自動集計します。</p>
       <div class="form-grid" style="margin-bottom:12px">
         <div class="field">
           <label>年</label>
@@ -317,7 +349,7 @@
   <!-- Excel集計履歴 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📊 電子カルテ集計履歴</h2>
+      <h2>📊 iBow集計履歴</h2>
       <span class="acc-icon">▼</span>
     </div>
     <div class="card-body">
@@ -399,6 +431,7 @@
       </div>
     </div>
   </div>
+
 
   <!-- インセンティブ設定 -->
   <div class="card">
@@ -944,16 +977,21 @@
       return;
     }
     wrap.style.display = 'block';
-    body.innerHTML = noticesCache.map(n => `
-      <tr>
+    body.innerHTML = noticesCache.map(n => {
+      const isSystem = n.source === 'system';
+      const badge = isSystem
+        ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fff3cd;color:#856404;border:1px solid #ffc107">運営</span>'
+        : '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f4fd;color:#1565c0;border:1px solid #90caf9">管理者</span>';
+      const btns = isSystem
+        ? '<span style="font-size:11px;color:var(--muted)">—</span>'
+        : `<button class="btn-xs btn-edit" onclick="startEditNotice('${n.id}')">編集</button><button class="btn-xs btn-danger" onclick="deleteNotice('${n.id}')">削除</button>`;
+      return `<tr>
+        <td>${badge}</td>
         <td style="font-size:13px;font-weight:600">${esc(n.title)}</td>
         <td style="white-space:nowrap;font-size:12px;color:var(--muted)">${n.date || ''}</td>
-        <td class="td-btns">
-          <button class="btn-xs btn-edit" onclick="startEditNotice('${n.id}')">編集</button>
-          <button class="btn-xs btn-danger" onclick="deleteNotice('${n.id}')">削除</button>
-        </td>
-      </tr>
-    `).join('');
+        <td class="td-btns">${btns}</td>
+      </tr>`;
+    }).join('');
   }
 
   function startEditNotice(id) {

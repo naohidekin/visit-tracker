@@ -198,6 +198,7 @@
     <div class="menu-drawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
+      <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span class="menu-unread-badge" id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" onclick="logout()">ログアウト</button>
@@ -330,6 +331,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="faceIdPrompt">
+  <div class="modal" style="text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">🔐</div>
+    <h2 style="color:var(--blue-dark);font-size:16px;margin-bottom:8px">Face IDを設定しますか？</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px">
+      次回からパスワードなしで<br>ログインできるようになります
+    </p>
+    <div class="modal-btns" style="flex-direction:column;gap:8px">
+      <button class="btn-ok" id="regFaceIdBtn" onclick="registerFaceId()" style="background:var(--blue);color:#fff;border-radius:10px;padding:14px;font-size:16px">設定する</button>
+      <button class="btn-cancel" onclick="dismissFaceIdPrompt()" style="background:none;border:none;color:var(--muted);font-size:14px;padding:12px;cursor:pointer">あとで</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
 <script>
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
@@ -799,8 +815,73 @@
     location.href = '/login';
   }
 
+  async function updateMenuBadge() {
+    try {
+      const r = await fetch('/api/notices/unread-count');
+      const { count } = await r.json();
+      const b = document.getElementById('menuBadge');
+      if (count > 0) { b.textContent = count; b.style.display = 'flex'; }
+      else b.style.display = 'none';
+    } catch {}
+  }
+
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  init();
+  init().then(() => updateMenuBadge());
+
+  // ── FaceID 登録プロンプト ──
+  async function checkFaceIdRegistration() {
+    if (typeof SimpleWebAuthnBrowser === 'undefined') return;
+    if (!SimpleWebAuthnBrowser.browserSupportsWebAuthn()) return;
+    if (localStorage.getItem('faceid_prompt_dismissed') === 'true') return;
+    try {
+      const hasPlatform = await SimpleWebAuthnBrowser.platformAuthenticatorIsAvailable();
+      if (!hasPlatform) return;
+    } catch { return; }
+    if (!currentUser) return;
+    try {
+      const resp = await fetch('/api/webauthn/has-credential?loginId=' + encodeURIComponent(currentUser.id));
+      const data = await resp.json();
+      if (!data.has) {
+        document.getElementById('faceIdPrompt').classList.add('show');
+      }
+    } catch {}
+  }
+  // init() 完了後に少し遅延してチェック
+  setTimeout(checkFaceIdRegistration, 1500);
+
+  async function registerFaceId() {
+    const btn = document.getElementById('regFaceIdBtn');
+    btn.disabled = true; btn.textContent = '設定中...';
+    try {
+      const optResp = await fetch('/api/webauthn/register-options', { method: 'POST' });
+      if (!optResp.ok) throw new Error('オプション取得に失敗');
+      const options = await optResp.json();
+      const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+      const verifyResp = await fetch('/api/webauthn/register-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(regResp),
+      });
+      const result = await verifyResp.json();
+      if (result.success) {
+        localStorage.setItem('faceid_prompt_dismissed', 'true');
+        document.getElementById('faceIdPrompt').classList.remove('show');
+        alert('Face IDの設定が完了しました！\n次回からFace IDでログインできます。');
+      } else {
+        throw new Error(result.error || '登録に失敗しました');
+      }
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') {
+        alert('Face IDの設定に失敗しました: ' + (e.message || ''));
+      }
+    }
+    btn.disabled = false; btn.textContent = '設定する';
+  }
+
+  function dismissFaceIdPrompt() {
+    localStorage.setItem('faceid_prompt_dismissed', 'true');
+    document.getElementById('faceIdPrompt').classList.remove('show');
+  }
 </script>
 <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
 </div><!-- /page-wrapper -->
