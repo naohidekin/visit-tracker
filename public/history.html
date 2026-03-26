@@ -21,6 +21,7 @@
     .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
     .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
     .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .header-user-name{font-size:11px;font-weight:600;opacity:.85;margin-top:1px}
     .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
     .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
     .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
@@ -112,6 +113,7 @@
     <div class="header-brand-text">
       <span class="header-app-name">にこっと Web App</span>
       <span class="header-page-name">月次実績</span>
+      <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
   <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
@@ -122,6 +124,7 @@
     <div class="menu-drawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
+      <a href="/leave">有給申請</a>
       <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
@@ -190,6 +193,9 @@
     const elType = document.getElementById('headerType');
     if (elName) elName.textContent = currentUser.name;
     if (elType) elType.textContent = currentUser.type === 'nurse' ? '看護師' : currentUser.type;
+    const typeLabel = currentUser.type === 'nurse' ? '看護師' : currentUser.type;
+    const elUser = document.getElementById('headerUserName');
+    if (elUser) elUser.textContent = `👤 ${currentUser.name}（${typeLabel}）`;
     buildMonthSelector();
     document.getElementById('mainContent').style.display = 'block';
     loadHistory();
