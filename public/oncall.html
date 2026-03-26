@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>オンコール | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10);
+      --green:#375623;--ok:#27ae60;--warn:#f39c12;--danger:#c0392b
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .header-brand{display:flex;align-items:stretch;gap:10px}
+    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.5);flex-shrink:0}
+    .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
+    .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
+    .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay.open{display:block}
+    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer .menu-logout{color:#c0392b}
+    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
+    .unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .page-wrapper{width:100%;min-height:100vh}
+    .menu-overlay-inner{max-width:390px;margin:0 auto;height:100%;position:relative}
+    @media(min-width:480px){
+      body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
+      .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
+    }
+    .container{padding:16px;max-width:480px;margin:0 auto}
+
+    .month-selector{margin-bottom:16px}
+    .month-selector select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);outline:none}
+    .month-selector select:focus{border-color:var(--blue)}
+
+    .summary-card{background:linear-gradient(135deg,#2E75B6 0%,#1F497D 100%);color:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+    .summary-title{font-size:12px;opacity:.8;margin-bottom:12px;text-align:center}
+    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .summary-item{text-align:center}
+    .summary-val{font-size:28px;font-weight:900;line-height:1}
+    .summary-unit{font-size:13px;font-weight:600;margin-left:2px}
+    .summary-label{font-size:11px;opacity:.8;margin-top:4px}
+
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+    .card-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+
+    .form-group{margin-bottom:14px}
+    .form-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:block}
+    .form-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);outline:none;transition:border .15s}
+    .form-input:focus{border-color:var(--blue)}
+
+    /* ── プルダウン（picker） ── */
+    .picker-wrap{position:relative}
+    .picker-btn{width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:17px;font-weight:700;font-family:inherit;background:var(--white);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color .15s}
+    .picker-btn.open{border-color:var(--blue);border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .picker-dropdown{position:absolute;bottom:calc(100% - 1px);left:0;right:0;background:var(--white);border:1.5px solid var(--blue);border-bottom:none;border-top-left-radius:10px;border-top-right-radius:10px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 -6px 20px rgba(0,0,0,.12)}
+    .picker-item{padding:10px 16px;font-size:15px;cursor:pointer;border-bottom:1px solid #f0f4f8;transition:background .1s}
+    .picker-item.selected{background:var(--blue);color:#fff;font-weight:700}
+    .picker-item:hover:not(.selected){background:#f0f4f8}
+    .val-empty{color:var(--muted);font-weight:400}
+    .chevron{font-size:12px;color:var(--muted)}
+
+    .btn-submit{width:100%;padding:14px;border:none;border-radius:12px;background:var(--blue);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;transition:opacity .15s}
+    .btn-submit:disabled{opacity:.5;cursor:not-allowed}
+    .btn-submit:active:not(:disabled){opacity:.8}
+    .editing-label{display:none;font-size:12px;color:var(--blue);font-weight:700;margin-bottom:8px;text-align:center}
+    .editing-label.show{display:block}
+
+    .record-item{border-bottom:1px solid #f0f4f8;padding:12px 0;display:flex;align-items:center;justify-content:space-between}
+    .record-item:last-child{border-bottom:none}
+    .record-date{font-size:14px;font-weight:700}
+    .record-detail{font-size:12px;color:var(--muted);margin-top:2px}
+    .record-actions{display:flex;gap:6px;flex-shrink:0}
+    .btn-edit,.btn-delete{padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;border:1px solid}
+    .btn-edit{border-color:var(--blue);background:#fff;color:var(--blue)}
+    .btn-delete{border-color:var(--danger);background:#fff;color:var(--danger)}
+
+    .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:24px 0}
+    .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
+    .toast.show{opacity:1}
+
+    .picker-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .picker-col-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-align:center}
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+<header>
+  <div class="header-brand">
+    <div class="header-accent"></div>
+    <div class="header-brand-text">
+      <span class="header-app-name">にこっと Web App</span>
+      <span class="header-page-name">オンコール</span>
+    </div>
+  </div>
+  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-overlay-inner">
+    <div class="menu-drawer" onclick="event.stopPropagation()">
+      <a href="/">入力画面</a>
+      <a href="/history">月次実績</a>
+      <a href="/leave">有給管理</a>
+      <a href="/oncall">オンコール</a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
+      <a href="/change-password">PW変更</a>
+      <a href="/manual">使い方</a>
+      <button class="menu-logout" onclick="logout()">ログアウト</button>
+    </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="spinner" id="spinner">読み込み中...</div>
+
+  <div class="month-selector" id="monthSelector" style="display:none">
+    <select id="monthSelect" onchange="loadData()"></select>
+  </div>
+
+  <div class="summary-card" id="summaryCard" style="display:none">
+    <div class="summary-title">月間オンコール実績</div>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div><span class="summary-val" id="sumCount">0</span><span class="summary-unit">件</span></div>
+        <div class="summary-label">合計件数</div>
+      </div>
+      <div class="summary-item">
+        <div><span class="summary-val" id="sumTime">0.0</span><span class="summary-unit">時間</span></div>
+        <div class="summary-label">合計時間</div>
+      </div>
+      <div class="summary-item">
+        <div><span class="summary-val" id="sumTransport">0</span><span class="summary-unit">件</span></div>
+        <div class="summary-label">交通費件数</div>
+      </div>
+      <div class="summary-item">
+        <div><span class="summary-val" id="sumDays">0</span><span class="summary-unit">日</span></div>
+        <div class="summary-label">入力日数</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="formCard" style="display:none">
+    <div class="card-title">オンコール入力</div>
+    <div class="editing-label" id="editingLabel"></div>
+
+    <div class="form-group">
+      <label class="form-label">日付</label>
+      <input type="date" class="form-input" id="inputDate" onchange="onDateChange()">
+    </div>
+
+    <div class="picker-grid">
+      <!-- 件数 -->
+      <div>
+        <div class="picker-col-label">件数</div>
+        <div class="picker-wrap">
+          <button type="button" class="picker-btn" id="countBtn" onclick="togglePicker('count')">
+            <span id="countDisplay" class="val-empty">0</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div class="picker-dropdown" id="countList" style="display:none"></div>
+        </div>
+      </div>
+      <!-- 合計時間 -->
+      <div>
+        <div class="picker-col-label">合計時間</div>
+        <div class="picker-wrap">
+          <button type="button" class="picker-btn" id="timeBtn" onclick="togglePicker('time')">
+            <span id="timeDisplay" class="val-empty">0.0</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div class="picker-dropdown" id="timeList" style="display:none"></div>
+        </div>
+      </div>
+      <!-- 交通費 -->
+      <div>
+        <div class="picker-col-label">交通費</div>
+        <div class="picker-wrap">
+          <button type="button" class="picker-btn" id="transportBtn" onclick="togglePicker('transport')">
+            <span id="transportDisplay" class="val-empty">0</span>
+            <span class="chevron">▼</span>
+          </button>
+          <div class="picker-dropdown" id="transportList" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="submitBtn" onclick="submitRecord()" style="margin-top:16px">保存する</button>
+  </div>
+
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title">入力履歴</div>
+    <div id="recordsList"></div>
+    <div class="empty-msg" id="emptyMsg" style="display:none">この月のオンコール記録はありません</div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const WD = ['日','月','火','水','木','金','土'];
+  let allRecords = [];
+
+  // 選択値
+  const pv = { count: 0, time: 0, transport: 0 };
+
+  // オプション生成
+  const COUNT_OPTS = [];
+  for (let i = 0; i <= 10; i++) COUNT_OPTS.push(i);
+
+  const TIME_OPTS = [];
+  for (let v = 0; v <= 10.0 + 0.001; v += 0.5) TIME_OPTS.push(Math.round(v * 10) / 10);
+
+  const TRANSPORT_OPTS = [];
+  for (let i = 0; i <= 10; i++) TRANSPORT_OPTS.push(i);
+
+  async function init() {
+    const me = await fetch('/api/me').then(r => r.json());
+    if (!me.id) { location.href = '/login'; return; }
+    // アクセスガード: 看護師 + oncall_eligible のみ
+    if (me.type !== 'nurse' || !me.oncall_eligible) {
+      location.href = '/';
+      return;
+    }
+
+    const sel = document.getElementById('monthSelect');
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const label = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+      sel.innerHTML += `<option value="${val}">${label}</option>`;
+    }
+
+    document.getElementById('inputDate').value = now.toISOString().slice(0, 10);
+
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('monthSelector').style.display = '';
+    document.getElementById('summaryCard').style.display = '';
+    document.getElementById('formCard').style.display = '';
+    document.getElementById('historyCard').style.display = '';
+
+    await Promise.all([loadData(), updateMenuBadge()]);
+  }
+
+  async function loadData() {
+    const month = document.getElementById('monthSelect').value;
+    const [recRes, sumRes] = await Promise.all([
+      fetch('/api/oncall/records?month=' + month),
+      fetch('/api/oncall/monthly-summary?month=' + month),
+    ]);
+    const { records } = await recRes.json();
+    const { summary } = await sumRes.json();
+    allRecords = records;
+
+    document.getElementById('sumCount').textContent = summary.totalCount;
+    document.getElementById('sumTime').textContent = (summary.totalMinutes / 60).toFixed(1);
+    document.getElementById('sumTransport').textContent = summary.totalTransportCount;
+    document.getElementById('sumDays').textContent = summary.recordDays;
+
+    renderRecords(records);
+    onDateChange();
+  }
+
+  function renderRecords(records) {
+    const list = document.getElementById('recordsList');
+    const emptyMsg = document.getElementById('emptyMsg');
+    if (!records.length) { list.innerHTML = ''; emptyMsg.style.display = 'block'; return; }
+    emptyMsg.style.display = 'none';
+    list.innerHTML = records.map(r => {
+      const d = new Date(r.date + 'T00:00:00');
+      const dateLabel = `${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
+      const hours = (r.totalMinutes / 60).toFixed(1);
+      return `
+        <div class="record-item">
+          <div>
+            <div class="record-date">${dateLabel}</div>
+            <div class="record-detail">${r.count}件 / ${hours}時間 / 交通費${r.transportCount}件</div>
+          </div>
+          <div class="record-actions">
+            <button class="btn-edit" onclick="editRecord('${r.date}')">編集</button>
+            <button class="btn-delete" onclick="deleteRecord('${r.id}')">削除</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── ピッカー ──
+  function closeAllPickers() {
+    ['count', 'time', 'transport'].forEach(name => {
+      document.getElementById(name + 'List').style.display = 'none';
+      document.getElementById(name + 'Btn').classList.remove('open');
+    });
+  }
+
+  function togglePicker(name) {
+    const list = document.getElementById(name + 'List');
+    const btn = document.getElementById(name + 'Btn');
+    const isOpen = list.style.display !== 'none';
+    closeAllPickers();
+    if (!isOpen) {
+      buildList(name);
+      list.style.display = 'block';
+      btn.classList.add('open');
+    }
+  }
+
+  function buildList(name) {
+    const list = document.getElementById(name + 'List');
+    const opts = name === 'count' ? COUNT_OPTS : name === 'time' ? TIME_OPTS : TRANSPORT_OPTS;
+    list.innerHTML = '';
+    for (const opt of opts) {
+      const item = document.createElement('div');
+      item.className = 'picker-item' + (pv[name] === opt ? ' selected' : '');
+      if (name === 'time') {
+        item.textContent = opt.toFixed(1) + '　時間';
+      } else if (name === 'count') {
+        item.textContent = opt + '　件';
+      } else {
+        item.textContent = opt + '　件';
+      }
+      item.onclick = () => selectVal(name, opt);
+      list.appendChild(item);
+    }
+    const sel = list.querySelector('.selected');
+    if (sel) setTimeout(() => sel.scrollIntoView({ block: 'center' }), 0);
+  }
+
+  function selectVal(name, val) {
+    pv[name] = val;
+    const display = document.getElementById(name + 'Display');
+    if (name === 'time') {
+      display.textContent = val.toFixed(1);
+    } else {
+      display.textContent = val;
+    }
+    display.classList.remove('val-empty');
+    closeAllPickers();
+  }
+
+  function onDateChange() {
+    const date = document.getElementById('inputDate').value;
+    const existing = allRecords.find(r => r.date === date);
+    const label = document.getElementById('editingLabel');
+    if (existing) {
+      pv.count = existing.count || 0;
+      pv.time = (existing.totalMinutes || 0) / 60;
+      pv.transport = existing.transportCount || 0;
+      const d = new Date(date + 'T00:00:00');
+      label.textContent = `${d.getMonth()+1}/${d.getDate()}のデータを編集中`;
+      label.classList.add('show');
+    } else {
+      pv.count = 0; pv.time = 0; pv.transport = 0;
+      label.classList.remove('show');
+    }
+    document.getElementById('countDisplay').textContent = pv.count;
+    document.getElementById('timeDisplay').textContent = pv.time.toFixed(1);
+    document.getElementById('transportDisplay').textContent = pv.transport;
+  }
+
+  function editRecord(date) {
+    document.getElementById('inputDate').value = date;
+    onDateChange();
+    document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  async function deleteRecord(id) {
+    if (!confirm('このレコードを削除しますか？')) return;
+    try {
+      const res = await fetch('/api/oncall/records/' + id, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'エラー'); return; }
+      showToast('削除しました');
+      await loadData();
+    } catch { showToast('エラーが発生しました'); }
+  }
+
+  async function submitRecord() {
+    const date = document.getElementById('inputDate').value;
+    if (!date) { showToast('日付を選択してください'); return; }
+    if (pv.count === 0 && pv.time === 0 && pv.transport === 0) {
+      showToast('いずれかの値を入力してください');
+      return;
+    }
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/oncall/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, count: pv.count, totalHours: pv.time, transportCount: pv.transport }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'エラー'); return; }
+      showToast('保存しました');
+      await loadData();
+    } catch { showToast('エラーが発生しました'); }
+    finally { btn.disabled = false; }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  async function updateMenuBadge() {
+    try {
+      const res = await fetch('/api/notices/unread-count');
+      const { count } = await res.json();
+      const badge = document.getElementById('menuBadge');
+      if (count > 0) { badge.textContent = count; badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    } catch {}
+  }
+
+  function toggleMenu() {
+    document.getElementById('hamburgerBtn').classList.toggle('open');
+    document.getElementById('menuOverlay').classList.toggle('open');
+  }
+  function closeMenu() {
+    document.getElementById('hamburgerBtn').classList.remove('open');
+    document.getElementById('menuOverlay').classList.remove('open');
+  }
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    location.href = '/login';
+  }
+
+  // ピッカー外クリックで閉じる
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.picker-wrap')) closeAllPickers();
+  });
+
+  init();
+</script>
+</body>
+</html>

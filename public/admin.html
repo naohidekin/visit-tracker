@@ -548,6 +548,45 @@
     </div>
   </div>
 
+  <!-- オンコール管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📞 オンコール管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <!-- 対象スタッフ設定 -->
+      <p class="section-sub" style="font-size:13px;font-weight:700;margin-bottom:10px">オンコール対象スタッフ</p>
+      <div id="oncallEligibleList"></div>
+      <div id="oncallEligibleSpinner" class="spinner">読み込み中...</div>
+
+      <!-- 月別集計 -->
+      <div style="margin-top:16px;border-top:1px solid #f0f4f8;padding-top:14px">
+        <p class="section-sub" style="font-size:13px;font-weight:700;margin-bottom:10px">月別集計</p>
+        <div style="margin-bottom:12px">
+          <select id="oncallMonth" onchange="loadOncallSummary()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
+        </div>
+        <div id="oncallSpinner" class="spinner" style="display:none">読み込み中...</div>
+        <div id="oncallContent" style="display:none">
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="background:#f0f4f8">
+                <th style="padding:8px 6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">件数</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">時間</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">交通費</th>
+                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">日数</th>
+              </tr>
+            </thead>
+            <tbody id="oncallBody"></tbody>
+            <tfoot id="oncallFoot"></tfoot>
+          </table>
+        </div>
+        <div id="oncallEmpty" class="empty-msg" style="display:none">この月のオンコール記録はありません</div>
+      </div>
+    </div>
+  </div>
+
   <!-- スタッフ追加 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -668,6 +707,14 @@
       const h2 = header.querySelector('h2');
       if (h2 && h2.textContent.includes('有給休暇管理')) {
         loadLeavePending();
+      }
+      if (h2 && h2.textContent.includes('オンコール管理')) {
+        loadOncallEligible();
+        initOncallMonth();
+        loadOncallSummary();
+      }
+      if (h2 && h2.textContent.includes('スタッフ追加')) {
+        autoGenerate();
       }
     }
   }
@@ -1677,6 +1724,95 @@
   // 年・月の初期値をページ読み込み時に設定
   initAdminMonthlySelectors();
   initExcelSelectors();
+
+  // ── オンコール管理 ────────────────────────────────────────────
+  let oncallMonthInited = false;
+  async function loadOncallEligible() {
+    const spinner = document.getElementById('oncallEligibleSpinner');
+    const listEl = document.getElementById('oncallEligibleList');
+    spinner.style.display = '';
+    listEl.innerHTML = '';
+    try {
+      const res = await fetch('/api/admin/staff');
+      const { staff } = await res.json();
+      const nurses = staff.filter(s => s.type === 'nurse' && !s.archived);
+      spinner.style.display = 'none';
+      listEl.innerHTML = nurses.map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f4f8">
+          <span style="font-size:13px;font-weight:600">${esc(s.name)}</span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${s.oncall_eligible ? 'checked' : ''} onchange="toggleOncall('${s.id}', this.checked)"
+              style="width:18px;height:18px;accent-color:var(--blue)">
+            <span style="font-size:12px;color:var(--muted)">${s.oncall_eligible ? '対象' : '対象外'}</span>
+          </label>
+        </div>
+      `).join('');
+    } catch { spinner.style.display = 'none'; }
+  }
+  async function toggleOncall(staffId, eligible) {
+    try {
+      await fetch('/api/admin/staff/' + staffId + '/oncall', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eligible }),
+      });
+      loadOncallEligible();
+    } catch {}
+  }
+
+  function initOncallMonth() {
+    if (oncallMonthInited) return;
+    oncallMonthInited = true;
+    const sel = document.getElementById('oncallMonth');
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const label = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+      sel.innerHTML += `<option value="${val}">${label}</option>`;
+    }
+  }
+  async function loadOncallSummary() {
+    const month = document.getElementById('oncallMonth').value;
+    if (!month) return;
+    document.getElementById('oncallSpinner').style.display = '';
+    document.getElementById('oncallContent').style.display = 'none';
+    document.getElementById('oncallEmpty').style.display = 'none';
+    try {
+      const res = await fetch('/api/admin/oncall/summary?month=' + month);
+      const { summary } = await res.json();
+      const hasData = summary.some(s => s.recordDays > 0);
+      if (!hasData) {
+        document.getElementById('oncallSpinner').style.display = 'none';
+        document.getElementById('oncallEmpty').style.display = '';
+        return;
+      }
+      document.getElementById('oncallBody').innerHTML = summary.filter(s => s.recordDays > 0).map(s => `
+        <tr>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;font-weight:600">${esc(s.name)}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalCount}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${(s.totalMinutes/60).toFixed(1)}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalTransportCount}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.recordDays}</td>
+        </tr>
+      `).join('');
+      const t = summary.reduce((a, s) => ({ c: a.c+s.totalCount, m: a.m+s.totalMinutes, tr: a.tr+s.totalTransportCount, d: a.d+s.recordDays }), { c:0, m:0, tr:0, d:0 });
+      document.getElementById('oncallFoot').innerHTML = `
+        <tr style="background:#f0f4f8;font-weight:800">
+          <td style="padding:8px 6px;border-top:2px solid var(--border)">合計</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.c}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${(t.m/60).toFixed(1)}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.tr}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.d}</td>
+        </tr>`;
+      document.getElementById('oncallSpinner').style.display = 'none';
+      document.getElementById('oncallContent').style.display = '';
+    } catch {
+      document.getElementById('oncallSpinner').style.display = 'none';
+      document.getElementById('oncallEmpty').textContent = 'データの取得に失敗しました';
+      document.getElementById('oncallEmpty').style.display = '';
+    }
+  }
 
   // ── 翌年スプレッドシート作成 ──────────────────────────────────
   document.getElementById('nextYearLabel').textContent = new Date().getFullYear() + 1;
