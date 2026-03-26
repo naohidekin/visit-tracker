@@ -2184,16 +2184,17 @@ app.get('/api/admin/notices', requireAdmin, (_req, res) => {
 });
 
 app.post('/api/admin/notices', requireAdmin, (req, res) => {
-  const { title, body } = req.body;
+  const { title, body, source } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
   const data = loadNotices();
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const noticeSource = (source === 'system') ? 'system' : 'admin';
   const notice = {
-    id: String(Date.now()),
+    id: noticeSource === 'system' ? 'sys-' + Date.now() : String(Date.now()),
     date: now.toISOString().slice(0, 10),
     title,
     body,
-    source: 'admin',
+    source: noticeSource,
     createdAt: now.toISOString()
   };
   data.notices.push(notice);
@@ -2205,7 +2206,6 @@ app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
   const data = loadNotices();
   const notice = data.notices.find(n => n.id === req.params.id);
   if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
-  if (notice.source === 'system') return res.status(403).json({ error: '運営からのお知らせは編集できません' });
   if (req.body.title) notice.title = req.body.title;
   if (req.body.body) notice.body = req.body.body;
   saveNotices(data);
@@ -2216,7 +2216,6 @@ app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
   const data = loadNotices();
   const idx = data.notices.findIndex(n => n.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });
-  if (data.notices[idx].source === 'system') return res.status(403).json({ error: '運営からのお知らせは削除できません' });
   data.notices.splice(idx, 1);
   // readStatus からも削除
   for (const staffId in data.readStatus) {

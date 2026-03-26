@@ -386,6 +386,13 @@
     <div class="card-body">
       <div style="margin-bottom:14px">
         <div class="field">
+          <label>発信元</label>
+          <select id="noticeSource" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
+            <option value="admin">管理者</option>
+            <option value="system">運営</option>
+          </select>
+        </div>
+        <div class="field">
           <label>タイトル</label>
           <input id="noticeTitle" placeholder="お知らせのタイトル">
         </div>
@@ -1075,9 +1082,7 @@
       const badge = isSystem
         ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fff3cd;color:#856404;border:1px solid #ffc107">運営</span>'
         : '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f4fd;color:#1565c0;border:1px solid #90caf9">管理者</span>';
-      const btns = isSystem
-        ? '<span style="font-size:11px;color:var(--muted)">—</span>'
-        : `<button class="btn-xs btn-edit" onclick="startEditNotice('${n.id}')">編集</button><button class="btn-xs btn-danger" onclick="deleteNotice('${n.id}')">削除</button>`;
+      const btns = `<button class="btn-xs btn-edit" onclick="startEditNotice('${n.id}')">編集</button><button class="btn-xs btn-danger" onclick="deleteNotice('${n.id}')">削除</button>`;
       return `<tr>
         <td>${badge}</td>
         <td style="font-size:13px;font-weight:600">${esc(n.title)}</td>
@@ -1091,6 +1096,7 @@
     const n = noticesCache.find(x => x.id === id);
     if (!n) return;
     editingNoticeId = id;
+    document.getElementById('noticeSource').value = n.source || 'admin';
     document.getElementById('noticeTitle').value = n.title;
     document.getElementById('noticeBody').value  = n.body;
     const msgEl = document.getElementById('noticeMsg');
@@ -1111,16 +1117,18 @@
       msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = 'タイトルと本文を入力してください';
       return;
     }
+    const source = document.getElementById('noticeSource').value;
     const res = await fetch('/api/admin/notices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body })
+      body: JSON.stringify({ title, body, source })
     });
     const data = await res.json();
     if (data.ok) {
       showToast('📢 お知らせを作成しました');
       document.getElementById('noticeTitle').value = '';
       document.getElementById('noticeBody').value  = '';
+      document.getElementById('noticeSource').value = 'admin';
       msgEl.style.display = 'none';
       loadAdminNotices();
     } else {
@@ -1154,6 +1162,7 @@
 
   function cancelEditNotice() {
     editingNoticeId = null;
+    document.getElementById('noticeSource').value = 'admin';
     document.getElementById('noticeTitle').value = '';
     document.getElementById('noticeBody').value  = '';
     const msgEl = document.getElementById('noticeMsg');
