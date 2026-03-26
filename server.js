@@ -2058,6 +2058,21 @@ app.post('/api/admin/staff/:id/oncall', requireAdmin, (req, res) => {
   res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
 });
 
+// ─── API: スタッフ重複除去（一時的） ─────────────────────────────
+app.post('/api/admin/staff/dedup', requireAdmin, (_req, res) => {
+  const data = loadStaff();
+  const seen = new Set();
+  const before = data.staff.length;
+  data.staff = data.staff.filter(s => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+  const removed = before - data.staff.length;
+  if (removed > 0) saveStaff(data);
+  res.json({ ok: true, before, after: data.staff.length, removed });
+});
+
 // ─── API: 有給休暇（管理者向け） ───────────────────────────────
 app.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
   const leaveData = loadLeave();
