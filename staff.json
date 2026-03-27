@@ -16,7 +16,6 @@
       "initial_pw": "YU01",
       "password_hash": "$2a$10$oKUIdud3Tv3ICCb/gJ8nfebCYlZ72ez9nwEAdWRog5yVqZ9cseH2C",
       "incentive_line": null,
-      "oncall_eligible": false,
       "hire_date": null,
       "leave_granted": 0,
       "leave_grant_date": null,
@@ -39,8 +38,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "goto03",
@@ -58,8 +56,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "kamata04",
@@ -77,8 +74,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "nakashima05",
@@ -95,8 +91,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "ozawa06",
@@ -113,8 +108,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "ooe07",
@@ -131,8 +125,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "testns",
@@ -146,7 +139,6 @@
       "initial_pw": "0000",
       "password_hash": "$2a$10$P6H5CPtg0oJ65lUC13QXuuTkPzk.gI1YtFAeMXM0Z7VsWXtwDjHqq",
       "incentive_line": null,
-      "oncall_eligible": true,
       "archived": true,
       "hire_date": null,
       "leave_granted": 0,
@@ -170,8 +162,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "morobe08",
@@ -189,8 +180,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     },
     {
       "id": "sahara09",
@@ -208,8 +198,7 @@
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
-      "leave_manual_adjustment": 0,
-      "oncall_eligible": false
+      "leave_manual_adjustment": 0
     }
   ]
 }

@@ -98,6 +98,15 @@
     .card-body{overflow:hidden;max-height:0;transition:max-height .35s ease}
     .card-body.open{max-height:9999px}
     .card-body > *:first-child{margin-top:14px}
+    /* ── カテゴリセクション ── */
+    .category-section{margin-bottom:20px}
+    .category-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:10px 14px;background:#e8ecf2;border-radius:10px;margin-bottom:10px;user-select:none}
+    .category-header.no-toggle{cursor:default}
+    .category-title{font-size:13px;font-weight:800;color:var(--blue-dark);letter-spacing:.03em}
+    .category-icon{font-size:12px;color:var(--muted);flex-shrink:0;margin-left:8px}
+    .category-body{overflow:hidden;transition:max-height .35s ease}
+    .category-body.collapsed{max-height:0!important}
+    .category-body.open{max-height:none}
     /* ── ローディング ── */
     .spinner{text-align:center;padding:14px;color:var(--muted);font-size:12px;display:none}
     /* ── 自動生成ラベル ── */
@@ -171,52 +180,109 @@
 <!-- メインコンテンツ -->
 <div id="mainContent" class="container">
 
-  <!-- 未確定の予定一覧 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📋 未確定の予定一覧</h2>
-      <span class="acc-icon">▼</span>
+  <!-- ═══ 日常業務 ═══ -->
+  <div class="category-section">
+    <div class="category-header no-toggle">
+      <span class="category-title">日常業務</span>
     </div>
-    <div class="card-body">
-      <div class="spinner" id="schedulesSpinner">読み込み中...</div>
-      <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
-      <div class="table-wrap" id="schedulesTableWrap" style="display:none">
-        <table>
-          <thead>
-            <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
-          </thead>
-          <tbody id="schedulesBody"></tbody>
-        </table>
+    <div class="category-body open">
+
+      <!-- 未確定の予定一覧 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>📋 未確定の予定一覧</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="spinner" id="schedulesSpinner">読み込み中...</div>
+          <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
+          <div class="table-wrap" id="schedulesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
+              </thead>
+              <tbody id="schedulesBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
+
+      <!-- スタッフ一覧 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>👥 スタッフ一覧</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="spinner" id="tableSpinner">読み込み中...</div>
+          <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 アーカイブ済みを表示</button>
+          <div class="table-wrap">
+            <table class="staff-table">
+              <colgroup>
+                <col class="col-name"><col class="col-type"><col class="col-btns">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>名前</th><th>職種</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="staffBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- お知らせ管理 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>📢 お知らせ管理</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:14px">
+            <div class="field">
+              <label>発信元</label>
+              <select id="noticeSource" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
+                <option value="admin">管理者</option>
+                <option value="system">運営</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>タイトル</label>
+              <input id="noticeTitle" placeholder="お知らせのタイトル">
+            </div>
+            <div class="field">
+              <label>本文</label>
+              <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
+            </div>
+            <div id="noticeMsg" class="msg"></div>
+            <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
+          </div>
+          <div class="spinner" id="noticesSpinner">読み込み中...</div>
+          <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
+          <div class="table-wrap" id="noticesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
+              </thead>
+              <tbody id="noticesBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- スタッフ一覧 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>👥 スタッフ一覧</h2>
-      <span class="acc-icon">▼</span>
+  <!-- ═══ 月次業務 ═══ -->
+  <div class="category-section">
+    <div class="category-header" onclick="toggleCategory(this)">
+      <span class="category-title">月次業務</span>
+      <span class="category-icon">▼</span>
     </div>
-    <div class="card-body">
-      <div class="spinner" id="tableSpinner">読み込み中...</div>
-      <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 アーカイブ済みを表示</button>
-      <div class="table-wrap">
-        <table class="staff-table">
-          <colgroup>
-            <col class="col-name"><col class="col-type"><col class="col-btns">
-          </colgroup>
-          <thead>
-            <tr>
-              <th>名前</th><th>職種</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="staffBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+    <div class="category-body collapsed">
 
-  <!-- スタッフ月次実績 -->
+      <!-- スタッフ月次実績 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
       <h2>📊 スタッフ月次実績</h2>
@@ -377,45 +443,6 @@
     </div>
   </div>
 
-  <!-- お知らせ管理 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📢 お知らせ管理</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <div style="margin-bottom:14px">
-        <div class="field">
-          <label>発信元</label>
-          <select id="noticeSource" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
-            <option value="admin">管理者</option>
-            <option value="system">運営</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>タイトル</label>
-          <input id="noticeTitle" placeholder="お知らせのタイトル">
-        </div>
-        <div class="field">
-          <label>本文</label>
-          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
-        </div>
-        <div id="noticeMsg" class="msg"></div>
-        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
-      </div>
-      <div class="spinner" id="noticesSpinner">読み込み中...</div>
-      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
-      <div class="table-wrap" id="noticesTableWrap" style="display:none">
-        <table>
-          <thead>
-            <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
-          </thead>
-          <tbody id="noticesBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <!-- 有給休暇管理 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -423,21 +450,28 @@
       <span class="acc-icon">▼</span>
     </div>
     <div class="card-body">
+      <!-- タブ切替 -->
       <div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:2px solid #e8ecf0;padding-bottom:0">
         <button class="leave-tab active" data-tab="leavePending" onclick="switchLeaveTab(this)">申請一覧</button>
         <button class="leave-tab" data-tab="leaveHistory" onclick="switchLeaveTab(this)">履歴</button>
         <button class="leave-tab" data-tab="leaveBalance" onclick="switchLeaveTab(this)">残日数管理</button>
       </div>
+
+      <!-- 申請一覧タブ -->
       <div id="leavePending">
         <div class="spinner" id="leavePendingSpinner">読み込み中...</div>
         <div id="leavePendingEmpty" style="display:none;color:var(--muted);font-size:13px;padding:8px 0">承認待ちの申請はありません</div>
         <div class="table-wrap" id="leavePendingTableWrap" style="display:none">
           <table>
-            <thead><tr><th>名前</th><th>日付</th><th>種別</th><th>理由</th><th>申請日</th><th>操作</th></tr></thead>
+            <thead>
+              <tr><th>名前</th><th>日付</th><th>種別</th><th>理由</th><th>申請日</th><th>操作</th></tr>
+            </thead>
             <tbody id="leavePendingBody"></tbody>
           </table>
         </div>
       </div>
+
+      <!-- 履歴タブ -->
       <div id="leaveHistory" style="display:none">
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <select id="leaveHistoryStaff" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px" onchange="loadLeaveHistory()">
@@ -455,16 +489,22 @@
         <div id="leaveHistoryEmpty" style="display:none;color:var(--muted);font-size:13px;padding:8px 0">該当する申請はありません</div>
         <div class="table-wrap" id="leaveHistoryTableWrap" style="display:none">
           <table>
-            <thead><tr><th>名前</th><th>日付</th><th>種別</th><th>ステータス</th><th>コメント</th><th>申請日</th></tr></thead>
+            <thead>
+              <tr><th>名前</th><th>日付</th><th>種別</th><th>ステータス</th><th>コメント</th><th>申請日</th></tr>
+            </thead>
             <tbody id="leaveHistoryBody"></tbody>
           </table>
         </div>
       </div>
+
+      <!-- 残日数管理タブ -->
       <div id="leaveBalance" style="display:none">
         <div class="spinner" id="leaveBalanceSpinner">読み込み中...</div>
         <div class="table-wrap" id="leaveBalanceTableWrap" style="display:none">
           <table>
-            <thead><tr><th>名前</th><th>入社日</th><th>自動付与</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr></thead>
+            <thead>
+              <tr><th>名前</th><th>入社日</th><th>自動付与</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
+            </thead>
             <tbody id="leaveBalanceBody"></tbody>
           </table>
         </div>
@@ -515,39 +555,6 @@
     </div>
   </div>
 
-  <!-- インセンティブ設定 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>💰 インセンティブ設定</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <div id="incentiveSpinner" class="spinner">読み込み中...</div>
-
-      <!-- デフォルト設定 -->
-      <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
-        <p class="section-sub">デフォルト設定</p>
-        <div class="form-grid">
-          <div class="field">
-            <label>看護師デフォルト（時間/日）</label>
-            <select id="defaultNurse"></select>
-          </div>
-          <div class="field">
-            <label>リハデフォルト（単位/日）</label>
-            <select id="defaultRehab"></select>
-          </div>
-        </div>
-        <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
-      </div>
-
-      <!-- スタッフ個別設定 -->
-      <div id="incentiveStaffSection" style="display:none">
-        <p class="section-sub">スタッフ個別設定</p>
-        <div class="iline-list" id="incentiveBody"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- オンコール管理 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -555,40 +562,74 @@
       <span class="acc-icon">▼</span>
     </div>
     <div class="card-body">
-      <!-- 対象スタッフ設定 -->
-      <p class="section-sub" style="font-size:13px;font-weight:700;margin-bottom:10px">オンコール対象スタッフ</p>
-      <div id="oncallEligibleList"></div>
-      <div id="oncallEligibleSpinner" class="spinner">読み込み中...</div>
-
-      <!-- 月別集計 -->
-      <div style="margin-top:16px;border-top:1px solid #f0f4f8;padding-top:14px">
-        <p class="section-sub" style="font-size:13px;font-weight:700;margin-bottom:10px">月別集計</p>
-        <div style="margin-bottom:12px">
-          <select id="oncallMonth" onchange="loadOncallSummary()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
-        </div>
-        <div id="oncallSpinner" class="spinner" style="display:none">読み込み中...</div>
-        <div id="oncallContent" style="display:none">
-          <table style="width:100%;font-size:12px;border-collapse:collapse">
-            <thead>
-              <tr style="background:#f0f4f8">
-                <th style="padding:8px 6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">件数</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">時間</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">交通費</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">日数</th>
-                <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">OC有給</th>
-              </tr>
-            </thead>
-            <tbody id="oncallBody"></tbody>
-            <tfoot id="oncallFoot"></tfoot>
-          </table>
-        </div>
-        <div id="oncallEmpty" class="empty-msg" style="display:none">この月のオンコール記録はありません</div>
+      <div style="margin-bottom:12px">
+        <select id="oncallMonth" onchange="loadOncallSummary()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
       </div>
+      <div id="oncallSpinner" class="spinner" style="display:none">読み込み中...</div>
+      <div id="oncallContent" style="display:none">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f0f4f8">
+              <th style="padding:8px 6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+              <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">件数</th>
+              <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">時間</th>
+              <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">交通費</th>
+              <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">日数</th>
+            </tr>
+          </thead>
+          <tbody id="oncallBody"></tbody>
+          <tfoot id="oncallFoot"></tfoot>
+        </table>
+      </div>
+      <div id="oncallEmpty" class="empty-msg" style="display:none">この月のオンコール記録はありません</div>
     </div>
   </div>
 
-  <!-- スタッフ追加 -->
+    </div>
+  </div>
+
+  <!-- ═══ 設定・マスタ ═══ -->
+  <div class="category-section">
+    <div class="category-header" onclick="toggleCategory(this)">
+      <span class="category-title">設定・マスタ</span>
+      <span class="category-icon">▼</span>
+    </div>
+    <div class="category-body collapsed">
+
+      <!-- インセンティブ設定 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>💰 インセンティブ設定</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div id="incentiveSpinner" class="spinner">読み込み中...</div>
+
+          <!-- デフォルト設定 -->
+          <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
+            <p class="section-sub">デフォルト設定</p>
+            <div class="form-grid">
+              <div class="field">
+                <label>看護師デフォルト（時間/日）</label>
+                <select id="defaultNurse"></select>
+              </div>
+              <div class="field">
+                <label>リハデフォルト（単位/日）</label>
+                <select id="defaultRehab"></select>
+              </div>
+            </div>
+            <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
+          </div>
+
+          <!-- スタッフ個別設定 -->
+          <div id="incentiveStaffSection" style="display:none">
+            <p class="section-sub">スタッフ個別設定</p>
+            <div class="iline-list" id="incentiveBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- スタッフ追加 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
       <h2>➕ スタッフ追加</h2>
@@ -636,8 +677,8 @@
         <div class="field" id="oncallField" style="display:none">
           <label>オンコール</label>
           <select id="newOncall">
-            <option value="有" selected>有</option>
-            <option value="無">無</option>
+            <option value="有">有</option>
+            <option value="無" selected>無</option>
           </select>
         </div>
       </div>
@@ -661,6 +702,9 @@
       </p>
       <button class="btn btn-blue" id="createNextYearBtn" onclick="createNextYearSheet()" style="margin-top:14px">翌年シートを作成</button>
       <div id="createSheetResult" style="display:none;margin-top:14px"></div>
+    </div>
+  </div>
+
     </div>
   </div>
 
@@ -695,6 +739,21 @@
 <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
 
 <script>
+  // ── カテゴリ折りたたみ ──────────────────────────────────────
+  function toggleCategory(header) {
+    const body = header.nextElementSibling;
+    const icon = header.querySelector('.category-icon');
+    if (body.classList.contains('collapsed')) {
+      body.classList.remove('collapsed');
+      body.classList.add('open');
+      if (icon) icon.textContent = '▲';
+    } else {
+      body.classList.remove('open');
+      body.classList.add('collapsed');
+      if (icon) icon.textContent = '▼';
+    }
+  }
+
   // ── アコーディオン ──────────────────────────────────────────
   function toggleAccordion(header) {
     const body = header.nextElementSibling;
@@ -705,17 +764,14 @@
     } else {
       body.classList.add('open');
       icon.textContent = '▲';
+      // セクション展開時に初期データ読み込み
       const h2 = header.querySelector('h2');
       if (h2 && h2.textContent.includes('有給休暇管理')) {
         loadLeavePending();
       }
       if (h2 && h2.textContent.includes('オンコール管理')) {
-        loadOncallEligible();
         initOncallMonth();
         loadOncallSummary();
-      }
-      if (h2 && h2.textContent.includes('スタッフ追加')) {
-        autoGenerate();
       }
     }
   }
@@ -840,6 +896,9 @@
           </div>
         </td>`;
     }
+    const ocBtn = s.type === 'nurse'
+      ? `<button class="btn-xs ${s.oncall_eligible ? 'btn-green' : 'btn-reset'}" onclick="toggleOncallEligible('${s.id}',${!s.oncall_eligible})" title="オンコール対象">${s.oncall_eligible ? 'OC有' : 'OC無'}</button>`
+      : '';
     return `
       <td>
         <div class="name-furi">${furi}</div>
@@ -848,6 +907,7 @@
       <td>${badge}</td>
       <td>
         <div class="td-btns">
+          ${ocBtn}
           <button class="btn-xs btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
           <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">リセット</button>
           <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">アーカイブ</button>
@@ -966,8 +1026,8 @@
     const initPw   = document.getElementById('newInitialPw').value.trim();
     const hireDate = document.getElementById('newHireDate').value || null;
     const oncall   = type === 'nurse' ? document.getElementById('newOncall').value : undefined;
-    const err      = document.getElementById('addErr');
-    const btn      = document.getElementById('addBtn');
+    const err     = document.getElementById('addErr');
+    const btn     = document.getElementById('addBtn');
     err.style.display = 'none';
 
     if (!name || !loginId || !initPw) {
@@ -1004,6 +1064,23 @@
   }
 
   // ── 削除 ────────────────────────────────────────────────────
+  async function toggleOncallEligible(id, val) {
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/oncall-eligible`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oncall_eligible: val }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const s = staffList.find(x => x.id === id);
+      if (s) s.oncall_eligible = data.oncall_eligible;
+      renderTable();
+      showToast(val ? 'OC対象に設定しました' : 'OC対象を解除しました');
+    } else {
+      showToast('エラー: ' + (data.error || '失敗'));
+    }
+  }
+
   function askDelete(id, name) {
     deleteTarget = id;
     document.getElementById('delMsg').textContent =
@@ -1163,14 +1240,14 @@
   }
 
   async function createNotice() {
-    const title  = document.getElementById('noticeTitle').value.trim();
-    const body   = document.getElementById('noticeBody').value.trim();
-    const source = document.getElementById('noticeSource').value;
-    const msgEl  = document.getElementById('noticeMsg');
+    const title = document.getElementById('noticeTitle').value.trim();
+    const body  = document.getElementById('noticeBody').value.trim();
+    const msgEl = document.getElementById('noticeMsg');
     if (!title || !body) {
       msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = 'タイトルと本文を入力してください';
       return;
     }
+    const source = document.getElementById('noticeSource').value;
     const res = await fetch('/api/admin/notices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1181,6 +1258,7 @@
       showToast('📢 お知らせを作成しました');
       document.getElementById('noticeTitle').value = '';
       document.getElementById('noticeBody').value  = '';
+      document.getElementById('noticeSource').value = 'admin';
       msgEl.style.display = 'none';
       loadAdminNotices();
     } else {
@@ -1214,6 +1292,7 @@
 
   function cancelEditNotice() {
     editingNoticeId = null;
+    document.getElementById('noticeSource').value = 'admin';
     document.getElementById('noticeTitle').value = '';
     document.getElementById('noticeBody').value  = '';
     const msgEl = document.getElementById('noticeMsg');
@@ -1465,11 +1544,14 @@
     const empty = document.getElementById('leavePendingEmpty');
     const wrap = document.getElementById('leavePendingTableWrap');
     spinner.style.display = ''; empty.style.display = 'none'; wrap.style.display = 'none';
+
     const res = await fetch('/api/admin/leave/requests?status=pending');
     const { requests } = await res.json();
     spinner.style.display = 'none';
+
     if (!requests.length) { empty.style.display = ''; return; }
     wrap.style.display = '';
+
     document.getElementById('leavePendingBody').innerHTML = requests.map(r => {
       const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
       const typeLabel = r.type === 'full' ? '全日' : r.type === 'half_am' ? '午前半休' : '午後半休';
@@ -1497,7 +1579,9 @@
     document.getElementById('leaveModalComment').value = '';
     document.getElementById('leaveModal').style.display = 'flex';
   }
-  function closeLeaveModal() { document.getElementById('leaveModal').style.display = 'none'; }
+  function closeLeaveModal() {
+    document.getElementById('leaveModal').style.display = 'none';
+  }
 
   async function executeLeaveAction() {
     const comment = document.getElementById('leaveModalComment').value;
@@ -1522,6 +1606,8 @@
     const empty = document.getElementById('leaveHistoryEmpty');
     const wrap = document.getElementById('leaveHistoryTableWrap');
     spinner.style.display = ''; empty.style.display = 'none'; wrap.style.display = 'none';
+
+    // スタッフドロップダウン更新
     const staffSel = document.getElementById('leaveHistoryStaff');
     if (staffSel.options.length <= 1) {
       const sRes = await fetch('/api/admin/staff');
@@ -1532,16 +1618,21 @@
         staffSel.appendChild(opt);
       });
     }
+
     let url = '/api/admin/leave/requests';
     const status = document.getElementById('leaveHistoryStatus').value;
     if (status) url += '?status=' + status;
+
     const res = await fetch(url);
     let { requests } = await res.json();
     spinner.style.display = 'none';
+
     const staffFilter = staffSel.value;
     if (staffFilter) requests = requests.filter(r => r.staffId === staffFilter);
+
     if (!requests.length) { empty.style.display = ''; return; }
     wrap.style.display = '';
+
     const statusLabels = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' };
     document.getElementById('leaveHistoryBody').innerHTML = requests.map(r => {
       const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
@@ -1562,10 +1653,12 @@
     const spinner = document.getElementById('leaveBalanceSpinner');
     const wrap = document.getElementById('leaveBalanceTableWrap');
     spinner.style.display = ''; wrap.style.display = 'none';
+
     const res = await fetch('/api/admin/leave/summary');
     const { summary } = await res.json();
     spinner.style.display = 'none';
     wrap.style.display = '';
+
     document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => `<tr>
       <td>${esc(s.name)}</td>
       <td style="font-size:12px">${s.hire_date || '未設定'}</td>
@@ -1583,19 +1676,23 @@
     leaveEditStaffId = id;
     document.getElementById('leaveEditName').textContent = name;
     document.getElementById('leaveEditHireDate').value = hireDate;
-    document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `自動計算: ${autoGrant}日` : '入社日を設定すると自動計算されます';
+    document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `労基法自動計算: ${autoGrant}日` : '入社日を設定すると自動計算されます';
     document.getElementById('leaveEditGranted').value = granted;
     document.getElementById('leaveEditCarried').value = carried;
     document.getElementById('leaveEditAdj').value = adj;
     document.getElementById('leaveEditModal').style.display = 'flex';
   }
-  function closeLeaveEditModal() { document.getElementById('leaveEditModal').style.display = 'none'; }
+  function closeLeaveEditModal() {
+    document.getElementById('leaveEditModal').style.display = 'none';
+  }
 
   async function saveLeaveEdit() {
     const hireDate = document.getElementById('leaveEditHireDate').value;
     const granted = Number(document.getElementById('leaveEditGranted').value);
     const carried = Number(document.getElementById('leaveEditCarried').value);
     const adj = Number(document.getElementById('leaveEditAdj').value);
+
+    // 入社日を保存
     if (hireDate) {
       await fetch(`/api/admin/staff/${leaveEditStaffId}/hire-date`, {
         method: 'POST',
@@ -1603,6 +1700,7 @@
         body: JSON.stringify({ hire_date: hireDate }),
       });
     }
+    // 残日数を保存
     const res = await fetch(`/api/admin/staff/${leaveEditStaffId}/leave-balance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1728,39 +1826,6 @@
 
   // ── オンコール管理 ────────────────────────────────────────────
   let oncallMonthInited = false;
-  async function loadOncallEligible() {
-    const spinner = document.getElementById('oncallEligibleSpinner');
-    const listEl = document.getElementById('oncallEligibleList');
-    spinner.style.display = '';
-    listEl.innerHTML = '';
-    try {
-      const res = await fetch('/api/admin/staff');
-      const { staff } = await res.json();
-      const nurses = staff.filter(s => s.type === 'nurse' && !s.archived);
-      spinner.style.display = 'none';
-      listEl.innerHTML = nurses.map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f4f8">
-          <span style="font-size:13px;font-weight:600">${esc(s.name)}</span>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="checkbox" ${s.oncall_eligible ? 'checked' : ''} onchange="toggleOncall('${s.id}', this.checked)"
-              style="width:18px;height:18px;accent-color:var(--blue)">
-            <span style="font-size:12px;color:var(--muted)">${s.oncall_eligible ? '対象' : '対象外'}</span>
-          </label>
-        </div>
-      `).join('');
-    } catch { spinner.style.display = 'none'; }
-  }
-  async function toggleOncall(staffId, eligible) {
-    try {
-      await fetch('/api/admin/staff/' + staffId + '/oncall', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eligible }),
-      });
-      loadOncallEligible();
-    } catch {}
-  }
-
   function initOncallMonth() {
     if (oncallMonthInited) return;
     oncallMonthInited = true;
@@ -1788,33 +1853,42 @@
         document.getElementById('oncallEmpty').style.display = '';
         return;
       }
-      document.getElementById('oncallBody').innerHTML = summary.filter(s => s.recordDays > 0).map(s => `
+      const body = document.getElementById('oncallBody');
+      body.innerHTML = summary.filter(s => s.recordDays > 0).map(s => `
         <tr>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;font-weight:600">${esc(s.name)}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalCount}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${(s.totalMinutes/60).toFixed(1)}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${oncallMinToHM(s.totalMinutes)}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalTransportCount}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.recordDays}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center;color:var(--ok);font-weight:700">${s.oncallLeaveDays || 0}日</td>
         </tr>
       `).join('');
-      const t = summary.reduce((a, s) => ({ c: a.c+s.totalCount, m: a.m+s.totalMinutes, tr: a.tr+s.totalTransportCount, d: a.d+s.recordDays, ol: a.ol+(s.oncallLeaveDays||0) }), { c:0, m:0, tr:0, d:0, ol:0 });
+      const totals = summary.reduce((a, s) => ({
+        count: a.count + s.totalCount,
+        min: a.min + s.totalMinutes,
+        trans: a.trans + s.totalTransportCount,
+        days: a.days + s.recordDays,
+      }), { count: 0, min: 0, trans: 0, days: 0 });
       document.getElementById('oncallFoot').innerHTML = `
         <tr style="background:#f0f4f8;font-weight:800">
           <td style="padding:8px 6px;border-top:2px solid var(--border)">合計</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.c}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${(t.m/60).toFixed(1)}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.tr}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${t.d}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center;color:var(--ok);font-weight:700">${t.ol}日</td>
-        </tr>`;
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.count}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${oncallMinToHM(totals.min)}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.trans}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.days}</td>
+        </tr>
+      `;
       document.getElementById('oncallSpinner').style.display = 'none';
       document.getElementById('oncallContent').style.display = '';
-    } catch {
+    } catch (e) {
       document.getElementById('oncallSpinner').style.display = 'none';
       document.getElementById('oncallEmpty').textContent = 'データの取得に失敗しました';
       document.getElementById('oncallEmpty').style.display = '';
     }
+  }
+  function oncallMinToHM(min) {
+    if (!min) return '0:00';
+    return Math.floor(min / 60) + ':' + String(min % 60).padStart(2, '0');
   }
 
   // ── 翌年スプレッドシート作成 ──────────────────────────────────
