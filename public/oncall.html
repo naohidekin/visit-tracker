@@ -40,25 +40,28 @@
       body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
       .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
     }
-    .container{padding:16px;max-width:480px;margin:0 auto}
+    .container{padding:12px;max-width:480px;margin:0 auto}
 
-    .month-selector{margin-bottom:16px}
-    .month-selector select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);outline:none}
+    .month-selector{margin-bottom:10px}
+    .month-selector select{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:#fff;color:var(--text);outline:none}
     .month-selector select:focus{border-color:var(--blue)}
 
-    .summary-card{background:linear-gradient(135deg,#2E75B6 0%,#1F497D 100%);color:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
-    .summary-title{font-size:12px;opacity:.8;margin-bottom:12px;text-align:center}
-    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .summary-item{text-align:center}
-    .summary-val{font-size:28px;font-weight:900;line-height:1}
-    .summary-unit{font-size:13px;font-weight:600;margin-left:2px}
-    .summary-label{font-size:11px;opacity:.8;margin-top:4px}
+    .summary-card{background:linear-gradient(135deg,#2E75B6 0%,#1F497D 100%);color:#fff;border-radius:var(--radius);padding:12px 16px;margin-bottom:10px;box-shadow:var(--shadow)}
+    .summary-title{font-size:11px;opacity:.8;margin-bottom:6px;text-align:center}
 
-    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
-    .card-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin-bottom:10px}
+    .card-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 
-    .form-group{margin-bottom:14px}
-    .form-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;display:block}
+    /* ── 横バーゲージ ── */
+    .gauge-wrap{position:relative}
+    .gauge-bar-track{height:28px;background:linear-gradient(90deg,#e0e6ee 0%,#d0d7e3 100%);border-radius:14px;position:relative;overflow:hidden}
+    .gauge-bar-fill{height:100%;background:linear-gradient(90deg,rgba(39,174,96,0.05),rgba(39,174,96,0.3),rgba(39,174,96,0.7),#27ae60);border-radius:14px;transition:width .5s ease;position:absolute;left:0;top:0}
+    .gauge-bike{position:absolute;top:50%;transition:left .5s ease;transform:translate(-50%,-50%);z-index:2;line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2))}
+    .gauge-bike svg{width:24px;height:24px}
+    .gauge-bar-labels{display:flex;justify-content:space-between;align-items:baseline;margin-top:5px}
+    .gauge-info-main{font-size:11px;font-weight:700;color:var(--text)}
+    .gauge-info-sub{font-size:11px;color:var(--muted)}
+
     .form-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--text);outline:none;transition:border .15s}
     .form-input:focus{border-color:var(--blue)}
 
@@ -76,8 +79,6 @@
     .btn-submit{width:100%;padding:14px;border:none;border-radius:12px;background:var(--blue);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;transition:opacity .15s}
     .btn-submit:disabled{opacity:.5;cursor:not-allowed}
     .btn-submit:active:not(:disabled){opacity:.8}
-    .editing-label{display:none;font-size:12px;color:var(--blue);font-weight:700;margin-bottom:8px;text-align:center}
-    .editing-label.show{display:block}
 
     .record-item{border-bottom:1px solid #f0f4f8;padding:12px 0;display:flex;align-items:center;justify-content:space-between}
     .record-item:last-child{border-bottom:none}
@@ -93,7 +94,7 @@
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
     .toast.show{opacity:1}
 
-    .picker-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .picker-col-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-align:center}
   </style>
 </head>
@@ -133,89 +134,70 @@
 
   <div class="summary-card" id="summaryCard" style="display:none">
     <div class="summary-title">月間オンコール実績</div>
-    <div class="summary-grid">
-      <div class="summary-item">
-        <div><span class="summary-val" id="sumCount">0</span><span class="summary-unit">件</span></div>
-        <div class="summary-label">合計件数</div>
-      </div>
-      <div class="summary-item">
-        <div><span class="summary-val" id="sumTime">0.0</span><span class="summary-unit">時間</span></div>
-        <div class="summary-label">合計時間</div>
-      </div>
-      <div class="summary-item">
-        <div><span class="summary-val" id="sumTransport">0</span><span class="summary-unit">件</span></div>
-        <div class="summary-label">交通費件数</div>
-      </div>
-      <div class="summary-item">
-        <div><span class="summary-val" id="sumDays">0</span><span class="summary-unit">日</span></div>
-        <div class="summary-label">入力日数</div>
-      </div>
+    <div style="text-align:center;margin-bottom:4px">
+      <span style="font-size:32px;font-weight:900;line-height:1" id="sumTime">0.0</span><span style="font-size:14px;font-weight:600;margin-left:3px">時間</span>
+    </div>
+    <div style="display:flex;justify-content:center;gap:20px">
+      <div style="text-align:center"><span style="font-size:13px;font-weight:700" id="sumTransport">0</span><span style="font-size:10px;opacity:.8">件</span><span style="font-size:10px;opacity:.7;margin-left:2px">交通費</span></div>
+      <div style="text-align:center"><span style="font-size:13px;font-weight:700" id="sumDays">0</span><span style="font-size:10px;opacity:.8">日</span><span style="font-size:10px;opacity:.7;margin-left:2px">入力日数</span></div>
     </div>
   </div>
 
   <div class="card" id="gaugeCard" style="display:none">
-    <div class="card-title">有給付与ゲージ</div>
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
-      <div style="position:relative;width:64px;height:64px;flex-shrink:0">
-        <svg viewBox="0 0 36 36" style="width:64px;height:64px;transform:rotate(-90deg)">
-          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e0e6ee" stroke-width="3"/>
-          <circle id="gaugeCircle" cx="18" cy="18" r="15.5" fill="none" stroke="var(--ok)" stroke-width="3" stroke-dasharray="0 97.4" stroke-linecap="round"/>
-        </svg>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800" id="gaugePct">0%</div>
+    <div class="card-title">オンコール累計時間</div>
+    <div class="gauge-wrap">
+      <div class="gauge-bar-track">
+        <div class="gauge-bar-fill" id="gaugeBar" style="width:0%"></div>
+        <div class="gauge-bike" id="gaugeBike" style="left:8%">
+          <svg viewBox="0 0 40 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- 後輪 -->
+            <circle cx="9" cy="19" r="7.5" stroke="#1F497D" stroke-width="2" fill="none"/>
+            <!-- 前輪 -->
+            <circle cx="31" cy="19" r="7.5" stroke="#1F497D" stroke-width="2" fill="none"/>
+            <!-- フレーム -->
+            <path d="M9 19 L18 7 L31 19 M18 7 L18 19 L31 19" stroke="#1F497D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <!-- ハンドル -->
+            <path d="M18 7 L28 5.5 L32 10" stroke="#1F497D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <!-- サドル -->
+            <line x1="15" y1="6.5" x2="21" y2="6.5" stroke="#1F497D" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </div>
       </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">累計 <span id="gaugeTotal">0.0</span> 時間 → <span id="gaugeDays">0</span>日 付与済</div>
-        <div style="font-size:12px;color:var(--muted)" id="gaugeNext">あと 15.0 時間で +1日</div>
+      <div class="gauge-bar-labels">
+        <span class="gauge-info-main">累計 <span id="gaugeTotal">0.0</span>h → <span id="gaugeDays">0</span>日付与</span>
+        <span class="gauge-info-sub" id="gaugeNext">あと 15.0h</span>
       </div>
     </div>
   </div>
 
   <div class="card" id="formCard" style="display:none">
     <div class="card-title">オンコール入力</div>
-    <div class="editing-label" id="editingLabel"></div>
-
-    <div class="form-group">
-      <label class="form-label">日付</label>
-      <input type="date" class="form-input" id="inputDate" onchange="onDateChange()">
+    <div style="margin-bottom:8px">
+      <input type="date" class="form-input" id="inputDate" style="padding:8px 12px;font-size:14px" onchange="onDateChange()">
     </div>
-
     <div class="picker-grid">
-      <!-- 件数 -->
-      <div>
-        <div class="picker-col-label">件数</div>
-        <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="countBtn" onclick="togglePicker('count')">
-            <span id="countDisplay" class="val-empty">0</span>
-            <span class="chevron">▼</span>
-          </button>
-          <div class="picker-dropdown" id="countList" style="display:none"></div>
-        </div>
-      </div>
-      <!-- 合計時間 -->
       <div>
         <div class="picker-col-label">合計時間</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="timeBtn" onclick="togglePicker('time')">
-            <span id="timeDisplay" class="val-empty">0.0</span>
+          <button type="button" class="picker-btn" id="timeBtn" style="padding:10px 12px;font-size:16px" onclick="togglePicker('time')">
+            <span><span id="timeDisplay" class="val-empty">0.0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">時間</span></span>
             <span class="chevron">▼</span>
           </button>
           <div class="picker-dropdown" id="timeList" style="display:none"></div>
         </div>
       </div>
-      <!-- 交通費 -->
       <div>
         <div class="picker-col-label">交通費</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="transportBtn" onclick="togglePicker('transport')">
-            <span id="transportDisplay" class="val-empty">0</span>
+          <button type="button" class="picker-btn" id="transportBtn" style="padding:10px 12px;font-size:16px" onclick="togglePicker('transport')">
+            <span><span id="transportDisplay" class="val-empty">0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">件</span></span>
             <span class="chevron">▼</span>
           </button>
           <div class="picker-dropdown" id="transportList" style="display:none"></div>
         </div>
       </div>
     </div>
-
-    <button class="btn-submit" id="submitBtn" onclick="submitRecord()" style="margin-top:16px">保存する</button>
+    <button class="btn-submit" id="submitBtn" onclick="submitRecord()" style="margin-top:10px;padding:12px">登録する</button>
   </div>
 
   <div class="card" id="historyCard" style="display:none">
@@ -233,12 +215,9 @@
   let allRecords = [];
 
   // 選択値
-  const pv = { count: 0, time: 0, transport: 0 };
+  const pv = { time: 0, transport: 0 };
 
   // オプション生成
-  const COUNT_OPTS = [];
-  for (let i = 0; i <= 10; i++) COUNT_OPTS.push(i);
-
   const TIME_OPTS = [];
   for (let v = 0; v <= 10.0 + 0.001; v += 0.5) TIME_OPTS.push(Math.round(v * 10) / 10);
 
@@ -286,7 +265,6 @@
     const summary = sumData.summary;
     allRecords = records;
 
-    document.getElementById('sumCount').textContent = summary.totalCount;
     document.getElementById('sumTime').textContent = (summary.totalMinutes / 60).toFixed(1);
     document.getElementById('sumTransport').textContent = summary.totalTransportCount;
     document.getElementById('sumDays').textContent = summary.recordDays;
@@ -311,7 +289,7 @@
         <div class="record-item">
           <div>
             <div class="record-date">${dateLabel}</div>
-            <div class="record-detail">${r.count}件 / ${hours}時間 / 交通費${r.transportCount}件</div>
+            <div class="record-detail">${hours}時間 / 交通費${r.transportCount}件</div>
           </div>
           <div class="record-actions">
             <button class="btn-edit" onclick="editRecord('${r.date}')">編集</button>
@@ -323,7 +301,7 @@
 
   // ── ピッカー ──
   function closeAllPickers() {
-    ['count', 'time', 'transport'].forEach(name => {
+    ['time', 'transport'].forEach(name => {
       document.getElementById(name + 'List').style.display = 'none';
       document.getElementById(name + 'Btn').classList.remove('open');
     });
@@ -343,15 +321,13 @@
 
   function buildList(name) {
     const list = document.getElementById(name + 'List');
-    const opts = name === 'count' ? COUNT_OPTS : name === 'time' ? TIME_OPTS : TRANSPORT_OPTS;
+    const opts = name === 'time' ? TIME_OPTS : TRANSPORT_OPTS;
     list.innerHTML = '';
     for (const opt of opts) {
       const item = document.createElement('div');
       item.className = 'picker-item' + (pv[name] === opt ? ' selected' : '');
       if (name === 'time') {
         item.textContent = opt.toFixed(1) + '　時間';
-      } else if (name === 'count') {
-        item.textContent = opt + '　件';
       } else {
         item.textContent = opt + '　件';
       }
@@ -377,19 +353,12 @@
   function onDateChange() {
     const date = document.getElementById('inputDate').value;
     const existing = allRecords.find(r => r.date === date);
-    const label = document.getElementById('editingLabel');
     if (existing) {
-      pv.count = existing.count || 0;
       pv.time = (existing.totalMinutes || 0) / 60;
       pv.transport = existing.transportCount || 0;
-      const d = new Date(date + 'T00:00:00');
-      label.textContent = `${d.getMonth()+1}/${d.getDate()}のデータを編集中`;
-      label.classList.add('show');
     } else {
-      pv.count = 0; pv.time = 0; pv.transport = 0;
-      label.classList.remove('show');
+      pv.time = 0; pv.transport = 0;
     }
-    document.getElementById('countDisplay').textContent = pv.count;
     document.getElementById('timeDisplay').textContent = pv.time.toFixed(1);
     document.getElementById('transportDisplay').textContent = pv.transport;
   }
@@ -414,7 +383,7 @@
   async function submitRecord() {
     const date = document.getElementById('inputDate').value;
     if (!date) { showToast('日付を選択してください'); return; }
-    if (pv.count === 0 && pv.time === 0 && pv.transport === 0) {
+    if (pv.time === 0 && pv.transport === 0) {
       showToast('いずれかの値を入力してください');
       return;
     }
@@ -424,11 +393,11 @@
       const res = await fetch('/api/oncall/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, count: pv.count, totalHours: pv.time, transportCount: pv.transport }),
+        body: JSON.stringify({ date, count: 0, totalHours: pv.time, transportCount: pv.transport }),
       });
       const data = await res.json();
       if (!res.ok) { showToast(data.error || 'エラー'); return; }
-      showToast('保存しました');
+      showToast('登録しました');
       await loadData();
     } catch { showToast('エラーが発生しました'); }
     finally { btn.disabled = false; }
@@ -438,14 +407,12 @@
     const totalHours = allMinutes / 60;
     const currentBandMinutes = allMinutes - days * 900;
     const pct = Math.min(100, Math.round(currentBandMinutes / 900 * 100));
-    const circumference = 2 * Math.PI * 15.5;
-    const dashLen = circumference * pct / 100;
-    document.getElementById('gaugeCircle').setAttribute('stroke-dasharray', `${dashLen} ${circumference}`);
-    document.getElementById('gaugePct').textContent = pct + '%';
+    document.getElementById('gaugeBar').style.width = pct + '%';
+    document.getElementById('gaugeBike').style.left = Math.max(8, pct) + '%';
     document.getElementById('gaugeTotal').textContent = totalHours.toFixed(1);
     document.getElementById('gaugeDays').textContent = days;
     const remaining = ((nextThreshold - allMinutes) / 60).toFixed(1);
-    document.getElementById('gaugeNext').textContent = `あと ${remaining} 時間で +1日`;
+    document.getElementById('gaugeNext').textContent = `あと ${remaining}hで+1日`;
   }
 
   function showToast(msg) {
