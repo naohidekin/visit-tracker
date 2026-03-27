@@ -115,8 +115,6 @@
     <div class="menu-drawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/leave">有給管理</a>
-      <a href="/oncall">オンコール</a>
       <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
@@ -151,6 +149,23 @@
       <div class="summary-item">
         <div><span class="summary-val" id="sumDays">0</span><span class="summary-unit">日</span></div>
         <div class="summary-label">入力日数</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="gaugeCard" style="display:none">
+    <div class="card-title">有給付与ゲージ</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div style="position:relative;width:64px;height:64px;flex-shrink:0">
+        <svg viewBox="0 0 36 36" style="width:64px;height:64px;transform:rotate(-90deg)">
+          <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e0e6ee" stroke-width="3"/>
+          <circle id="gaugeCircle" cx="18" cy="18" r="15.5" fill="none" stroke="var(--ok)" stroke-width="3" stroke-dasharray="0 97.4" stroke-linecap="round"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800" id="gaugePct">0%</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">累計 <span id="gaugeTotal">0.0</span> 時間 → <span id="gaugeDays">0</span>日 付与済</div>
+        <div style="font-size:12px;color:var(--muted)" id="gaugeNext">あと 15.0 時間で +1日</div>
       </div>
     </div>
   </div>
@@ -253,6 +268,7 @@
     document.getElementById('spinner').style.display = 'none';
     document.getElementById('monthSelector').style.display = '';
     document.getElementById('summaryCard').style.display = '';
+    document.getElementById('gaugeCard').style.display = '';
     document.getElementById('formCard').style.display = '';
     document.getElementById('historyCard').style.display = '';
 
@@ -266,13 +282,17 @@
       fetch('/api/oncall/monthly-summary?month=' + month),
     ]);
     const { records } = await recRes.json();
-    const { summary } = await sumRes.json();
+    const sumData = await sumRes.json();
+    const summary = sumData.summary;
     allRecords = records;
 
     document.getElementById('sumCount').textContent = summary.totalCount;
     document.getElementById('sumTime').textContent = (summary.totalMinutes / 60).toFixed(1);
     document.getElementById('sumTransport').textContent = summary.totalTransportCount;
     document.getElementById('sumDays').textContent = summary.recordDays;
+
+    // ゲージ更新
+    updateGauge(sumData.allTimeTotalMinutes || 0, sumData.oncallLeaveDays || 0, sumData.nextThresholdMinutes || 900);
 
     renderRecords(records);
     onDateChange();
@@ -412,6 +432,20 @@
       await loadData();
     } catch { showToast('エラーが発生しました'); }
     finally { btn.disabled = false; }
+  }
+
+  function updateGauge(allMinutes, days, nextThreshold) {
+    const totalHours = allMinutes / 60;
+    const currentBandMinutes = allMinutes - days * 900;
+    const pct = Math.min(100, Math.round(currentBandMinutes / 900 * 100));
+    const circumference = 2 * Math.PI * 15.5;
+    const dashLen = circumference * pct / 100;
+    document.getElementById('gaugeCircle').setAttribute('stroke-dasharray', `${dashLen} ${circumference}`);
+    document.getElementById('gaugePct').textContent = pct + '%';
+    document.getElementById('gaugeTotal').textContent = totalHours.toFixed(1);
+    document.getElementById('gaugeDays').textContent = days;
+    const remaining = ((nextThreshold - allMinutes) / 60).toFixed(1);
+    document.getElementById('gaugeNext').textContent = `あと ${remaining} 時間で +1日`;
   }
 
   function showToast(msg) {
