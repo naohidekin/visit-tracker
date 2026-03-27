@@ -263,7 +263,8 @@ function calcLeaveBalance(staff) {
   const granted = staff.leave_granted || 0;
   const carriedOver = staff.leave_carried_over || 0;
   const manualAdj = staff.leave_manual_adjustment || 0;
-  return granted + carriedOver + manualAdj - usedDays;
+  const oncallLeave = staff.oncall_leave_granted || 0;
+  return granted + carriedOver + manualAdj + oncallLeave - usedDays;
 }
 
 function loadExcelResults() {
@@ -366,6 +367,8 @@ function ensureLeaveFields() {
     if (s.leave_manual_adjustment === undefined){ s.leave_manual_adjustment = 0;   changed = true; }
     // leave_balance は廃止（都度計算する）
     if (s.leave_balance !== undefined)          { delete s.leave_balance;          changed = true; }
+    if (s.oncall_eligible === undefined)        { s.oncall_eligible = false;       changed = true; }
+    if (s.oncall_leave_granted === undefined)   { s.oncall_leave_granted = 0;      changed = true; }
   }
   if (changed) { saveStaff(data); console.log('✅ 有給フィールドを初期化しました'); }
 }
@@ -541,7 +544,10 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', (req, res) => {
   if (!req.session.staffId) return res.status(401).json({ error: '未ログイン' });
-  res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType });
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  const oncall_eligible = staff ? !!staff.oncall_eligible : false;
+  res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType, oncall_eligible });
 });
 
 // ─── API: WebAuthn (FaceID/TouchID) ─────────────────────────────
@@ -2051,12 +2057,28 @@ app.get('/api/oncall/records', requireStaff, (req, res) => {
   res.json({ records });
 });
 
+// オンコール累計時間から有給付与日数を再計算し、staff.jsonを更新
+function updateOncallLeave(staffId) {
+  const data = loadOncall();
+  const allRecords = data.records.filter(r => r.staffId === staffId);
+  const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
+  const days = Math.floor(totalMinutes / 900); // 900分 = 15時間
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === staffId);
+  if (staff && staff.oncall_leave_granted !== days) {
+    staff.oncall_leave_granted = days;
+    saveStaff(staffData);
+  }
+  return { totalMinutes, days };
+}
+
 app.post('/api/oncall/records', requireStaff, (req, res) => {
-  const { date, count, totalMinutes, transportCount } = req.body;
+  const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
   const c = Number(count) || 0;
-  const tm = Number(totalMinutes) || 0;
+  // totalHours（フロントエンド）→ totalMinutes に変換。totalMinutes直接指定も後方互換で対応
+  const tm = totalHours != null ? Math.round(Number(totalHours) * 60) : (Number(totalMinutes) || 0);
   const tc = Number(transportCount) || 0;
   if (c < 0 || tm < 0 || tc < 0)
     return res.status(400).json({ error: '値は0以上で入力してください' });
@@ -2083,6 +2105,10 @@ app.post('/api/oncall/records', requireStaff, (req, res) => {
     });
   }
   saveOncall(data);
+
+  // オンコール有給を自動再計算
+  updateOncallLeave(req.session.staffId);
+
   res.json({ ok: true });
 });
 
@@ -2101,14 +2127,28 @@ app.get('/api/oncall/monthly-summary', requireStaff, (req, res) => {
   const month = req.query.month;
   if (!month) return res.status(400).json({ error: 'month パラメータが必要です' });
   const data = loadOncall();
-  const records = data.records.filter(r => r.staffId === req.session.staffId && r.date.startsWith(month));
+  const myRecords = data.records.filter(r => r.staffId === req.session.staffId);
+  const monthRecords = myRecords.filter(r => r.date.startsWith(month));
+
+  // 月次サマリー
   const summary = {
-    totalCount: records.reduce((s, r) => s + (r.count || 0), 0),
-    totalMinutes: records.reduce((s, r) => s + (r.totalMinutes || 0), 0),
-    totalTransportCount: records.reduce((s, r) => s + (r.transportCount || 0), 0),
-    recordDays: records.length,
+    totalCount: monthRecords.reduce((s, r) => s + (r.count || 0), 0),
+    totalMinutes: monthRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0),
+    totalTransportCount: monthRecords.reduce((s, r) => s + (r.transportCount || 0), 0),
+    recordDays: monthRecords.length,
   };
-  res.json({ summary });
+
+  // 全期間通算（ゲージ用）
+  const allTimeTotalMinutes = myRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
+  const oncallLeaveDays = Math.floor(allTimeTotalMinutes / 900);
+  const nextThresholdMinutes = (oncallLeaveDays + 1) * 900;
+
+  res.json({
+    summary,
+    allTimeTotalMinutes,
+    oncallLeaveDays,
+    nextThresholdMinutes,
+  });
 });
 
 // ─── API: オンコール（管理者向け） ───────────────────────────────
@@ -2143,6 +2183,15 @@ app.get('/api/admin/oncall/records', requireAdmin, (req, res) => {
   if (staffId) records = records.filter(r => r.staffId === staffId);
   records.sort((a, b) => a.date.localeCompare(b.date));
   res.json({ records });
+});
+
+app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, (req, res) => {
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  staff.oncall_eligible = !!req.body.oncall_eligible;
+  saveStaff(staffData);
+  res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
 });
 
 // ─── API: 有給休暇（管理者向け） ───────────────────────────────

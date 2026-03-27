@@ -98,6 +98,15 @@
     .card-body{overflow:hidden;max-height:0;transition:max-height .35s ease}
     .card-body.open{max-height:9999px}
     .card-body > *:first-child{margin-top:14px}
+    /* ── カテゴリセクション ── */
+    .category-section{margin-bottom:20px}
+    .category-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:10px 14px;background:#e8ecf2;border-radius:10px;margin-bottom:10px;user-select:none}
+    .category-header.no-toggle{cursor:default}
+    .category-title{font-size:13px;font-weight:800;color:var(--blue-dark);letter-spacing:.03em}
+    .category-icon{font-size:12px;color:var(--muted);flex-shrink:0;margin-left:8px}
+    .category-body{overflow:hidden;transition:max-height .35s ease}
+    .category-body.collapsed{max-height:0!important}
+    .category-body.open{max-height:none}
     /* ── ローディング ── */
     .spinner{text-align:center;padding:14px;color:var(--muted);font-size:12px;display:none}
     /* ── 自動生成ラベル ── */
@@ -171,52 +180,109 @@
 <!-- メインコンテンツ -->
 <div id="mainContent" class="container">
 
-  <!-- 未確定の予定一覧 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📋 未確定の予定一覧</h2>
-      <span class="acc-icon">▼</span>
+  <!-- ═══ 日常業務 ═══ -->
+  <div class="category-section">
+    <div class="category-header no-toggle">
+      <span class="category-title">日常業務</span>
     </div>
-    <div class="card-body">
-      <div class="spinner" id="schedulesSpinner">読み込み中...</div>
-      <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
-      <div class="table-wrap" id="schedulesTableWrap" style="display:none">
-        <table>
-          <thead>
-            <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
-          </thead>
-          <tbody id="schedulesBody"></tbody>
-        </table>
+    <div class="category-body open">
+
+      <!-- 未確定の予定一覧 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>📋 未確定の予定一覧</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="spinner" id="schedulesSpinner">読み込み中...</div>
+          <div id="schedulesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">現在予定はありません</div>
+          <div class="table-wrap" id="schedulesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr><th>スタッフ</th><th>日付</th><th>職種</th><th>入力値</th><th>登録日時</th><th>操作</th></tr>
+              </thead>
+              <tbody id="schedulesBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
+
+      <!-- スタッフ一覧 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>👥 スタッフ一覧</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div class="spinner" id="tableSpinner">読み込み中...</div>
+          <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 アーカイブ済みを表示</button>
+          <div class="table-wrap">
+            <table class="staff-table">
+              <colgroup>
+                <col class="col-name"><col class="col-type"><col class="col-btns">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>名前</th><th>職種</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="staffBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- お知らせ管理 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>📢 お知らせ管理</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div style="margin-bottom:14px">
+            <div class="field">
+              <label>発信元</label>
+              <select id="noticeSource" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
+                <option value="admin">管理者</option>
+                <option value="system">運営</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>タイトル</label>
+              <input id="noticeTitle" placeholder="お知らせのタイトル">
+            </div>
+            <div class="field">
+              <label>本文</label>
+              <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
+            </div>
+            <div id="noticeMsg" class="msg"></div>
+            <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
+          </div>
+          <div class="spinner" id="noticesSpinner">読み込み中...</div>
+          <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
+          <div class="table-wrap" id="noticesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
+              </thead>
+              <tbody id="noticesBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- スタッフ一覧 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>👥 スタッフ一覧</h2>
-      <span class="acc-icon">▼</span>
+  <!-- ═══ 月次業務 ═══ -->
+  <div class="category-section">
+    <div class="category-header" onclick="toggleCategory(this)">
+      <span class="category-title">月次業務</span>
+      <span class="category-icon">▼</span>
     </div>
-    <div class="card-body">
-      <div class="spinner" id="tableSpinner">読み込み中...</div>
-      <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 アーカイブ済みを表示</button>
-      <div class="table-wrap">
-        <table class="staff-table">
-          <colgroup>
-            <col class="col-name"><col class="col-type"><col class="col-btns">
-          </colgroup>
-          <thead>
-            <tr>
-              <th>名前</th><th>職種</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="staffBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+    <div class="category-body collapsed">
 
-  <!-- スタッフ月次実績 -->
+      <!-- スタッフ月次実績 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
       <h2>📊 スタッフ月次実績</h2>
@@ -377,45 +443,6 @@
     </div>
   </div>
 
-  <!-- お知らせ管理 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>📢 お知らせ管理</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <div style="margin-bottom:14px">
-        <div class="field">
-          <label>発信元</label>
-          <select id="noticeSource" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
-            <option value="admin">管理者</option>
-            <option value="system">運営</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>タイトル</label>
-          <input id="noticeTitle" placeholder="お知らせのタイトル">
-        </div>
-        <div class="field">
-          <label>本文</label>
-          <textarea id="noticeBody" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;color:var(--text);resize:vertical" placeholder="お知らせの内容"></textarea>
-        </div>
-        <div id="noticeMsg" class="msg"></div>
-        <button class="btn btn-blue btn-full" onclick="createNotice()">新規作成</button>
-      </div>
-      <div class="spinner" id="noticesSpinner">読み込み中...</div>
-      <div id="noticesEmpty" style="display:none;color:var(--muted);font-size:13px;padding:4px 0">お知らせはありません</div>
-      <div class="table-wrap" id="noticesTableWrap" style="display:none">
-        <table>
-          <thead>
-            <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
-          </thead>
-          <tbody id="noticesBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <!-- 有給休暇管理 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -528,39 +555,6 @@
     </div>
   </div>
 
-  <!-- インセンティブ設定 -->
-  <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
-      <h2>💰 インセンティブ設定</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <div id="incentiveSpinner" class="spinner">読み込み中...</div>
-
-      <!-- デフォルト設定 -->
-      <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
-        <p class="section-sub">デフォルト設定</p>
-        <div class="form-grid">
-          <div class="field">
-            <label>看護師デフォルト（時間/日）</label>
-            <select id="defaultNurse"></select>
-          </div>
-          <div class="field">
-            <label>リハデフォルト（単位/日）</label>
-            <select id="defaultRehab"></select>
-          </div>
-        </div>
-        <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
-      </div>
-
-      <!-- スタッフ個別設定 -->
-      <div id="incentiveStaffSection" style="display:none">
-        <p class="section-sub">スタッフ個別設定</p>
-        <div class="iline-list" id="incentiveBody"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- オンコール管理 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
@@ -591,7 +585,51 @@
     </div>
   </div>
 
-  <!-- スタッフ追加 -->
+    </div>
+  </div>
+
+  <!-- ═══ 設定・マスタ ═══ -->
+  <div class="category-section">
+    <div class="category-header" onclick="toggleCategory(this)">
+      <span class="category-title">設定・マスタ</span>
+      <span class="category-icon">▼</span>
+    </div>
+    <div class="category-body collapsed">
+
+      <!-- インセンティブ設定 -->
+      <div class="card">
+        <div class="card-header" onclick="toggleAccordion(this)">
+          <h2>💰 インセンティブ設定</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <div id="incentiveSpinner" class="spinner">読み込み中...</div>
+
+          <!-- デフォルト設定 -->
+          <div id="incentiveDefaultSection" style="display:none;margin-bottom:20px">
+            <p class="section-sub">デフォルト設定</p>
+            <div class="form-grid">
+              <div class="field">
+                <label>看護師デフォルト（時間/日）</label>
+                <select id="defaultNurse"></select>
+              </div>
+              <div class="field">
+                <label>リハデフォルト（単位/日）</label>
+                <select id="defaultRehab"></select>
+              </div>
+            </div>
+            <button class="btn btn-blue" onclick="saveDefaults()">デフォルトを保存</button>
+          </div>
+
+          <!-- スタッフ個別設定 -->
+          <div id="incentiveStaffSection" style="display:none">
+            <p class="section-sub">スタッフ個別設定</p>
+            <div class="iline-list" id="incentiveBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- スタッフ追加 -->
   <div class="card">
     <div class="card-header" onclick="toggleAccordion(this)">
       <h2>➕ スタッフ追加</h2>
@@ -667,6 +705,9 @@
     </div>
   </div>
 
+    </div>
+  </div>
+
 </div>
 
 <!-- 削除確認モーダル -->
@@ -698,6 +739,21 @@
 <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
 
 <script>
+  // ── カテゴリ折りたたみ ──────────────────────────────────────
+  function toggleCategory(header) {
+    const body = header.nextElementSibling;
+    const icon = header.querySelector('.category-icon');
+    if (body.classList.contains('collapsed')) {
+      body.classList.remove('collapsed');
+      body.classList.add('open');
+      if (icon) icon.textContent = '▲';
+    } else {
+      body.classList.remove('open');
+      body.classList.add('collapsed');
+      if (icon) icon.textContent = '▼';
+    }
+  }
+
   // ── アコーディオン ──────────────────────────────────────────
   function toggleAccordion(header) {
     const body = header.nextElementSibling;
@@ -840,6 +896,9 @@
           </div>
         </td>`;
     }
+    const ocBtn = s.type === 'nurse'
+      ? `<button class="btn-xs ${s.oncall_eligible ? 'btn-green' : 'btn-reset'}" onclick="toggleOncallEligible('${s.id}',${!s.oncall_eligible})" title="オンコール対象">${s.oncall_eligible ? 'OC有' : 'OC無'}</button>`
+      : '';
     return `
       <td>
         <div class="name-furi">${furi}</div>
@@ -848,6 +907,7 @@
       <td>${badge}</td>
       <td>
         <div class="td-btns">
+          ${ocBtn}
           <button class="btn-xs btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
           <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">リセット</button>
           <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">アーカイブ</button>
@@ -1004,6 +1064,23 @@
   }
 
   // ── 削除 ────────────────────────────────────────────────────
+  async function toggleOncallEligible(id, val) {
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/oncall-eligible`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oncall_eligible: val }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const s = staffList.find(x => x.id === id);
+      if (s) s.oncall_eligible = data.oncall_eligible;
+      renderTable();
+      showToast(val ? 'OC対象に設定しました' : 'OC対象を解除しました');
+    } else {
+      showToast('エラー: ' + (data.error || '失敗'));
+    }
+  }
+
   function askDelete(id, name) {
     deleteTarget = id;
     document.getElementById('delMsg').textContent =
