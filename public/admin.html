@@ -1857,10 +1857,10 @@
       body.innerHTML = summary.filter(s => s.recordDays > 0).map(s => `
         <tr>
           <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;font-weight:600">${esc(s.name)}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalCount}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${oncallMinToHM(s.totalMinutes)}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalTransportCount}</td>
-          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.recordDays}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalCount}件</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${(s.totalMinutes/60).toFixed(1)}h</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.totalTransportCount}件</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${s.recordDays}日</td>
         </tr>
       `).join('');
       const totals = summary.reduce((a, s) => ({
@@ -1872,10 +1872,10 @@
       document.getElementById('oncallFoot').innerHTML = `
         <tr style="background:#f0f4f8;font-weight:800">
           <td style="padding:8px 6px;border-top:2px solid var(--border)">合計</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.count}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${oncallMinToHM(totals.min)}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.trans}</td>
-          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.days}</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.count}件</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${(totals.min/60).toFixed(1)}h</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.trans}件</td>
+          <td style="padding:8px 6px;border-top:2px solid var(--border);text-align:center">${totals.days}日</td>
         </tr>
       `;
       document.getElementById('oncallSpinner').style.display = 'none';
