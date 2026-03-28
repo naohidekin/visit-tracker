@@ -47,9 +47,16 @@
     .balance-number{font-size:48px;font-weight:900;line-height:1}
     .balance-unit{font-size:16px;font-weight:600;margin-left:4px}
     .balance-label{font-size:12px;opacity:.8;margin-bottom:8px}
-    .balance-detail{display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:11px;opacity:.85}
-    .balance-detail-item{display:flex;flex-direction:column;align-items:center;gap:2px}
-    .balance-detail-val{font-size:16px;font-weight:700}
+    .balance-calc{background:rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;margin-top:14px}
+    .balance-calc-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px}
+    .balance-calc-row:not(:last-child){border-bottom:1px solid rgba(255,255,255,.08)}
+    .balance-calc-left{display:flex;align-items:center;gap:6px}
+    .balance-calc-op{width:18px;text-align:center;font-size:12px;font-weight:700;opacity:.6}
+    .balance-calc-label{font-weight:600}
+    .balance-calc-val{font-size:14px;font-weight:800}
+    .balance-calc-total{border-top:1.5px solid rgba(255,255,255,.3);padding-top:7px;margin-top:3px}
+    .balance-carry-note{background:rgba(255,200,50,.18);border:1px solid rgba(255,200,50,.35);border-radius:8px;padding:8px 12px;margin-top:10px;font-size:11px;display:none;align-items:center;gap:6px}
+    .balance-carry-note .carry-date{font-weight:800}
 
     /* ── カード共通 ── */
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
@@ -140,12 +147,14 @@
   <div class="balance-card" id="balanceCard" style="display:none">
     <div class="balance-label">有給残日数</div>
     <div><span class="balance-number" id="balanceNum">-</span><span class="balance-unit">日</span></div>
-    <div class="balance-detail">
-      <div class="balance-detail-item"><span>付与</span><span class="balance-detail-val" id="balGranted">-</span></div>
-      <div class="balance-detail-item"><span>繰越</span><span class="balance-detail-val" id="balCarried">-</span></div>
-      <div class="balance-detail-item"><span>調整</span><span class="balance-detail-val" id="balAdj">-</span></div>
-      <div class="balance-detail-item"><span>使用済</span><span class="balance-detail-val" id="balUsed">-</span></div>
+    <div class="balance-calc">
+      <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op"></span><span class="balance-calc-label">年間付与</span></div><span class="balance-calc-val" id="balGranted">-</span></div>
+      <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">前年繰越</span></div><span class="balance-calc-val" id="balCarried">-</span></div>
+      <div class="balance-calc-row" id="balOcRow" style="display:none"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">累積OC付与</span></div><span class="balance-calc-val" id="balOc">-</span></div>
+      <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">-</span><span class="balance-calc-label">使用済</span></div><span class="balance-calc-val" id="balUsed">-</span></div>
+      <div class="balance-calc-row balance-calc-total"><div class="balance-calc-left"><span class="balance-calc-op">=</span><span class="balance-calc-label">残日数</span></div><span class="balance-calc-val" id="balTotal">-</span></div>
     </div>
+    <div class="balance-carry-note" id="carryNote"><span>⏳</span><span>前年繰越 <span id="carryDays">-</span>日 は <span class="carry-date" id="carryExpiry">-</span> に期限切れ</span></div>
   </div>
 
   <!-- 付与情報カード -->
@@ -238,8 +247,24 @@
     document.getElementById('balanceNum').textContent = data.balance;
     document.getElementById('balGranted').textContent = data.granted + '日';
     document.getElementById('balCarried').textContent = data.carried_over + '日';
-    document.getElementById('balAdj').textContent = (data.manual_adjustment >= 0 ? '+' : '') + data.manual_adjustment + '日';
+    const oncall = data.oncall_leave || 0;
+    if (oncall > 0) {
+      document.getElementById('balOcRow').style.display = '';
+      document.getElementById('balOc').textContent = oncall + '日';
+    }
     document.getElementById('balUsed').textContent = data.used + '日';
+    document.getElementById('balTotal').textContent = data.balance + '日';
+
+    // 繰越期限表示
+    if (data.carried_over > 0 && data.grant_date) {
+      const gd = new Date(data.grant_date);
+      gd.setFullYear(gd.getFullYear() + 1);
+      gd.setDate(gd.getDate() - 1);
+      const expiryStr = gd.getFullYear() + '年' + (gd.getMonth()+1) + '月' + gd.getDate() + '日';
+      document.getElementById('carryDays').textContent = data.carried_over;
+      document.getElementById('carryExpiry').textContent = expiryStr;
+      document.getElementById('carryNote').style.display = 'flex';
+    }
 
     // 付与情報カード
     if (data.hire_date) {

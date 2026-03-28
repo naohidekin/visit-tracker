@@ -1939,7 +1939,8 @@ app.get('/api/leave/balance', requireStaff, (req, res) => {
   const granted     = staff.leave_granted || 0;
   const carriedOver = staff.leave_carried_over || 0;
   const manualAdj   = staff.leave_manual_adjustment || 0;
-  const balance     = granted + carriedOver + manualAdj - usedDays;
+  const oncallLeave = staff.oncall_leave_granted || 0;
+  const balance     = calcLeaveBalance(staff);
   const autoGrantDays = calcLeaveGrantDays(staff.hire_date);
 
   const nextGrant = calcNextGrant(staff.hire_date);
@@ -1949,6 +1950,7 @@ app.get('/api/leave/balance', requireStaff, (req, res) => {
     granted,
     carried_over: carriedOver,
     manual_adjustment: manualAdj,
+    oncall_leave: oncallLeave,
     used: usedDays,
     hire_date: staff.hire_date,
     auto_grant_days: autoGrantDays,
