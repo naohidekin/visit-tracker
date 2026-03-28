@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>管理者マニュアル | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --radius:12px;--shadow:0 2px 12px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    header{background:var(--blue-dark);color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+    .header-brand{display:flex;align-items:center;gap:10px}
+    .header-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0}
+    .header-titles{display:flex;flex-direction:column;gap:1px}
+    header h1{font-size:15px;font-weight:700;line-height:1.2}
+    .header-sub{font-size:10px;opacity:.7;letter-spacing:.03em}
+    .header-btns{display:flex;gap:8px;align-items:center}
+    .header-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}
+    .header-btn:hover{background:rgba(255,255,255,.1)}
+    .container{padding:16px;max-width:900px;margin:0 auto}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
+    .card-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding-bottom:8px;border-bottom:2px solid #e8edf5;margin-bottom:0;user-select:none}
+    .card-header h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin:0;padding:0;border:none}
+    .acc-icon{font-size:13px;color:var(--muted);flex-shrink:0;margin-left:8px;transition:transform .25s}
+    .card-body{overflow:hidden;max-height:0;transition:max-height .35s ease}
+    .card-body.open{max-height:9999px}
+    .card-body>*:first-child{margin-top:14px}
+    .section-title{font-size:13px;font-weight:800;color:var(--blue-dark);margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
+    .section-title:first-child{margin-top:0}
+    .manual-text{font-size:13px;line-height:1.8;color:var(--text);margin-bottom:10px}
+    .manual-text strong{font-weight:700;color:var(--blue-dark)}
+    .steps{margin:8px 0 14px 0;padding:0;list-style:none;counter-reset:step}
+    .steps li{font-size:13px;line-height:1.8;padding:4px 0 4px 28px;position:relative;counter-increment:step}
+    .steps li::before{content:counter(step);position:absolute;left:0;top:4px;width:20px;height:20px;background:var(--blue);color:#fff;border-radius:50%;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+    ul.plain{margin:6px 0 14px 18px;padding:0}
+    ul.plain li{font-size:13px;line-height:1.8;list-style:disc}
+    .note{background:#fef9e7;border-left:3px solid #e8a020;border-radius:6px;padding:10px 14px;font-size:12px;line-height:1.7;color:#6b5a00;margin:10px 0 14px}
+    .note strong{color:#8a6d00}
+    .important{background:#fee2e2;border-left:3px solid #c0392b;border-radius:6px;padding:10px 14px;font-size:12px;line-height:1.7;color:#7f1d1d;margin:10px 0 14px}
+    .important strong{color:#991b1b}
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:10px 0 14px}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:300px}
+    th{background:var(--blue-dark);color:#fff;padding:8px 10px;text-align:left;font-size:12px;white-space:nowrap}
+    td{padding:8px 10px;border-bottom:1px solid #eef0f4;vertical-align:middle;font-size:13px}
+    tr:last-child td{border-bottom:none}
+    .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <img src="/logo.png" class="header-logo" alt="にこっと">
+    <div class="header-titles">
+      <h1>管理者マニュアル</h1>
+      <span class="header-sub">for にこっと訪問看護ステーション</span>
+    </div>
+  </div>
+  <div class="header-btns">
+    <a href="/admin" class="header-btn">← 管理画面</a>
+    <button class="header-btn" onclick="adminLogout()">ログアウト</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ログイン・ログアウト -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>🔐 ログイン・ログアウト</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div class="section-title">ログイン手順</div>
+      <ol class="steps">
+        <li><code>/admin</code> にアクセス</li>
+        <li>パスワードを入力</li>
+        <li>ログインボタンをクリック</li>
+        <li>メイン画面が表示される</li>
+      </ol>
+      <div class="note"><strong>注意:</strong> パスワードがわからない場合はシステム管理者に問い合わせてください。</div>
+
+      <div class="section-title">ログアウト</div>
+      <p class="manual-text">画面右上の「ログアウト」ボタンをクリックします。</p>
+
+      <div class="section-title">セッションについて</div>
+      <ul class="plain">
+        <li>セッションは <strong>7日間</strong> 有効です。</li>
+        <li>ブラウザを閉じても維持されます。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- スタッフ管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>👥 スタッフ管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 日常業務 &gt; スタッフ一覧</p>
+
+      <div class="section-title">一覧表示</div>
+      <ul class="plain">
+        <li>ふりがな順に並んでいます。</li>
+        <li>名前・職種・ログインIDが表示されます。</li>
+        <li>「アーカイブ済みも表示」で退職者の表示を切り替えられます。</li>
+      </ul>
+
+      <div class="section-title">職種バッジ</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>職種コード</th><th>表示名</th></tr></thead>
+          <tbody>
+            <tr><td>看護</td><td>看護師</td></tr>
+            <tr><td>PT</td><td>理学療法士</td></tr>
+            <tr><td>OT</td><td>作業療法士</td></tr>
+            <tr><td>ST</td><td>言語聴覚士</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">スタッフ情報の編集</div>
+      <ol class="steps">
+        <li>「編集」ボタンをクリック</li>
+        <li>名前・ふりがなを修正</li>
+        <li>「保存」または「取消」をクリック</li>
+      </ol>
+      <div class="note"><strong>注意:</strong> ログインID・職種は編集できません。</div>
+
+      <div class="section-title">パスワードリセット</div>
+      <ol class="steps">
+        <li>「PW」ボタンをクリック</li>
+        <li>確認ダイアログで「リセット実行」をクリック</li>
+        <li>初期パスワードが表示される</li>
+        <li>表示されたパスワードをスタッフに伝える</li>
+      </ol>
+      <div class="note"><strong>注意:</strong> リセット後、スタッフにパスワードを変更してもらってください。</div>
+
+      <div class="section-title">アーカイブ</div>
+      <ol class="steps">
+        <li>「アーカイブ」ボタンをクリック</li>
+        <li>確認ダイアログで承認</li>
+        <li>スタッフが一覧から非表示になる</li>
+      </ol>
+
+      <div class="section-title">復元</div>
+      <ol class="steps">
+        <li>「アーカイブ済みも表示」をクリック</li>
+        <li>該当スタッフの「復元」ボタンをクリック</li>
+      </ol>
+
+      <div class="section-title">削除</div>
+      <ul class="plain">
+        <li>アーカイブ済みのスタッフのみ削除できます。</li>
+        <li>「削除」ボタン → 確認ダイアログで実行します。</li>
+      </ul>
+      <div class="important"><strong>重要:</strong> 削除は元に戻せません。通常はアーカイブで十分です。</div>
+
+      <div class="section-title">オンコール対象（看護師のみ）</div>
+      <ul class="plain">
+        <li>「OC有」「OC無」ボタンをタップして切り替えます。</li>
+        <li>オンコール対象に設定されたスタッフのみ、オンコール入力が可能になります。</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- お知らせ管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📢 お知らせ管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 日常業務 &gt; お知らせ管理</p>
+      <p class="manual-text">スタッフはトップ画面やお知らせ画面で確認できます。</p>
+
+      <div class="section-title">お知らせの作成</div>
+      <ol class="steps">
+        <li>「新規作成」をクリック</li>
+        <li>発信元（管理者/システム）を選択</li>
+        <li>タイトル・本文を入力</li>
+        <li>「保存」をクリック</li>
+      </ol>
+
+      <div class="section-title">お知らせの編集</div>
+      <ol class="steps">
+        <li>「編集」ボタンをクリック</li>
+        <li>内容を修正</li>
+        <li>「保存」をクリック</li>
+      </ol>
+
+      <div class="section-title">お知らせの削除</div>
+      <ol class="steps">
+        <li>「削除」ボタンをクリック</li>
+        <li>確認ダイアログで承認</li>
+      </ol>
+      <div class="important"><strong>重要:</strong> 削除したお知らせは復元できません。</div>
+    </div>
+  </div>
+
+  <!-- 未確定の予定管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📋 未確定の予定管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 日常業務 &gt; 未確定の予定一覧</p>
+      <p class="manual-text">スタッフが入力した未確定の予定を確認・削除できます。</p>
+
+      <ul class="plain">
+        <li>日付・スタッフ名・予定内容が表示されます。</li>
+      </ul>
+
+      <div class="section-title">予定の削除</div>
+      <ol class="steps">
+        <li>「削除」ボタンをクリック</li>
+        <li>確認ダイアログで承認</li>
+      </ol>
+      <div class="important"><strong>重要:</strong> 削除は復元できません。スタッフに確認の上で操作してください。</div>
+    </div>
+  </div>
+
+  <!-- スタッフ月次実績 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📊 スタッフ月次実績</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 月次業務 &gt; スタッフ月次実績</p>
+
+      <div class="section-title">表示手順</div>
+      <ol class="steps">
+        <li>年月を選択</li>
+        <li>スタッフを選択</li>
+        <li>「表示」をクリック</li>
+      </ol>
+
+      <div class="section-title">看護師の実績</div>
+      <ul class="plain">
+        <li>サマリー: 介護時間・医療時間・合計時間・稼働日数</li>
+        <li>日別詳細テーブルが表示されます。</li>
+      </ul>
+
+      <div class="section-title">リハビリ（PT/OT/ST）の実績</div>
+      <ul class="plain">
+        <li>単位数・稼働日数が表示されます。</li>
+      </ul>
+
+      <div class="section-title">手動編集</div>
+      <ul class="plain">
+        <li>セルのドロップダウンで値を変更できます。</li>
+        <li>変更は自動保存されます。</li>
+      </ul>
+
+      <div class="note"><strong>用途:</strong> スプレッドシートとの齟齬修正や特殊な記録に使用します。</div>
+    </div>
+  </div>
+
+  <!-- iBow Excel集計 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📈 iBow Excel集計</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 月次業務 &gt; iBow Excel集計</p>
+
+      <div class="section-title">集計手順</div>
+      <ol class="steps">
+        <li>年月を選択</li>
+        <li>Excelファイルを選択</li>
+        <li>「集計実行」をクリック</li>
+        <li>結果が表示される</li>
+      </ol>
+
+      <div class="section-title">看護師の丸めルール</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>訪問分数</th><th>丸め後</th><th>時間換算</th></tr></thead>
+          <tbody>
+            <tr><td>29分, 30分</td><td>30分</td><td>0.5h</td></tr>
+            <tr><td>59分, 60分</td><td>60分</td><td>1.0h</td></tr>
+            <tr><td>89分, 90分</td><td>90分</td><td>1.5h</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="manual-text">介護・医療に分けて集計されます。</p>
+
+      <div class="section-title">リハビリの集計ルール</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>保険種別</th><th>計算方法</th></tr></thead>
+          <tbody>
+            <tr><td>医療</td><td>1訪問 = 4単位</td></tr>
+            <tr><td>介護</td><td>訪問分数 / 10</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">集計履歴</div>
+      <p class="manual-text"><strong>場所:</strong> 月次業務 &gt; iBow集計履歴</p>
+      <ul class="plain">
+        <li>年月をクリックすると結果が表示されます。</li>
+      </ul>
+
+      <div class="note"><strong>注意:</strong> 同じ年月のファイルを再アップロードすると、前回の結果が上書きされます。</div>
+    </div>
+  </div>
+
+  <!-- 有給休暇管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>🏖️ 有給休暇管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 月次業務 &gt; 有給休暇管理</p>
+      <p class="manual-text">3つのタブで構成されています。</p>
+
+      <div class="section-title">申請一覧タブ</div>
+      <p class="manual-text">申請情報として以下が表示されます:</p>
+      <ul class="plain">
+        <li>スタッフ名</li>
+        <li>種別（全休 / 午前半休 / 午後半休）</li>
+        <li>日付</li>
+        <li>理由</li>
+        <li>ステータス（未処理 / 承認済 / 却下 / キャンセル）</li>
+      </ul>
+
+      <p class="manual-text"><strong>承認する場合:</strong></p>
+      <ol class="steps">
+        <li>「承認」ボタンをクリック</li>
+        <li>コメントを入力（任意）</li>
+        <li>「承認する」をクリック</li>
+      </ol>
+
+      <p class="manual-text"><strong>却下する場合:</strong></p>
+      <ol class="steps">
+        <li>「却下」ボタンをクリック</li>
+        <li>コメントを入力（任意）</li>
+        <li>「却下する」をクリック</li>
+      </ol>
+      <p class="manual-text">承認すると、スタッフに自動通知されます。</p>
+
+      <div class="section-title">履歴タブ</div>
+      <ul class="plain">
+        <li>ステータスでフィルタリングできます。</li>
+        <li>時系列で表示されます。</li>
+      </ul>
+
+      <div class="section-title">残日数管理タブ</div>
+      <p class="manual-text">以下の情報が表示されます:</p>
+      <ul class="plain">
+        <li>スタッフ名・入社日・付与日数・繰越日数・使用日数・残日数</li>
+      </ul>
+
+      <p class="manual-text"><strong>入社日の設定:</strong></p>
+      <ol class="steps">
+        <li>「設定」ボタンをクリック</li>
+        <li>日付を入力</li>
+        <li>「保存」をクリック</li>
+      </ol>
+      <p class="manual-text">勤続年数に基づき、付与日数が自動計算されます。</p>
+
+      <p class="manual-text"><strong>手動調整:</strong></p>
+      <ol class="steps">
+        <li>「編集」ボタンをクリック</li>
+        <li>調整日数を入力（正の値 = 増加、負の値 = 減少）</li>
+        <li>「保存」をクリック</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- オンコール管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📞 オンコール管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 月次業務 &gt; オンコール管理</p>
+
+      <div class="section-title">表示手順</div>
+      <ol class="steps">
+        <li>年月を選択</li>
+        <li>サマリーが表示される</li>
+      </ol>
+
+      <div class="section-title">サマリー項目</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>件数</td><td>対応件数</td></tr>
+            <tr><td>時間</td><td>合計時間</td></tr>
+            <tr><td>交通費</td><td>交通費発生件数</td></tr>
+            <tr><td>日数</td><td>担当日数</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note"><strong>注意:</strong> 記録の入力はスタッフ側で行います。管理画面は閲覧のみです。</div>
+    </div>
+  </div>
+
+  <!-- インセンティブ設定 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>💰 インセンティブ設定</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 設定・マスタ &gt; インセンティブ設定</p>
+
+      <div class="section-title">デフォルト基準</div>
+      <ul class="plain">
+        <li><strong>看護師:</strong> 1日あたり基準時間（例: 3.5h）</li>
+        <li><strong>リハビリ:</strong> 1日あたり基準単位（例: 20）</li>
+      </ul>
+      <p class="manual-text">基準を超過した場合にインセンティブ対象となります。</p>
+
+      <div class="section-title">設定手順</div>
+      <ol class="steps">
+        <li>看護師の基準時間を入力</li>
+        <li>リハビリの基準単位を入力</li>
+        <li>「保存」をクリック</li>
+      </ol>
+
+      <div class="section-title">個別設定</div>
+      <ol class="steps">
+        <li>スタッフを選択</li>
+        <li>個別の値を入力</li>
+        <li>「保存」をクリック</li>
+      </ol>
+      <div class="note"><strong>注意:</strong> 個別設定がある場合、デフォルト基準は適用されません。</div>
+    </div>
+  </div>
+
+  <!-- スタッフ追加 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>➕ スタッフ追加</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 設定・マスタ &gt; スタッフ追加</p>
+
+      <div class="section-title">入力項目</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>必須</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td>姓（漢字）</td><td>必須</td><td></td></tr>
+            <tr><td>名（漢字）</td><td>必須</td><td></td></tr>
+            <tr><td>姓（ふりがな）</td><td>必須</td><td></td></tr>
+            <tr><td>名（ふりがな）</td><td>必須</td><td></td></tr>
+            <tr><td>職種</td><td>必須</td><td>看護師 / PT / OT / ST</td></tr>
+            <tr><td>入社日</td><td>任意</td><td>後から設定可能</td></tr>
+            <tr><td>オンコール対象</td><td>任意</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">追加手順</div>
+      <ol class="steps">
+        <li>各項目を入力</li>
+        <li>「追加」をクリック</li>
+        <li>完了メッセージとログインID・初期パスワードが表示される</li>
+      </ol>
+
+      <div class="important"><strong>重要:</strong> 表示されたログインIDと初期パスワードを控えて、スタッフに伝えてください。</div>
+
+      <div class="section-title">自動生成される情報</div>
+      <ul class="plain">
+        <li><strong>ログインID:</strong> ローマ字 + 連番で自動生成</li>
+        <li><strong>初期パスワード:</strong> ローマ字の一部から自動生成</li>
+      </ul>
+
+      <div class="section-title">自動処理</div>
+      <ul class="plain">
+        <li>staff.jsonに保存</li>
+        <li>スプレッドシートに列を追加（看護師: 2列 / リハビリ: 1列）</li>
+        <li>パスワードは暗号化して保存</li>
+      </ul>
+
+      <div class="note"><strong>注意:</strong> 同名のふりがなの場合は連番が付与されます。職種は後から変更できません。入社日は後から設定可能です。</div>
+    </div>
+  </div>
+
+  <!-- 翌年スプレッドシート作成 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📅 翌年スプレッドシート作成</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <p class="manual-text"><strong>場所:</strong> 設定・マスタ &gt; 翌年スプレッドシート作成</p>
+
+      <div class="section-title">作成手順</div>
+      <ol class="steps">
+        <li>「翌年スプレッドシート作成」ボタンをクリック</li>
+        <li>確認ダイアログで承認</li>
+        <li>作成されたスプレッドシートのURLが表示される</li>
+      </ol>
+
+      <div class="section-title">作成される内容</div>
+      <ul class="plain">
+        <li>12枚の月別シート</li>
+        <li>スタッフ列（看護師: 2列 / リハビリ: 1列）</li>
+        <li>ヘッダー情報</li>
+      </ul>
+
+      <div class="section-title">管理情報</div>
+      <ul class="plain">
+        <li>spreadsheet-registry.jsonに記録されます。</li>
+        <li>年度ごとに自動参照されます。</li>
+      </ul>
+
+      <div class="note"><strong>推奨:</strong> 年末（12月頃）に実行してください。</div>
+
+      <div class="note"><strong>注意:</strong> 既存のスプレッドシートがある場合は、別のシートが生成されます。追加されたスタッフは自動的に反映されます。</div>
+
+      <div class="important"><strong>重要:</strong> Google共有設定は別途必要です。</div>
+    </div>
+  </div>
+
+  <!-- トラブルシューティング・FAQ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>🔧 トラブルシューティング・FAQ</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+
+      <div class="section-title">ログインできない場合</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>原因</th><th>対処法</th></tr></thead>
+          <tbody>
+            <tr><td>パスワード入力ミス</td><td>全角・半角を確認してください</td></tr>
+            <tr><td>セッション切れ</td><td>ブラウザのキャッシュをクリアしてください</td></tr>
+            <tr><td>パスワード不明</td><td>管理者に問い合わせてください</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">スタッフがログインできない場合</div>
+      <ol class="steps">
+        <li>スタッフがアーカイブされていないか確認</li>
+        <li>パスワードリセットを実行</li>
+        <li>スタッフにパスワード変更を依頼</li>
+      </ol>
+
+      <div class="section-title">Excel集計がおかしい場合</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>症状</th><th>対処法</th></tr></thead>
+          <tbody>
+            <tr><td>スタッフが表示されない</td><td>iBow上の名前とシステムの名前が一致しているか確認</td></tr>
+            <tr><td>数値がずれる</td><td>iBowの出力形式が正しいか確認</td></tr>
+            <tr><td>アップロードエラー</td><td>xlsx形式のファイルか確認</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">スプレッドシートのエラー</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>症状</th><th>対処法</th></tr></thead>
+          <tbody>
+            <tr><td>取得できない</td><td>Google認証の設定を確認</td></tr>
+            <tr><td>列がずれる</td><td>メンテナンスを実行</td></tr>
+            <tr><td>翌年作成ができない</td><td>spreadsheet-registry.jsonを確認</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">有給日数が合わない場合</div>
+      <ol class="steps">
+        <li>入社日が正しく設定されているか確認</li>
+        <li>手動調整の履歴を確認</li>
+        <li>残日数管理タブで調整を行う</li>
+      </ol>
+    </div>
+  </div>
+
+</div>
+
+<div class="copyright">&copy; 2026 株式会社Yuw connect All rights reserved.</div>
+
+<script>
+// セッションチェック
+(async function checkSession(){
+  try {
+    const res = await fetch('/api/admin/staff');
+    if(res.status === 401){
+      location.href = '/admin';
+    }
+  } catch(e){
+    location.href = '/admin';
+  }
+})();
+
+// アコーディオン
+function toggleAccordion(headerEl){
+  const body = headerEl.nextElementSibling;
+  const icon = headerEl.querySelector('.acc-icon');
+  if(body.classList.contains('open')){
+    body.style.maxHeight = body.scrollHeight + 'px';
+    requestAnimationFrame(()=>{ body.style.maxHeight = '0'; });
+    body.classList.remove('open');
+    icon.textContent = '▼';
+  } else {
+    body.classList.add('open');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    setTimeout(()=>{ body.style.maxHeight = '9999px'; }, 350);
+    icon.textContent = '▲';
+  }
+}
+
+// ログアウト
+function adminLogout(){
+  document.cookie = 'admin_session=; Max-Age=0; path=/';
+  location.href = '/admin';
+}
+</script>
+</body>
+</html>

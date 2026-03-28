@@ -163,7 +163,10 @@
       <span class="header-sub">for にこっと訪問看護ステーション</span>
     </div>
   </div>
-  <button class="logout-btn" onclick="adminLogout()">ログアウト</button>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="/admin-manual" class="logout-btn" style="text-decoration:none;text-align:center">マニュアル</a>
+    <button class="logout-btn" onclick="adminLogout()">ログアウト</button>
+  </div>
 </header>
 
 <!-- ログイン -->
@@ -172,7 +175,7 @@
   <div class="msg err" id="loginErr"></div>
   <div class="field">
     <label for="pwInput">パスワード</label>
-    <input type="password" id="pwInput" placeholder="管理者パスワードを入力" autocomplete="current-password">
+    <input type="password" id="pwInput" placeholder="管理者パスワードを入力" autocomplete="off">
   </div>
   <button class="btn btn-blue btn-full" onclick="adminLogin()">ログイン</button>
 </div>
