@@ -491,6 +491,7 @@ app.get('/change-password', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'change-password.html'));
 });
 app.get('/admin',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/admin-manual', requireAdmin, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-manual.html')));
 app.get('/history', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'history.html'));
