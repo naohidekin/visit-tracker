@@ -1,3 +1,19 @@
 {
-  "requests": []
+  "requests": [
+    {
+      "id": "testns-2026-04-15-1774771099545",
+      "staffId": "testns",
+      "staffName": "テスト看護師",
+      "type": "full",
+      "dates": [
+        "2026-04-15"
+      ],
+      "reason": "テスト",
+      "status": "pending",
+      "adminComment": null,
+      "createdAt": "2026-03-29T16:58:19.545Z",
+      "reviewedAt": null,
+      "cancelledAt": null
+    }
+  ]
 }
