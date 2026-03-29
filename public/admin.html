@@ -935,13 +935,17 @@
   async function toggleArchive(id, name, archive) {
     const msg = archive ? `「${name}」をアーカイブに格納しますか？` : `「${name}」を復元しますか？`;
     if (!confirm(msg)) return;
-    const res  = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/archive`, { method: 'PATCH' });
-    const data = await res.json();
-    if (data.success) {
-      showToast(archive ? `📦 ${name} を格納しました` : `✅ ${name} を復元しました`);
-      loadStaff();
-    } else {
-      showToast('エラー: ' + (data.error || '失敗'));
+    try {
+      const res  = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/archive`, { method: 'PATCH' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(archive ? `📦 ${name} を格納しました` : `✅ ${name} を復元しました`);
+        loadStaff();
+      } else {
+        showToast('エラー: ' + (data.error || '失敗'));
+      }
+    } catch (e) {
+      showToast('通信エラー: ' + e.message);
     }
   }
 

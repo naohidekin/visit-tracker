@@ -1,5 +1,5 @@
 // Service Worker（オフライン対応）
-const CACHE = 'visit-v3';
+const CACHE = 'visit-v4';
 const STATIC = ['/manifest.json', '/logo.png'];
 
 self.addEventListener('install', e => {
