@@ -24,9 +24,9 @@ const isValidDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s
 const isValidYearMonth = (y, m) => Number.isInteger(+y) && +y >= 2020 && +y <= 2099 && Number.isInteger(+m) && +m >= 1 && +m <= 12;
 const sanitizeStr = (s, maxLen = 200) => typeof s === 'string' ? s.trim().slice(0, maxLen) : '';
 
-// SESSION_SECRET未設定で本番起動を防止
-if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
-  console.error('❌ SESSION_SECRET が設定されていません。本番環境では必須です。');
+// SESSION_SECRET未設定時はフォールバックを使わず起動拒否（ローカル開発時は SESSION_SECRET=dev 等を.envに設定）
+if (!process.env.SESSION_SECRET) {
+  console.error('❌ SESSION_SECRET が設定されていません。.env または環境変数に設定してください。');
   process.exit(1);
 }
 
@@ -1696,9 +1696,11 @@ app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) =
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  staff.password_hash = await bcrypt.hash(staff.initial_pw, 10);
+  // initial_pwがあればそれを使用、なければランダム4桁パスワードを生成
+  const newPw = staff.initial_pw || Math.random().toString(36).slice(-4).toUpperCase();
+  staff.password_hash = await bcrypt.hash(newPw, 10);
   saveStaff(data);
-  res.json({ success: true, initial_pw: staff.initial_pw });
+  res.json({ success: true, initial_pw: newPw });
 });
 
 // ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
