@@ -337,6 +337,24 @@ async function getSheets() {
   return google.sheets({ version: 'v4', auth: getAuth() });
 }
 
+// ─── Sheets APIリトライラッパー（429/5xx対策） ──────────────────
+async function sheetsRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const status = e?.response?.status || e?.code;
+      if ((status === 429 || status >= 500) && i < maxRetries - 1) {
+        const wait = Math.pow(2, i) * 1000 + Math.random() * 500;
+        console.warn(`⚠️ Sheets API ${status}, ${wait.toFixed(0)}ms後にリトライ (${i + 1}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, wait));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 // ─── 起動時：未ハッシュPWをハッシュ化 & 旧 'rehab' 職種を 'PT' に移行 ──
 async function ensurePasswordsHashed() {
   const data = loadStaff();
@@ -758,17 +776,17 @@ app.get('/api/record', requireStaff, async (req, res) => {
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`,
-      });
+      }));
       const vals = resp.data.values?.[0] ?? [];
       res.json({ kaigo: vals[0] ?? null, iryo: vals[1] ?? null });
     } else {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
-      });
+      }));
       res.json({ value: resp.data.values?.[0]?.[0] ?? null });
     }
   } catch (e) {
@@ -810,7 +828,7 @@ app.post('/api/record', requireStaff, async (req, res) => {
       const { kaigo, iryo } = req.body;
       const kVal = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
       const iVal = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
-      await api.spreadsheets.values.batchUpdate({
+      await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
         spreadsheetId: sid,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
@@ -819,17 +837,17 @@ app.post('/api/record', requireStaff, async (req, res) => {
             { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iVal]] },
           ],
         },
-      });
+      }));
       res.json({ success: true, kaigo: kVal, iryo: iVal });
     } else {
       const { value } = req.body;
       const val = (value !== '' && value !== null && value !== undefined) ? Number(value) : '';
-      await api.spreadsheets.values.update({
+      await sheetsRetry(() => api.spreadsheets.values.update({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
-      });
+      }));
       res.json({ success: true, value: val });
     }
   } catch (e) {
@@ -906,7 +924,7 @@ app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
     if (staff.type === 'nurse') {
       const kVal = schedule.kaigo != null ? schedule.kaigo : '';
       const iVal = schedule.iryo  != null ? schedule.iryo  : '';
-      await api.spreadsheets.values.batchUpdate({
+      await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
         spreadsheetId: sid,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
@@ -915,15 +933,15 @@ app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
             { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iVal]] },
           ],
         },
-      });
+      }));
     } else {
       const val = schedule.units != null ? schedule.units : '';
-      await api.spreadsheets.values.update({
+      await sheetsRetry(() => api.spreadsheets.values.update({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
-      });
+      }));
     }
     data.schedules.splice(idx, 1);
     saveSchedules(data);
@@ -972,10 +990,10 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${month}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       for (const r of rows) {
@@ -991,10 +1009,10 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
       res.json({ total_kaigo, total_iryo, total: total_kaigo + total_iryo, working_days,
                  incentive_line: iline, incentive_triggered: avg > iline });
     } else {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_units = 0, working_days = 0;
       for (const r of rows) {
@@ -1061,10 +1079,10 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
@@ -1085,10 +1103,10 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
         stats: { total_kaigo, total_iryo, total, working_days,
                  incentive_line: iline, incentive_triggered: avg > iline } });
     } else {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_units = 0, working_days = 0;
       const days = [];
@@ -1128,10 +1146,10 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   try {
     const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
@@ -1152,10 +1170,10 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
         stats: { total_kaigo, total_iryo, total, working_days,
                  incentive_line: iline, incentive_triggered: avg > iline } });
     } else {
-      const resp = await api.spreadsheets.values.get({
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
         range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      });
+      }));
       const rows = resp.data.values ?? [];
       let total_units = 0, working_days = 0;
       const days = [];
@@ -1197,7 +1215,7 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
       const { kaigo, iryo } = req.body;
       const kVal = (kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
       const iVal = (iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
-      await api.spreadsheets.values.batchUpdate({
+      await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
         spreadsheetId: sid,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
@@ -1206,16 +1224,16 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
             { range: `${month}月!${staff.iryo_col}${row}`, values: [[iVal]] },
           ],
         },
-      });
+      }));
     } else {
       const { value } = req.body;
       const val = (value !== null && value !== undefined) ? Number(value) : '';
-      await api.spreadsheets.values.update({
+      await sheetsRetry(() => api.spreadsheets.values.update({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
-      });
+      }));
     }
     res.json({ success: true });
   } catch (e) {

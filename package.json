@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "NODE_OPTIONS=--openssl-legacy-provider node server.js",
-    "dev": "NODE_OPTIONS=--openssl-legacy-provider node --watch server.js"
+    "dev": "NODE_OPTIONS=--openssl-legacy-provider node --watch server.js",
+    "test": "node test-leave.js"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.0",
