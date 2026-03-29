@@ -39,6 +39,9 @@ const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
 const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
 const ONCALL_PATH        = path.join(DATA_DIR, 'oncall-records.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+// ─── 有給・オンコール機能の公開対象スタッフID ──────────────────
+const LEAVE_ONCALL_ENABLED_IDS = ['testns', 'testpt'];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
 const WD              = ['日','月','火','水','木','金','土'];
@@ -506,10 +509,12 @@ app.get('/notices', (req, res) => {
 });
 app.get('/leave', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'leave.html'));
 });
 app.get('/oncall', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'oncall.html'));
 });
 app.get('/', (req, res) => {
@@ -1923,7 +1928,13 @@ app.get('/api/admin/excel-results/:yearMonth', requireAdmin, (req, res) => {
 });
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
-app.get('/api/leave/balance', requireStaff, (req, res) => {
+function requireLeaveOncall(req, res, next) {
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId))
+    return res.status(403).json({ error: 'この機能は現在ご利用いただけません' });
+  next();
+}
+
+app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
   const data = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -1960,7 +1971,7 @@ app.get('/api/leave/balance', requireStaff, (req, res) => {
   });
 });
 
-app.get('/api/leave/requests', requireStaff, (req, res) => {
+app.get('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
   const leaveData = loadLeave();
   const mine = leaveData.requests
     .filter(r => r.staffId === req.session.staffId)
@@ -1968,7 +1979,7 @@ app.get('/api/leave/requests', requireStaff, (req, res) => {
   res.json({ requests: mine });
 });
 
-app.post('/api/leave/requests', requireStaff, (req, res) => {
+app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm'].includes(type))
@@ -2035,7 +2046,7 @@ app.post('/api/leave/requests', requireStaff, (req, res) => {
   res.json({ ok: true, request });
 });
 
-app.post('/api/leave/requests/:id/cancel', requireStaff, (req, res) => {
+app.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -2051,7 +2062,7 @@ app.post('/api/leave/requests/:id/cancel', requireStaff, (req, res) => {
 });
 
 // ─── API: オンコール（スタッフ向け） ─────────────────────────────
-app.get('/api/oncall/records', requireStaff, (req, res) => {
+app.get('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
   const month = req.query.month;
   const data = loadOncall();
   let records = data.records.filter(r => r.staffId === req.session.staffId);
@@ -2075,7 +2086,7 @@ function updateOncallLeave(staffId) {
   return { totalMinutes, days };
 }
 
-app.post('/api/oncall/records', requireStaff, (req, res) => {
+app.post('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
   const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
@@ -2126,7 +2137,7 @@ app.delete('/api/oncall/records/:id', requireStaff, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/oncall/monthly-summary', requireStaff, (req, res) => {
+app.get('/api/oncall/monthly-summary', requireStaff, requireLeaveOncall, (req, res) => {
   const month = req.query.month;
   if (!month) return res.status(400).json({ error: 'month パラメータが必要です' });
   const data = loadOncall();
