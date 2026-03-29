@@ -13,13 +13,13 @@
       --danger:#c0392b;--ok:#0a7c42;--ok-bg:#e6f7ef;--radius:12px;--shadow:0 2px 12px rgba(0,0,0,.10)
     }
     body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    header{background:var(--blue-dark);color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
-    .header-brand{display:flex;align-items:center;gap:10px}
-    .header-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;flex-shrink:0}
-    .header-titles{display:flex;flex-direction:column;gap:1px}
-    header h1{font-size:15px;font-weight:700;line-height:1.2}
-    .header-sub{font-size:10px;opacity:.7;letter-spacing:.03em}
-    .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer}
+    header{background:var(--blue-dark);color:#fff;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header-brand{display:flex;align-items:center;gap:8px;min-width:0}
+    .header-logo{width:30px;height:30px;border-radius:8px;object-fit:cover;flex-shrink:0}
+    .header-titles{display:flex;flex-direction:column;gap:1px;min-width:0}
+    header h1{font-size:13px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .header-sub{font-size:9px;opacity:.7;letter-spacing:.03em}
+    .logout-btn{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;flex-shrink:0}
     .container{padding:16px;max-width:900px;margin:0 auto}
     .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
     .card h2{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e8edf5}
@@ -163,7 +163,7 @@
       <span class="header-sub">for にこっと訪問看護ステーション</span>
     </div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center">
+  <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
     <a href="/admin-manual" class="logout-btn" style="text-decoration:none;text-align:center">マニュアル</a>
     <button class="logout-btn" onclick="adminLogout()">ログアウト</button>
   </div>
