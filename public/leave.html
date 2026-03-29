@@ -289,15 +289,12 @@
 
     const ng = data.next_grant;
     if (ng) {
-      // お祝い休暇
+      // お祝い休暇（入職半年以内のみ表示）
       const celRow = document.getElementById('infoCelebrationRow');
-      celRow.style.display = '';
       if (ng.celebration_active) {
+        celRow.style.display = '';
         document.getElementById('infoCelebration').innerHTML =
           '<span class="celebration-badge">残り ' + ng.celebration_days_left + ' 日で期限</span>';
-      } else {
-        document.getElementById('infoCelebration').innerHTML =
-          '<span class="celebration-badge celebration-expired">期限終了</span>';
       }
 
       // 次回付与
