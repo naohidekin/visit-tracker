@@ -64,7 +64,7 @@
     .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700}
     .badge-nurse{background:#dbeafe;color:#1e40af}
     .badge-rehab{background:#dcfce7;color:#166534}
-    .td-btns{display:flex;gap:3px;flex-wrap:nowrap}
+    .td-btns{display:flex;gap:3px;flex-wrap:wrap}
     .edit-input{padding:5px 8px;font-size:13px;border:1.5px solid var(--blue);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;width:100%;min-width:80px;box-sizing:border-box}
     .btn-edit{background:#6b7a99;color:#fff}
     .btn-archive{background:#94a3b8;color:#fff}
@@ -115,9 +115,13 @@
     .section-sub{font-size:12px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
     /* ── スタッフ一覧（モバイル最適化） ── */
     .staff-table{table-layout:fixed;min-width:0}
-    .staff-table .col-name{width:auto}
-    .staff-table .col-type{width:38px}
-    .staff-table .col-btns{width:185px}
+    .staff-table .col-name{width:28%}
+    .staff-table .col-type{width:26px}
+    .staff-table .badge{padding:1px 4px;font-size:10px}
+    .staff-table .col-btns{width:auto}
+    .staff-table td{padding:6px 4px}
+    .staff-table .td-btns{gap:2px;flex-wrap:nowrap}
+    .staff-table .btn-xs{padding:3px 5px;font-size:10px}
     /* ── インセンティブ個別設定（モバイル最適化） ── */
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
@@ -912,8 +916,8 @@
         <div class="td-btns">
           ${ocBtn}
           <button class="btn-xs btn-edit" onclick="editStaffRow('${s.id}')">編集</button>
-          <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">リセット</button>
-          <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">アーカイブ</button>
+          <button class="btn-xs btn-reset" onclick="askReset('${s.id}','${s.name}')">PW</button>
+          <button class="btn-xs btn-archive" onclick="toggleArchive('${s.id}','${s.name}',true)">格納</button>
         </div>
       </td>`;
   }
