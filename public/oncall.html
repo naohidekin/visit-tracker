@@ -227,8 +227,8 @@
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.id) { location.href = '/login'; return; }
-    // アクセスガード: 看護師 + oncall_eligible のみ
-    if (me.type !== 'nurse' || !me.oncall_eligible) {
+    // アクセスガード: 看護師 + oncall_eligible、またはleave_oncall_enabled
+    if (!me.leave_oncall_enabled && (me.type !== 'nurse' || !me.oncall_eligible)) {
       location.href = '/';
       return;
     }

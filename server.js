@@ -358,6 +358,28 @@ async function syncNewStaffFromSource() {
   saveStaff(liveData);
 }
 
+// ─── 起動時：ソース staff.json の有給・OC設定を既存スタッフに同期 ──
+function syncLeaveFieldsFromSource() {
+  if (DATA_DIR === __dirname) return;
+  const srcPath = path.join(__dirname, 'staff.json');
+  if (!fs.existsSync(srcPath)) return;
+  const srcData  = JSON.parse(fs.readFileSync(srcPath, 'utf8'));
+  const liveData = loadStaff();
+  let changed = false;
+  const syncFields = ['hire_date','leave_granted','leave_grant_date','leave_carried_over','leave_manual_adjustment','oncall_eligible','oncall_leave_granted'];
+  for (const src of srcData.staff) {
+    const live = liveData.staff.find(s => s.id === src.id);
+    if (!live) continue;
+    for (const f of syncFields) {
+      if (src[f] !== undefined && src[f] !== null && src[f] !== 0 && src[f] !== false && live[f] !== src[f]) {
+        live[f] = src[f];
+        changed = true;
+      }
+    }
+  }
+  if (changed) { saveStaff(liveData); console.log('✅ ソースからスタッフ有給・OC設定を同期しました'); }
+}
+
 // ─── 起動時：有給フィールドがないスタッフにデフォルト値を追加 ───
 function ensureLeaveFields() {
   const data = loadStaff();
@@ -2518,6 +2540,7 @@ async function main() {
   await ensurePasswordsHashed();
   ensureLeaveFields();
   await syncNewStaffFromSource();
+  syncLeaveFieldsFromSource();
 
   // 毎年12/31 23:00に翌年スプレッドシートを自動作成
   cron.schedule('0 23 31 12 *', async () => {
