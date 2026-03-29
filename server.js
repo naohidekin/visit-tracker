@@ -1,3 +1,5 @@
+// TODO: CSRF保護の追加（csurfミドルウェア等）
+// TODO: スケール時はJSONファイルI/OをSQLiteに移行（同時アクセス競合対策）
 require('dotenv').config();
 const express    = require('express');
 const { google } = require('googleapis');
@@ -17,6 +19,17 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── 入力バリデーションヘルパー ──────────────────────────────────
+const isValidDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());
+const isValidYearMonth = (y, m) => Number.isInteger(+y) && +y >= 2020 && +y <= 2099 && Number.isInteger(+m) && +m >= 1 && +m <= 12;
+const sanitizeStr = (s, maxLen = 200) => typeof s === 'string' ? s.trim().slice(0, maxLen) : '';
+
+// SESSION_SECRET未設定で本番起動を防止
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  console.error('❌ SESSION_SECRET が設定されていません。本番環境では必須です。');
+  process.exit(1);
+}
+
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(csession({
@@ -24,7 +37,7 @@ app.use(csession({
   keys:    [process.env.SESSION_SECRET || 'dev-secret-please-change'],
   maxAge:  7 * 24 * 60 * 60 * 1000,
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: 'strict',
 }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
@@ -415,98 +428,55 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// ─── WebAuthn Credential Storage (Google Sheets) ────────────────
-const WEBAUTHN_SHEET = 'WebAuthn';
+// ─── WebAuthn Credential Storage (JSONファイル) ────────────────
+const WEBAUTHN_FILE = path.join(DATA_DIR, 'webauthn-credentials.json');
 
-async function ensureWebAuthnSheet() {
-  const api = await getSheets();
-  const ss = await api.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const exists = ss.data.sheets.some(s => s.properties.title === WEBAUTHN_SHEET);
-  if (!exists) {
-    await api.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: WEBAUTHN_SHEET } } }] },
-    });
-    await api.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${WEBAUTHN_SHEET}!A1:F1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [['staffId', 'credentialID', 'publicKey', 'counter', 'transports', 'registeredAt']] },
-    });
-  }
+function loadWebAuthnData() {
+  try { return JSON.parse(fs.readFileSync(WEBAUTHN_FILE, 'utf8')); }
+  catch { return { credentials: [] }; }
+}
+function saveWebAuthnData(data) {
+  fs.writeFileSync(WEBAUTHN_FILE, JSON.stringify(data, null, 2));
 }
 
 async function loadCredentials(staffId) {
-  await ensureWebAuthnSheet();
-  const api = await getSheets();
-  const resp = await api.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${WEBAUTHN_SHEET}!A2:F`,
-  });
-  const rows = resp.data.values || [];
-  return rows
-    .filter(r => r[0] === staffId)
-    .map(r => ({
-      id: r[1],
-      publicKey: isoBase64URL.toBuffer(r[2]),
-      counter: Number(r[3]),
-      transports: JSON.parse(r[4] || '[]'),
+  const data = loadWebAuthnData();
+  return data.credentials
+    .filter(c => c.staffId === staffId)
+    .map(c => ({
+      id: c.credentialID,
+      publicKey: isoBase64URL.toBuffer(c.publicKey),
+      counter: c.counter,
+      transports: c.transports || [],
     }));
 }
 
 async function saveCredential(staffId, credential) {
-  await ensureWebAuthnSheet();
-  const api = await getSheets();
-  await api.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${WEBAUTHN_SHEET}!A:F`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[
-      staffId,
-      credential.id,
-      isoBase64URL.fromBuffer(credential.publicKey),
-      credential.counter,
-      JSON.stringify(credential.transports || []),
-      new Date().toISOString(),
-    ]] },
+  const data = loadWebAuthnData();
+  data.credentials.push({
+    staffId,
+    credentialID: credential.id,
+    publicKey: isoBase64URL.fromBuffer(credential.publicKey),
+    counter: credential.counter,
+    transports: credential.transports || [],
+    registeredAt: new Date().toISOString(),
   });
+  saveWebAuthnData(data);
 }
 
 async function updateCredentialCounter(credentialID, newCounter) {
-  const api = await getSheets();
-  const resp = await api.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${WEBAUTHN_SHEET}!B2:B`,
-  });
-  const rows = resp.data.values || [];
-  const idx = rows.findIndex(r => r[0] === credentialID);
-  if (idx >= 0) {
-    await api.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${WEBAUTHN_SHEET}!D${idx + 2}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [[newCounter]] },
-    });
+  const data = loadWebAuthnData();
+  const cred = data.credentials.find(c => c.credentialID === credentialID);
+  if (cred) {
+    cred.counter = newCounter;
+    saveWebAuthnData(data);
   }
 }
 
 async function deleteCredentials(staffId) {
-  const api = await getSheets();
-  const resp = await api.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${WEBAUTHN_SHEET}!A2:F`,
-  });
-  const rows = resp.data.values || [];
-  // 該当行を空配列に置換
-  const updated = rows.map(r => r[0] === staffId ? ['', '', '', '', '', ''] : r);
-  if (rows.length > 0) {
-    await api.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${WEBAUTHN_SHEET}!A2:F${rows.length + 1}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: updated },
-    });
-  }
+  const data = loadWebAuthnData();
+  data.credentials = data.credentials.filter(c => c.staffId !== staffId);
+  saveWebAuthnData(data);
 }
 
 async function hasCredentials(staffId) {
@@ -2014,6 +1984,8 @@ app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => 
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm'].includes(type))
     return res.status(400).json({ error: '種別が不正です' });
+  if (!isValidDate(startDate)) return res.status(400).json({ error: '開始日の形式が不正です' });
+  if (endDate && !isValidDate(endDate)) return res.status(400).json({ error: '終了日の形式が不正です' });
 
   const today = getTodayJST();
   const start = startDate;
@@ -2376,6 +2348,7 @@ app.post('/api/admin/staff/:id/hire-date', requireAdmin, (req, res) => {
 
   const { hire_date, auto_apply } = req.body;
   if (!hire_date) return res.status(400).json({ error: '入社日は必須です' });
+  if (!isValidDate(hire_date)) return res.status(400).json({ error: '入社日の形式が不正です' });
 
   staff.hire_date = hire_date;
   // 自動計算を適用する場合
