@@ -79,7 +79,7 @@
   </button>
   <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
@@ -102,6 +102,20 @@
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.staffId) { location.href = '/login'; return; }
+
+    if (me.leave_oncall_enabled) {
+      const drawer = document.getElementById('menuDrawer');
+      const historyLink = drawer.querySelector('a[href="/history"]');
+      if (historyLink) {
+        const leaveLink = document.createElement('a');
+        leaveLink.href = '/leave';
+        leaveLink.textContent = '有給管理';
+        const oncallLink = document.createElement('a');
+        oncallLink.href = '/oncall';
+        oncallLink.textContent = 'オンコール';
+        historyLink.after(leaveLink, oncallLink);
+      }
+    }
 
     await loadNotices();
     await updateMenuBadge();

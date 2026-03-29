@@ -553,7 +553,8 @@ app.get('/api/me', (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   const oncall_eligible = staff ? !!staff.oncall_eligible : false;
-  res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType, oncall_eligible });
+  const leave_oncall_enabled = LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId);
+  res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType, oncall_eligible, leave_oncall_enabled });
 });
 
 // ─── API: WebAuthn (FaceID/TouchID) ─────────────────────────────

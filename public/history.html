@@ -121,7 +121,7 @@
   </button>
   <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
@@ -188,6 +188,21 @@
     const res = await fetch('/api/me');
     if (!res.ok) { location.href = '/login'; return; }
     currentUser = await res.json();
+
+    if (currentUser.leave_oncall_enabled) {
+      const drawer = document.getElementById('menuDrawer');
+      const historyLink = drawer.querySelector('a[href="/history"]');
+      if (historyLink) {
+        const leaveLink = document.createElement('a');
+        leaveLink.href = '/leave';
+        leaveLink.textContent = '有給管理';
+        const oncallLink = document.createElement('a');
+        oncallLink.href = '/oncall';
+        oncallLink.textContent = 'オンコール';
+        historyLink.after(leaveLink, oncallLink);
+      }
+    }
+
     const elName = document.getElementById('headerName');
     const elType = document.getElementById('headerType');
     if (elName) elName.textContent = currentUser.name;
