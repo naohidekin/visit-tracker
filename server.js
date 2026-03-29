@@ -179,27 +179,38 @@ function saveOncall(data) {
   fs.writeFileSync(ONCALL_PATH, JSON.stringify(data, null, 2));
 }
 
-// Yuw connect 有給付与テーブル（10→12→14→16→18→20、毎年+2）
+// Yuw connect 有給付与テーブル（月数ベース：労基法準拠）
+// 入社6ヶ月→10日、1年6ヶ月→12日、…、5年6ヶ月→20日（以降毎年20日）
 const LEAVE_GRANT_TABLE = [
-  { years: 0.5, days: 10 },
-  { years: 1.5, days: 12 },
-  { years: 2.5, days: 14 },
-  { years: 3.5, days: 16 },
-  { years: 4.5, days: 18 },
-  { years: 5.5, days: 20 },
+  { months: 6,  days: 10 },
+  { months: 18, days: 12 },
+  { months: 30, days: 14 },
+  { months: 42, days: 16 },
+  { months: 54, days: 18 },
+  { months: 66, days: 20 },
 ];
+
+// 入社日から月加算した日付を返す（日付ベースで正確に計算）
+function addMonthsToDate(base, months) {
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+// 入社日からの経過で、付与基準日に達しているか判定（日付ベース）
+function hasReachedGrantDate(hire, now, months) {
+  const grantDate = addMonthsToDate(hire, months);
+  return now >= grantDate;
+}
 
 // 現在の付与日数を計算
 function calcLeaveGrantDays(hireDate) {
   if (!hireDate) return 0;
   const hire = new Date(hireDate);
   const now  = new Date(getTodayJST());
-  const diffMs = now - hire;
-  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
-  if (diffYears < 0.5) return 0;
   let granted = 0;
   for (const t of LEAVE_GRANT_TABLE) {
-    if (diffYears >= t.years) granted = t.days;
+    if (hasReachedGrantDate(hire, now, t.months)) granted = t.days;
   }
   return granted;
 }
@@ -209,20 +220,15 @@ function calcNextGrant(hireDate) {
   if (!hireDate) return null;
   const hire = new Date(hireDate);
   const now  = new Date(getTodayJST());
-  const diffMs = now - hire;
-  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000);
 
   // お祝い休暇（入職〜6ヶ月）
-  const celebrationExpiry = new Date(hire);
-  celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+  const celebrationExpiry = addMonthsToDate(hire, 6);
   const celebrationActive = now < celebrationExpiry;
 
   // 次回付与を探す
   for (const t of LEAVE_GRANT_TABLE) {
-    if (diffYears < t.years) {
-      const nextDate = new Date(hire);
-      const months = Math.round(t.years * 12);
-      nextDate.setMonth(nextDate.getMonth() + months);
+    if (!hasReachedGrantDate(hire, now, t.months)) {
+      const nextDate = addMonthsToDate(hire, t.months);
       const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
       return {
         next_grant_date: toDateStr(nextDate),
@@ -236,11 +242,12 @@ function calcNextGrant(hireDate) {
   }
   // 既に最大付与(20日)に到達 → 次回は直近の付与周期から1年後
   const lastEntry = LEAVE_GRANT_TABLE[LEAVE_GRANT_TABLE.length - 1];
-  const lastMonths = Math.round(lastEntry.years * 12);
-  const yearsSinceMax = diffYears - lastEntry.years;
-  const completedYears = Math.floor(yearsSinceMax);
-  const nextDate = new Date(hire);
-  nextDate.setMonth(nextDate.getMonth() + lastMonths + (completedYears + 1) * 12);
+  // 最大付与到達後、何回目の年次更新かを日付ベースで求める
+  let nextMonths = lastEntry.months + 12;
+  while (hasReachedGrantDate(hire, now, nextMonths)) {
+    nextMonths += 12;
+  }
+  const nextDate = addMonthsToDate(hire, nextMonths);
   const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
   return {
     next_grant_date: toDateStr(nextDate),
