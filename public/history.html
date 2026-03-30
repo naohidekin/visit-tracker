@@ -102,7 +102,11 @@
     /* ローディング */
     .loading{text-align:center;padding:32px;color:var(--muted);font-size:13px}
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+    /* グラフカード */
+    .chart-container{position:relative;width:100%;height:220px}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
 </head>
 <body>
 <div class="page-wrapper">
@@ -148,6 +152,14 @@
   <!-- 月次実績カード -->
   <div id="statsCardSection" style="display:none">
     <div id="statsCard"></div>
+  </div>
+
+  <!-- 月次グラフ -->
+  <div class="card" id="chartSection" style="display:none">
+    <div class="section-title">📊 日別訪問グラフ</div>
+    <div class="chart-container">
+      <canvas id="visitChart"></canvas>
+    </div>
   </div>
 
   <!-- 日別明細 -->
@@ -233,6 +245,7 @@
     const [year, month] = document.getElementById('monthSelect').value.split('-').map(Number);
     document.getElementById('loadingView').style.display    = 'block';
     document.getElementById('statsCardSection').style.display = 'none';
+    document.getElementById('chartSection').style.display    = 'none';
     document.getElementById('tableSection').style.display    = 'none';
 
     try {
@@ -240,9 +253,11 @@
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
       renderStatsCard(data);
+      renderChart(data);
       renderTable(data);
       document.getElementById('loadingView').style.display    = 'none';
       document.getElementById('statsCardSection').style.display = 'block';
+      document.getElementById('chartSection').style.display    = 'block';
       document.getElementById('tableSection').style.display    = 'block';
     } catch (e) {
       document.getElementById('loadingView').textContent = '読み込みに失敗しました: ' + e.message;
@@ -307,6 +322,113 @@
         ${incentiveMsg}
         <div class="result-sub-grid ${subCols}">${subHtml}</div>
       </div>`;
+  }
+
+  let _chartInstance = null;
+
+  function renderChart(data) {
+    const canvas = document.getElementById('visitChart');
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+
+    const iline = data.stats.incentive_line ?? 0;
+    const isNurse = data.type === 'nurse';
+    const days = data.days;
+    const labels = days.map(d => String(d.day));
+
+    // インセンティブラインのラベル
+    const iLabel = isNurse ? `目安 ${iline}h` : `目安 ${iline}単位`;
+
+    let datasets;
+    if (isNurse) {
+      datasets = [
+        {
+          label: '介護',
+          data: days.map(d => d.kaigo ?? 0),
+          backgroundColor: 'rgba(30, 64, 175, 0.7)',
+          borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 2, bottomRight: 2 },
+          barPercentage: 0.7, categoryPercentage: 0.85, stack: 'v', order: 2
+        },
+        {
+          label: '医療',
+          data: days.map(d => d.iryo ?? 0),
+          backgroundColor: 'rgba(154, 52, 18, 0.65)',
+          borderRadius: { topLeft: 3, topRight: 3, bottomLeft: 0, bottomRight: 0 },
+          barPercentage: 0.7, categoryPercentage: 0.85, stack: 'v', order: 1
+        }
+      ];
+    } else {
+      datasets = [{
+        label: '単位数',
+        data: days.map(d => d.value ?? 0),
+        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+        borderRadius: 3,
+        barPercentage: 0.7, categoryPercentage: 0.85
+      }];
+    }
+
+    const yMax = isNurse
+      ? Math.max(6, Math.ceil(Math.max(...days.map(d => (d.kaigo??0)+(d.iryo??0))) + 1))
+      : Math.max(30, Math.ceil(Math.max(...days.map(d => d.value??0)) * 1.2));
+
+    _chartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { boxWidth: 12, boxHeight: 12, padding: 12, font: { size: 11, weight: '600' } }
+          },
+          annotation: {
+            annotations: {
+              incentiveLine: {
+                type: 'line',
+                yMin: iline, yMax: iline,
+                borderColor: '#E24B4A', borderWidth: 2, borderDash: [6, 4],
+                label: {
+                  display: true, content: iLabel, position: 'start',
+                  backgroundColor: 'rgba(226, 75, 74, 0.85)', color: '#fff',
+                  font: { size: 10, weight: '700' },
+                  padding: { top: 2, bottom: 2, left: 6, right: 6 }, borderRadius: 4
+                }
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) => `${items[0].label}日`,
+              label: (item) => isNurse
+                ? `${item.dataset.label}: ${item.raw}時間`
+                : `${item.raw}単位`
+            }
+          }
+        },
+        scales: {
+          x: {
+            stacked: isNurse,
+            grid: { display: false },
+            ticks: {
+              font: { size: 9 }, maxRotation: 0,
+              callback: function(val, idx) {
+                return (idx + 1) % 5 === 1 ? this.getLabelForValue(val) : '';
+              }
+            }
+          },
+          y: {
+            stacked: isNurse,
+            beginAtZero: true, max: yMax,
+            ticks: {
+              font: { size: 10 },
+              callback: v => isNurse ? v + 'h' : String(v)
+            },
+            grid: { color: 'rgba(0,0,0,0.06)' }
+          }
+        }
+      }
+    });
   }
 
   function renderTable(data) {
