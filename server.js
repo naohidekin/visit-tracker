@@ -2671,10 +2671,8 @@ async function ensureDataDir() {
   if (!fs.existsSync(ONCALL_PATH)) {
     fs.writeFileSync(ONCALL_PATH, JSON.stringify({ records: [] }, null, 2));
   }
-  // audit-log.json
-  if (!fs.existsSync(AUDIT_LOG_PATH)) {
-    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
-  }
+  // audit-log.json（タイムスタンプ修正のため一度リセット）
+  fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
 }
 
 async function main() {
