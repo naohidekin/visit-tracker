@@ -2619,6 +2619,157 @@ app.get('/api/admin/audit-log/verify', requireAdmin, (_req, res) => {
   res.json(result);
 });
 
+// ─── 未入力リマインダー ─────────────────────────────────────────
+
+// 祝日判定（静的リスト：年初に更新する）
+const HOLIDAYS_2026 = [
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23',
+  '2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06',
+  '2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23',
+  '2026-10-12','2026-11-03','2026-11-23',
+];
+const HOLIDAYS_2027 = [
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23',
+  '2027-03-21','2027-04-29','2027-05-03','2027-05-04','2027-05-05',
+  '2027-07-19','2027-08-11','2027-09-20','2027-09-23',
+  '2027-10-11','2027-11-03','2027-11-23',
+];
+const ALL_HOLIDAYS = new Set([...HOLIDAYS_2026, ...HOLIDAYS_2027]);
+
+function isWorkday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return false; // 土日
+  if (ALL_HOLIDAYS.has(dateStr)) return false; // 祝日
+  return true;
+}
+
+function isOnLeaveToday(staffId, dateStr) {
+  const leaveData = loadLeave();
+  return leaveData.requests.some(r =>
+    r.staffId === staffId &&
+    (r.status === 'approved') &&
+    r.dates.includes(dateStr)
+  );
+}
+
+// 特定スタッフの特定日のSheets記録有無を確認
+async function hasRecordForDate(staff, dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const row = DATA_START_ROW + d.getDate() - 1;
+  const sid = getSpreadsheetIdForYear(year);
+
+  try {
+    const api = await getSheets();
+    if (staff.type === 'nurse') {
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
+        spreadsheetId: sid,
+        range: `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`,
+      }));
+      const vals = resp.data.values?.[0] ?? [];
+      return (vals[0] !== undefined && vals[0] !== '') || (vals[1] !== undefined && vals[1] !== '');
+    } else {
+      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
+        spreadsheetId: sid,
+        range: `${month}月!${staff.col}${row}`,
+      }));
+      const val = resp.data.values?.[0]?.[0];
+      return val !== undefined && val !== '';
+    }
+  } catch (e) {
+    console.error(`⚠️ 未入力チェックエラー (${staff.id}):`, e.message);
+    return true; // エラー時はリマインダーを出さない
+  }
+}
+
+// 全スタッフの入力状況を一括取得（batchGet で効率化）
+async function getAllStaffRecordStatus(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const row = DATA_START_ROW + d.getDate() - 1;
+  const sid = getSpreadsheetIdForYear(year);
+
+  const staffData = loadStaff();
+  const activeStaff = staffData.staff.filter(s => !s.archived);
+
+  // batchGet用のレンジを構築
+  const ranges = [];
+  const staffMap = [];
+  for (const s of activeStaff) {
+    if (s.type === 'nurse') {
+      ranges.push(`${month}月!${s.kaigo_col}${row}:${s.iryo_col}${row}`);
+    } else {
+      ranges.push(`${month}月!${s.col}${row}`);
+    }
+    staffMap.push(s);
+  }
+
+  try {
+    const api = await getSheets();
+    const resp = await sheetsRetry(() => api.spreadsheets.values.batchGet({
+      spreadsheetId: sid,
+      ranges,
+    }));
+
+    const results = { missing: [], entered: [], onLeave: [] };
+    const valueRanges = resp.data.valueRanges || [];
+
+    for (let i = 0; i < staffMap.length; i++) {
+      const s = staffMap[i];
+      const info = { id: s.id, name: s.name, type: s.type };
+
+      if (isOnLeaveToday(s.id, dateStr)) {
+        results.onLeave.push(info);
+        continue;
+      }
+
+      const vals = valueRanges[i]?.values?.[0] ?? [];
+      let hasRecord = false;
+      if (s.type === 'nurse') {
+        hasRecord = (vals[0] !== undefined && vals[0] !== '') || (vals[1] !== undefined && vals[1] !== '');
+      } else {
+        hasRecord = vals[0] !== undefined && vals[0] !== '';
+      }
+
+      if (hasRecord) {
+        results.entered.push(info);
+      } else {
+        results.missing.push(info);
+      }
+    }
+    return results;
+  } catch (e) {
+    console.error('⚠️ 全スタッフ入力状況チェックエラー:', e.message);
+    return { missing: [], entered: [], onLeave: [], error: e.message };
+  }
+}
+
+// スタッフ向け: 自分の今日の入力状況
+app.get('/api/reminder/today-status', requireStaff, async (req, res) => {
+  const today = getTodayJST();
+  const workday = isWorkday(today);
+
+  if (!workday) {
+    return res.json({ date: today, hasRecord: true, isWorkday: false, isOnLeave: false });
+  }
+
+  const onLeave = isOnLeaveToday(req.session.staffId, today);
+  if (onLeave) {
+    return res.json({ date: today, hasRecord: true, isWorkday: true, isOnLeave: true });
+  }
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  if (!staff) return res.json({ date: today, hasRecord: true, isWorkday: true, isOnLeave: false });
+
+  const hasRecord = await hasRecordForDate(staff, today);
+  res.json({ date: today, hasRecord, isWorkday: true, isOnLeave: false });
+});
+
+// 管理者向け: 全スタッフの今日の入力状況
 // ─── 運営お知らせ自動発信 ────────────────────────────────────────
 function createSystemNotice(title, body) {
   const data = loadNotices();
@@ -2712,6 +2863,40 @@ async function main() {
     );
   });
   console.log('📢 運営お知らせスケジュール: 毎月16日 8:00 に修正可能期間を自動通知');
+
+  // 毎日18:00（JST）平日のみ: 未入力リマインダーを自動送信
+  cron.schedule('0 9 * * 1-5', async () => { // UTC 9:00 = JST 18:00
+    const today = getTodayJST();
+    if (!isWorkday(today)) return;
+
+    console.log(`[cron] 未入力リマインダーチェック: ${today}`);
+    try {
+      const results = await getAllStaffRecordStatus(today);
+      const d = new Date(today + 'T00:00:00');
+      const dateLabel = `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}）`;
+
+      for (const s of results.missing) {
+        // 重複防止: 同日のリマインダーが既にあればスキップ
+        const notices = loadNotices();
+        const alreadySent = notices.notices.some(n =>
+          n.id === `reminder-${s.id}-${today}` ||
+          (n.targetStaffId === s.id && n.title && n.title.includes(today))
+        );
+        if (alreadySent) continue;
+
+        createStaffNotice(s.id,
+          `${dateLabel}の記録が未入力です`,
+          `本日の訪問記録がまだ入力されていません。\n忘れずに入力をお願いします。`
+        );
+      }
+      if (results.missing.length > 0) {
+        console.log(`[cron] リマインダー送信: ${results.missing.map(s => s.name).join(', ')}`);
+      }
+    } catch (e) {
+      console.error('[cron] リマインダーエラー:', e.message);
+    }
+  });
+  console.log('📝 未入力リマインダー: 毎日 18:00 (JST) 平日のみ');
 
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }

@@ -161,6 +161,10 @@
     .schedule-reminder{text-align:center;padding:8px 0 4px;font-size:14px;line-height:1.8;color:var(--ok)}
 
     /* ── 修正期間アラートバナー ── */
+    .reminder-banner{background:#eff6ff;border:1.5px solid #3b82f6;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin:12px 16px 0;box-shadow:0 2px 8px rgba(59,130,246,.15)}
+    .reminder-banner-icon{font-size:24px;flex-shrink:0}
+    .reminder-banner-title{font-size:13px;font-weight:700;color:#1e40af;margin-bottom:2px}
+    .reminder-banner-desc{font-size:11px;color:#3b82f6}
     .alert-banner{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin:12px 16px 0;box-shadow:0 2px 8px rgba(245,158,11,.15)}
     .alert-banner-icon{font-size:20px;flex-shrink:0;margin-top:1px}
     .alert-banner-title{font-size:13px;font-weight:700;color:#92400e}
@@ -208,6 +212,15 @@
     </div>
   </div>
 </header>
+
+<!-- ── 未入力リマインダー ── -->
+<div class="reminder-banner" id="reminderBanner" style="display:none">
+  <div class="reminder-banner-icon">📝</div>
+  <div>
+    <div class="reminder-banner-title">今日の記録がまだです</div>
+    <div class="reminder-banner-desc" id="reminderDesc"></div>
+  </div>
+</div>
 
 <!-- ── 修正期間アラート（毎月16〜20日のみ表示） ── -->
 <div class="alert-banner" id="alertBanner" style="display:none">
@@ -493,6 +506,20 @@
     }
     document.getElementById('formView').style.display = 'block';
     await loadPendingSchedules();
+
+    // ── 未入力リマインダー ──
+    try {
+      const rr = await fetch('/api/reminder/today-status');
+      if (rr.ok) {
+        const rd = await rr.json();
+        if (rd.isWorkday && !rd.isOnLeave && !rd.hasRecord) {
+          const [,rm,rday] = rd.date.split('-');
+          document.getElementById('reminderDesc').textContent =
+            `${parseInt(rm)}月${parseInt(rday)}日の訪問件数を入力してください`;
+          document.getElementById('reminderBanner').style.display = 'flex';
+        }
+      }
+    } catch (_) { /* ignore */ }
   }
 
   function onDateChange() {
@@ -636,6 +663,9 @@
     btn.disabled = false; btn.textContent = '記録する';
 
     if (!data.success) { alert('エラー: ' + (data.error || '送信失敗')); return; }
+    // 記録成功 → リマインダーバナー非表示
+    const rb = document.getElementById('reminderBanner');
+    if (rb) rb.style.display = 'none';
     await showResult(date, data);
   }
 
