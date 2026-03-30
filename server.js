@@ -11,6 +11,7 @@ const csession   = require('cookie-session');
 const cron       = require('node-cron');
 const multer     = require('multer');
 const XLSX       = require('xlsx');
+const nodemailer = require('nodemailer');
 const { generateRegistrationOptions, verifyRegistrationResponse,
         generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 const { isoBase64URL } = require('@simplewebauthn/server/helpers');
@@ -53,6 +54,8 @@ const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
 const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
 const ONCALL_PATH        = path.join(DATA_DIR, 'oncall-records.json');
 const AUDIT_LOG_PATH     = path.join(DATA_DIR, 'audit-log.json');
+const RESET_TOKENS_PATH  = path.join(DATA_DIR, 'password-reset-tokens.json');
+const APP_BASE_URL       = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
 // ─── 有給・オンコール機能の公開対象スタッフID ──────────────────
@@ -502,6 +505,7 @@ function ensureLeaveFields() {
     if (s.leave_balance !== undefined)          { delete s.leave_balance;          changed = true; }
     if (s.oncall_eligible === undefined)        { s.oncall_eligible = false;       changed = true; }
     if (s.oncall_leave_granted === undefined)   { s.oncall_leave_granted = 0;      changed = true; }
+    if (s.email === undefined)                  { s.email = null;                  changed = true; }
   }
   if (changed) { saveStaff(data); console.log('✅ 有給フィールドを初期化しました'); }
 }
@@ -574,6 +578,93 @@ async function hasCredentials(staffId) {
   } catch { return false; }
 }
 
+// ─── パスワードリセットトークン管理 ──────────────────────────────
+function loadResetTokens() {
+  try { return JSON.parse(fs.readFileSync(RESET_TOKENS_PATH, 'utf8')); }
+  catch { return { tokens: [] }; }
+}
+function saveResetTokens(data) {
+  fs.writeFileSync(RESET_TOKENS_PATH, JSON.stringify(data, null, 2));
+}
+function generateResetToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+function cleanExpiredTokens() {
+  const data = loadResetTokens();
+  const now = Date.now();
+  data.tokens = data.tokens.filter(t => new Date(t.expiresAt).getTime() > now && !t.used);
+  saveResetTokens(data);
+}
+
+// レート制限（メモリ内・プロセス再起動でリセット）
+const resetRateLimit = new Map(); // key: staffId or ip → { count, resetAt }
+function checkRateLimit(key, maxPerWindow = 3, windowMs = 60000) {
+  const now = Date.now();
+  const entry = resetRateLimit.get(key);
+  if (!entry || now > entry.resetAt) {
+    resetRateLimit.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxPerWindow) return false;
+  entry.count++;
+  return true;
+}
+
+// ─── メール送信設定 ───────────────────────────────────────────
+function createMailTransport() {
+  if (!process.env.MAIL_FROM || !process.env.MAIL_APP_PASSWORD) {
+    console.warn('⚠️ MAIL_FROM / MAIL_APP_PASSWORD が未設定です。パスワードリセットメールは送信できません。');
+    return null;
+  }
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.MAIL_FROM,
+      pass: process.env.MAIL_APP_PASSWORD,
+    },
+  });
+}
+let mailTransport = null; // main()内で初期化
+
+async function sendResetEmail(toEmail, staffName, resetUrl) {
+  if (!mailTransport) {
+    console.error('❌ メールトランスポートが未初期化です');
+    return false;
+  }
+  try {
+    await mailTransport.sendMail({
+      from: `"にこっとweb App" <${process.env.MAIL_FROM}>`,
+      to: toEmail,
+      subject: '【にこっとweb App】パスワードリセット',
+      text: `${staffName}さん\n\nパスワードリセットのリクエストを受け付けました。\n以下のリンクをクリックして新しいパスワードを設定してください。\n\n${resetUrl}\n\n※ このリンクは30分間有効です。\n※ 心当たりのない場合は、このメールを無視してください。\n\n--\nにこっと訪問看護ステーション`,
+      html: `
+        <div style="font-family:-apple-system,'Hiragino Kaku Gothic ProN',sans-serif;max-width:480px;margin:0 auto;padding:20px">
+          <div style="text-align:center;margin-bottom:20px">
+            <h2 style="color:#1F497D;font-size:18px;margin:0">にこっとweb App</h2>
+            <p style="color:#6b7a99;font-size:12px;margin:4px 0 0">パスワードリセット</p>
+          </div>
+          <div style="background:#fff;border:1px solid #d0d7e3;border-radius:12px;padding:24px">
+            <p style="font-size:14px;color:#1a2233;margin:0 0 16px">${staffName}さん</p>
+            <p style="font-size:13px;color:#1a2233;line-height:1.7;margin:0 0 20px">パスワードリセットのリクエストを受け付けました。<br>以下のボタンをクリックして新しいパスワードを設定してください。</p>
+            <div style="text-align:center;margin:24px 0">
+              <a href="${resetUrl}" style="background:#2E75B6;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700;display:inline-block">パスワードを再設定する</a>
+            </div>
+            <p style="font-size:11px;color:#6b7a99;margin:20px 0 0;line-height:1.6">
+              ※ このリンクは30分間有効です。<br>
+              ※ 心当たりのない場合は、このメールを無視してください。
+            </p>
+          </div>
+          <p style="text-align:center;font-size:11px;color:#b0b8cc;margin:16px 0 0">にこっと訪問看護ステーション</p>
+        </div>`,
+    });
+    console.log(`📧 パスワードリセットメール送信: ${staffName} → ${toEmail}`);
+    return true;
+  } catch (e) {
+    console.error('❌ メール送信エラー:', e.message);
+    return false;
+  }
+}
+
 // ─── HTMLルーティング ───────────────────────────────────────────
 app.get('/login',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/change-password', (req, res) => {
@@ -604,9 +695,98 @@ app.get('/oncall', (req, res) => {
   if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'oncall.html'));
 });
+app.get('/forgot-password', (_r, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
+app.get('/reset-password',  (_r, res) => res.sendFile(path.join(__dirname, 'public', 'reset-password.html')));
 app.get('/', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ─── API: パスワードリセット ────────────────────────────────────
+app.post('/api/forgot-password', (req, res) => {
+  const { staffId } = req.body;
+  if (!staffId) return res.status(400).json({ error: 'ログインIDを入力してください' });
+
+  // IP レート制限
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (!checkRateLimit(`ip:${ip}`, 5, 60000)) {
+    return res.status(429).json({ error: 'リクエストが多すぎます。しばらく待ってから再度お試しください' });
+  }
+
+  const data = loadStaff();
+  const staff = data.staff.find(s => s.id === staffId);
+
+  // staffが見つからない or email未登録でも同じレスポンス（ID列挙対策）
+  if (!staff || !staff.email) {
+    auditLog(req, 'auth.reset_request', { type: 'auth', id: staffId, label: 'メール未登録/ID不明' });
+    return res.json({ success: true, message: 'ご登録のメールアドレスにリセットリンクを送信しました' });
+  }
+
+  // staffId レート制限（5分に1回）
+  if (!checkRateLimit(`staff:${staffId}`, 1, 300000)) {
+    return res.json({ success: true, message: 'ご登録のメールアドレスにリセットリンクを送信しました' });
+  }
+
+  // トークン生成・保存
+  const token = generateResetToken();
+  const tokens = loadResetTokens();
+  // 同一staffの古い未使用トークンを無効化
+  tokens.tokens.forEach(t => { if (t.staffId === staffId && !t.used) t.used = true; });
+  tokens.tokens.push({
+    staffId: staff.id,
+    token,
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30分
+    used: false,
+    createdAt: new Date().toISOString(),
+  });
+  saveResetTokens(tokens);
+
+  // メール送信（非同期・レスポンスは先に返す）
+  const resetUrl = `${APP_BASE_URL}/reset-password?token=${token}`;
+  sendResetEmail(staff.email, staff.name, resetUrl);
+
+  auditLog(req, 'auth.reset_request', { type: 'auth', id: staff.id, label: staff.name });
+  res.json({ success: true, message: 'ご登録のメールアドレスにリセットリンクを送信しました' });
+});
+
+app.get('/api/reset-password/verify', (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.json({ valid: false });
+
+  const data = loadResetTokens();
+  const entry = data.tokens.find(t => t.token === token && !t.used);
+  if (!entry) return res.json({ valid: false });
+  if (new Date(entry.expiresAt).getTime() < Date.now()) return res.json({ valid: false, expired: true });
+
+  res.json({ valid: true });
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  const { token, newPassword, confirmPassword } = req.body;
+  if (!token || !newPassword) return res.status(400).json({ error: 'パラメータが不足しています' });
+  if (newPassword !== confirmPassword) return res.status(400).json({ error: 'パスワードが一致しません' });
+  if (newPassword.length < 4) return res.status(400).json({ error: 'パスワードは4文字以上で設定してください' });
+
+  const tokenData = loadResetTokens();
+  const entry = tokenData.tokens.find(t => t.token === token && !t.used);
+  if (!entry) return res.status(400).json({ error: 'リセットリンクが無効です。再度リクエストしてください' });
+  if (new Date(entry.expiresAt).getTime() < Date.now()) {
+    return res.status(400).json({ error: 'リセットリンクの有効期限が切れています。再度リクエストしてください' });
+  }
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === entry.staffId);
+  if (!staff) return res.status(400).json({ error: 'スタッフが見つかりません' });
+
+  staff.password_hash = await bcrypt.hash(newPassword, 10);
+  saveStaff(staffData);
+
+  // トークンを使用済みに
+  entry.used = true;
+  saveResetTokens(tokenData);
+
+  auditLog(req, 'auth.self_reset_password', { type: 'auth', id: staff.id, label: staff.name });
+  res.json({ success: true });
 });
 
 // ─── API: スタッフ認証 ──────────────────────────────────────────
@@ -1089,10 +1269,13 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
         if (k > 0 || i > 0) working_days++;
       }
       const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
-      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const iline     = Math.round(rawLine * workRatio * 100) / 100;
       const avg = working_days > 0 ? (total_kaigo + total_iryo) / working_days : 0;
       res.json({ total_kaigo, total_iryo, total: total_kaigo + total_iryo, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline });
+                 incentive_line: iline, incentive_triggered: avg > iline,
+                 work_hours: staff.work_hours ?? null });
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
@@ -1105,11 +1288,18 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
         total_units += v;
         if (v > 0) working_days++;
       }
-      const iDef2 = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
-      const iline2 = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
-      const avg2 = working_days > 0 ? total_units / working_days : 0;
+      const iDef2     = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+      const rawLine2  = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
+      const workRatio2 = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const iline2    = Math.round(rawLine2 * workRatio2 * 100) / 100;
+      const avg2      = working_days > 0 ? total_units / working_days : 0;
+      const threshold2     = iline2 * working_days;
+      const over_units2    = Math.max(0, total_units - threshold2);
+      const incentive_amount2 = Math.floor(over_units2) * 1000;
       res.json({ total_units, working_days,
-                 incentive_line: iline2, incentive_triggered: avg2 > iline2 });
+                 incentive_line: iline2, incentive_triggered: avg2 > iline2,
+                 over_units: Math.floor(over_units2), incentive_amount: incentive_amount2,
+                 work_hours: staff.work_hours ?? null });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1182,11 +1372,20 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
         days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], kaigo, iryo, total });
       }
       const total = total_kaigo + total_iryo;
-      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const rawLineN   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const workRatioN = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const ilineN     = Math.round(rawLineN * workRatioN * 100) / 100;
       const avg = working_days > 0 ? total / working_days : 0;
+      const thresholdN     = ilineN * working_days;
+      const over_hoursN    = Math.max(0, total - thresholdN);
+      const incentive_countN  = Math.floor(over_hoursN / 0.5);
+      const incentive_amountN = incentive_countN * 2000;
       res.json({ type: 'nurse', year: y, month: m, days,
         stats: { total_kaigo, total_iryo, total, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline } });
+                 incentive_line: ilineN, incentive_triggered: avg > ilineN,
+                 over_hours: Math.round(over_hoursN * 10) / 10,
+                 incentive_amount: incentive_amountN,
+                 work_hours: staff.work_hours ?? null } });
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
@@ -1201,11 +1400,18 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
         if (value != null) { total_units += value; working_days++; }
         days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], value });
       }
-      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const rawLineR   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const workRatioR = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const ilineR     = Math.round(rawLineR * workRatioR * 100) / 100;
       const avg = working_days > 0 ? total_units / working_days : 0;
+      const threshold        = ilineR * working_days;
+      const over_units       = Math.max(0, total_units - threshold);
+      const incentive_amount = Math.floor(over_units) * 1000;
       res.json({ type: 'rehab', year: y, month: m, days,
         stats: { total_units, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline } });
+                 incentive_line: ilineR, incentive_triggered: avg > ilineR,
+                 over_units: Math.floor(over_units), incentive_amount,
+                 work_hours: staff.work_hours ?? null } });
     }
   } catch (e) {
     console.error('monthly-detail error:', e.message);
@@ -1249,11 +1455,20 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
         days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], kaigo, iryo, total });
       }
       const total = total_kaigo + total_iryo;
-      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const rawLineAN   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const workRatioAN = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const ilineAN     = Math.round(rawLineAN * workRatioAN * 100) / 100;
       const avg = working_days > 0 ? total / working_days : 0;
+      const thresholdAN    = ilineAN * working_days;
+      const over_hoursAN   = Math.max(0, total - thresholdAN);
+      const incentive_countAN  = Math.floor(over_hoursAN / 0.5);
+      const incentive_amountAN = incentive_countAN * 2000;
       res.json({ type: 'nurse', year: y, month: m, days,
         stats: { total_kaigo, total_iryo, total, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline } });
+                 incentive_line: ilineAN, incentive_triggered: avg > ilineAN,
+                 over_hours: Math.round(over_hoursAN * 10) / 10,
+                 incentive_amount: incentive_amountAN,
+                 work_hours: staff.work_hours ?? null } });
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
@@ -1268,11 +1483,18 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
         if (value != null) { total_units += value; working_days++; }
         days.push({ day: d, weekday: WD[new Date(y, m - 1, d).getDay()], value });
       }
-      const iline = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const rawLineAR   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const workRatioAR = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const ilineAR     = Math.round(rawLineAR * workRatioAR * 100) / 100;
       const avg = working_days > 0 ? total_units / working_days : 0;
+      const threshold        = ilineAR * working_days;
+      const over_units       = Math.max(0, total_units - threshold);
+      const incentive_amount = Math.floor(over_units) * 1000;
       res.json({ type: 'rehab', year: y, month: m, days,
         stats: { total_units, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline } });
+                 incentive_line: ilineAR, incentive_triggered: avg > ilineAR,
+                 over_units: Math.floor(over_units), incentive_amount,
+                 work_hours: staff.work_hours ?? null } });
     }
   } catch (e) {
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
@@ -1336,6 +1558,7 @@ app.get('/api/admin/incentive', requireAdmin, (_req, res) => {
       id: s.id, name: s.name, type: s.type,
       furigana_family: s.furigana_family, furigana_given: s.furigana_given,
       incentive_line: s.incentive_line ?? null,
+      work_hours: s.work_hours ?? null,
     })),
   });
 });
@@ -1358,6 +1581,17 @@ app.post('/api/admin/staff/:id/incentive', requireAdmin, (req, res) => {
   staff.incentive_line = (line != null) ? Number(line) : null;
   saveStaff(data);
   auditLog(req, 'incentive.staff_update', { type: 'incentive', id: staff.id, label: staff.name }, { line: staff.incentive_line });
+  res.json({ success: true });
+});
+
+app.post('/api/admin/staff/:id/work-hours', requireAdmin, (req, res) => {
+  const data  = loadStaff();
+  const staff = data.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  const { work_hours } = req.body;
+  staff.work_hours = (work_hours != null && work_hours !== '') ? Number(work_hours) : null;
+  saveStaff(data);
+  auditLog(req, 'staff.work_hours_update', { type: 'staff', id: staff.id, label: staff.name }, { work_hours: staff.work_hours });
   res.json({ success: true });
 });
 
@@ -1397,9 +1631,11 @@ app.patch('/api/admin/staff/:id/archive', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/staff', requireAdmin, async (req, res) => {
-  const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall } = req.body;
+  const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall, email } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
 
   const data = loadStaff();
   if (data.staff.find(s => s.id === loginId))
@@ -1632,6 +1868,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         seq: nextSeq, initial_pw: initialPw,
         hire_date: hire_date || null,
         oncall: oncall || '無',
+        email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
 
     } else {
@@ -1665,6 +1902,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         type: type, col: newCol,
         seq: nextSeq, initial_pw: initialPw,
         hire_date: hire_date || null,
+        email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
     }
 
@@ -1679,14 +1917,17 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 });
 
 app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
-  const { name, furigana_family, furigana_given } = req.body;
+  const { name, furigana_family, furigana_given, email } = req.body;
   if (!name) return res.status(400).json({ error: '氏名は必須です' });
+  if (email !== undefined && email !== null && email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   staff.name             = name;
   staff.furigana_family  = furigana_family  ?? staff.furigana_family;
   staff.furigana_given   = furigana_given   ?? staff.furigana_given;
+  if (email !== undefined) staff.email = email || null;
   saveStaff(data);
   auditLog(req, 'staff.update', { type: 'staff', id: staff.id, label: name });
   res.json({ success: true, staff: data.staff });
@@ -2832,6 +3073,8 @@ async function main() {
   await ensureDataDir();
   await ensurePasswordsHashed();
   ensureLeaveFields();
+  mailTransport = createMailTransport();
+  cleanExpiredTokens();
   await syncNewStaffFromSource();
   syncLeaveFieldsFromSource();
 
@@ -2897,6 +3140,9 @@ async function main() {
     }
   });
   console.log('📝 未入力リマインダー: 毎日 18:00 (JST) 平日のみ');
+
+  // 毎日0:00 UTC: 期限切れリセットトークンを削除
+  cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); });
 
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }

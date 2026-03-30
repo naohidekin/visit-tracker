@@ -70,6 +70,8 @@
     .result-big-num{font-size:36px;font-weight:800;color:var(--text)}
     .result-card.incentive .result-big-num{color:#E24B4A}
     .result-incentive-msg{font-size:15px;font-weight:700;color:#E24B4A;text-align:center;margin-bottom:4px}
+    .result-incentive-amount{font-size:13px;color:#555;text-align:center;margin-bottom:8px;background:#fff8e1;border-radius:6px;padding:6px 12px;border:1px solid #ffe082}
+    .result-incentive-amount strong{font-size:17px;color:#E24B4A;font-weight:800}
     .result-sub-grid{display:grid;gap:8px;margin-top:14px}
     .result-sub-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
     .result-sub-grid.cols-2{grid-template-columns:1fr 1fr}
@@ -309,7 +311,22 @@
     }
 
     const incentiveMsg = isIncentive
-      ? '<p class="result-incentive-msg">インセンティブが発生しています💰</p>' : '';
+      ? (() => {
+          if (data.type === 'rehab' && s.incentive_amount != null) {
+            const overUnits = s.over_units || 0;
+            const amount    = s.incentive_amount.toLocaleString('ja-JP');
+            return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
+                    <p class="result-incentive-amount">超過 ${overUnits}単位 × 1,000円 ＝ <strong>¥${amount}</strong></p>`;
+          }
+          if (data.type === 'nurse' && s.incentive_amount != null) {
+            const overHours = s.over_hours || 0;
+            const amount    = s.incentive_amount.toLocaleString('ja-JP');
+            return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
+                    <p class="result-incentive-amount">超過 ${overHours}時間 × 2,000円 ＝ <strong>¥${amount}</strong></p>`;
+          }
+          return '<p class="result-incentive-msg">インセンティブが発生しています💰</p>';
+        })()
+      : '';
 
     document.getElementById('statsCard').innerHTML = `
       <div class="result-card${cls}">

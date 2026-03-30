@@ -738,6 +738,10 @@
           <div class="auto-label" id="pwAutoLabel"></div>
         </div>
         <div class="field">
+          <label>メールアドレス</label>
+          <input type="email" id="newEmail" placeholder="example@gmail.com">
+        </div>
+        <div class="field">
           <label>入社日</label>
           <input type="date" id="newHireDate">
         </div>
@@ -979,9 +983,10 @@
     const ocBtn = s.type === 'nurse'
       ? `<button class="btn-xs ${s.oncall_eligible ? 'btn-green' : 'btn-reset'}" onclick="toggleOncallEligible('${s.id}',${!s.oncall_eligible})" title="オンコール対象">${s.oncall_eligible ? 'OC有' : 'OC無'}</button>`
       : '';
+    const emailIcon = s.email ? `<span title="${s.email}" style="font-size:11px;cursor:help">✉️</span>` : `<span style="font-size:10px;color:#ccc" title="メール未登録">✉️</span>`;
     return `
       <td>
-        <div class="name-furi">${furi}</div>
+        <div class="name-furi">${furi} ${emailIcon}</div>
         <div class="name-kanji">${s.name}</div>
       </td>
       <td>${badge}</td>
@@ -1033,11 +1038,13 @@
     if (!tr) return;
     const furi_f = s.furigana_family || '';
     const furi_g = s.furigana_given  || '';
+    const email  = s.email || '';
     tr.innerHTML = `
       <td>
         <input class="edit-input" id="edit-name-${id}" value="${s.name}" placeholder="フルネーム" style="margin-bottom:4px">
         <input class="edit-input" id="edit-furi-f-${id}" value="${furi_f}" placeholder="姓ふりがな" style="margin-bottom:4px">
-        <input class="edit-input" id="edit-furi-g-${id}" value="${furi_g}" placeholder="名ふりがな">
+        <input class="edit-input" id="edit-furi-g-${id}" value="${furi_g}" placeholder="名ふりがな" style="margin-bottom:4px">
+        <input class="edit-input" id="edit-email-${id}" value="${email}" placeholder="メールアドレス" type="email" style="font-size:12px">
       </td>
       <td style="font-size:11px;color:var(--muted)">変更不可</td>
       <td>
@@ -1062,11 +1069,12 @@
     const name    = document.getElementById(`edit-name-${id}`).value.trim();
     const furi_f  = document.getElementById(`edit-furi-f-${id}`).value.trim();
     const furi_g  = document.getElementById(`edit-furi-g-${id}`).value.trim();
+    const email   = document.getElementById(`edit-email-${id}`).value.trim();
     if (!name) { alert('氏名を入力してください'); return; }
     const res  = await fetch(`/api/admin/staff/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, furigana_family: furi_f, furigana_given: furi_g }),
+      body: JSON.stringify({ name, furigana_family: furi_f, furigana_given: furi_g, email: email || null }),
     });
     const data = await res.json();
     if (!data.success) { alert(data.error || '保存に失敗しました'); return; }
@@ -1108,6 +1116,7 @@
     const type     = document.getElementById('newType').value;
     const loginId  = document.getElementById('newLoginId').value.trim();
     const initPw   = document.getElementById('newInitialPw').value.trim();
+    const email    = document.getElementById('newEmail').value.trim() || null;
     const hireDate = document.getElementById('newHireDate').value || null;
     const oncall   = type === 'nurse' ? document.getElementById('newOncall').value : undefined;
     const err     = document.getElementById('addErr');
@@ -1124,7 +1133,7 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, furigana_family: fkana, furigana_given: gkana,
                              type, loginId, initialPw: initPw,
-                             hire_date: hireDate, oncall }),
+                             hire_date: hireDate, oncall, email }),
     });
     const data = await res.json();
     btn.disabled = false; btn.textContent = '追加する';
@@ -1133,7 +1142,7 @@
       staffList = data.staff;
       renderTable();
       // フォームリセット
-      ['newName','newFkana','newGkana','newLoginId','newInitialPw','newHireDate'].forEach(id => {
+      ['newName','newFkana','newGkana','newLoginId','newInitialPw','newEmail','newHireDate'].forEach(id => {
         document.getElementById(id).value = '';
       });
       document.getElementById('idAutoLabel').textContent = '';
@@ -1841,6 +1850,17 @@
     document.getElementById('incentiveStaffSection').style.display = 'block';
   }
 
+  function buildWorkHoursOpts(selected) {
+    const FULL = 8.0;
+    let html = `<option value=""${selected == null ? ' selected' : ''}>フルタイム (8h)</option>`;
+    for (let v = 4.0; v < FULL - 0.001; v += 0.5) {
+      const rounded = Math.round(v * 10) / 10;
+      const sel = (selected != null && Math.abs(selected - rounded) < 0.01) ? ' selected' : '';
+      html += `<option value="${rounded}"${sel}>${rounded.toFixed(1)}h / 日</option>`;
+    }
+    return html;
+  }
+
   function renderIncentiveTable(nurseOpts, rehabOpts) {
     const container = document.getElementById('incentiveBody');
     container.innerHTML = '';
@@ -1860,10 +1880,22 @@
           <div class="name-kanji">${s.name}</div>
         </div>
         <div class="iline-type">${badge}</div>
-        <select class="iline-select" id="iline_${s.id}">
-          ${buildSelectHtml(opts, effective, unit)}
-        </select>
-        <button class="btn-save" onclick="saveStaffIncentive('${s.id}','${s.name}')">保存</button>`;
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap">目安ライン</span>
+            <select class="iline-select" id="iline_${s.id}" style="flex:1">
+              ${buildSelectHtml(opts, effective, unit)}
+            </select>
+            <button class="btn-save" onclick="saveStaffIncentive('${s.id}','${s.name}')">保存</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:var(--muted);white-space:nowrap">時短勤務</span>
+            <select class="iline-select" id="whours_${s.id}" style="flex:1">
+              ${buildWorkHoursOpts(s.work_hours)}
+            </select>
+            <button class="btn-save" onclick="saveWorkHours('${s.id}','${s.name}')">保存</button>
+          </div>
+        </div>`;
       container.appendChild(row);
     }
   }
@@ -1879,6 +1911,21 @@
     if (data.success) {
       incentiveData.defaults = { nurse, rehab };
       showToast('✅ デフォルトを保存しました');
+    } else showToast('エラー: ' + (data.error || '保存失敗'));
+  }
+
+  async function saveWorkHours(id, name) {
+    const val = document.getElementById(`whours_${id}`).value;
+    const work_hours = val === '' ? null : parseFloat(val);
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/work-hours`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ work_hours }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      const s = incentiveData.staff.find(x => x.id === id);
+      if (s) s.work_hours = work_hours;
+      showToast(`✅ ${name} の時短設定を保存しました`);
     } else showToast('エラー: ' + (data.error || '保存失敗'));
   }
 
@@ -2178,6 +2225,8 @@
     'auth.webauthn_login': 'WebAuthnログイン',
     'auth.webauthn_delete': 'WebAuthn削除',
     'auth.change_password': 'パスワード変更',
+    'auth.reset_request': 'PWリセット申請',
+    'auth.self_reset_password': 'PWセルフリセット',
     'record.create': '実績入力',
     'record.confirm_schedule': '予定確定',
     'record.admin_edit': '管理者実績編集',
