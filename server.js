@@ -225,7 +225,7 @@ function appendAuditLog(entry) {
 
 function auditLog(req, action, target, details = {}) {
   try {
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const now = new Date();
     const entry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       timestamp: now.toISOString(),
