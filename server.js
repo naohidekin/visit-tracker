@@ -5,6 +5,7 @@ const express    = require('express');
 const { google } = require('googleapis');
 const fs         = require('fs');
 const path       = require('path');
+const crypto     = require('crypto');
 const bcrypt     = require('bcryptjs');
 const csession   = require('cookie-session');
 const cron       = require('node-cron');
@@ -51,6 +52,7 @@ const NOTICES_PATH    = path.join(DATA_DIR, 'notices.json');
 const EXCEL_RESULTS_PATH = path.join(DATA_DIR, 'excel-results.json');
 const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
 const ONCALL_PATH        = path.join(DATA_DIR, 'oncall-records.json');
+const AUDIT_LOG_PATH     = path.join(DATA_DIR, 'audit-log.json');
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
 // ─── 有給・オンコール機能の公開対象スタッフID ──────────────────
@@ -190,6 +192,74 @@ function loadOncall() {
 }
 function saveOncall(data) {
   fs.writeFileSync(ONCALL_PATH, JSON.stringify(data, null, 2));
+}
+
+// ─── 監査ログ（改ざん検知チェーン付き） ─────────────────────────
+function loadAuditLog() {
+  if (!fs.existsSync(AUDIT_LOG_PATH)) return [];
+  try { return JSON.parse(fs.readFileSync(AUDIT_LOG_PATH, 'utf8')); }
+  catch { return []; }
+}
+
+function hashEntry(entry) {
+  return crypto.createHash('sha256').update(JSON.stringify(entry)).digest('hex');
+}
+
+function appendAuditLog(entry) {
+  const log = loadAuditLog();
+  entry.prevHash = log.length > 0 ? hashEntry(log[log.length - 1]) : '0';
+  log.push(entry);
+  // ログローテーション: 10,000件超でアーカイブ
+  if (log.length > 10000) {
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const archiveName = `audit-log-${now.toISOString().slice(0, 7)}.json`;
+    const archivePath = path.join(DATA_DIR, archiveName);
+    fs.writeFileSync(archivePath, JSON.stringify(log.slice(0, -1000), null, 2));
+    const remaining = log.slice(-1000);
+    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(remaining, null, 2));
+    console.log(`📋 監査ログローテーション: ${archiveName} にアーカイブ`);
+  } else {
+    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(log, null, 2));
+  }
+}
+
+function auditLog(req, action, target, details = {}) {
+  try {
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: now.toISOString(),
+      actor: {
+        type: req.session?.isAdmin ? 'admin' : (req.session?.staffId ? 'staff' : 'anonymous'),
+        staffId: req.session?.staffId || null,
+        staffName: req.session?.staffName || null,
+      },
+      action,
+      target,
+      details,
+      ip: req.ip || req.connection?.remoteAddress || null,
+    };
+    appendAuditLog(entry);
+  } catch (e) {
+    console.error('⚠️ 監査ログ書き込みエラー:', e.message);
+  }
+}
+
+// 監査ログのハッシュチェーン整合性検証
+function verifyAuditChain() {
+  const log = loadAuditLog();
+  if (log.length === 0) return { valid: true, entries: 0, errors: [] };
+  const errors = [];
+  for (let i = 1; i < log.length; i++) {
+    const expectedHash = hashEntry(log[i - 1]);
+    if (log[i].prevHash !== expectedHash) {
+      errors.push({ index: i, id: log[i].id, expected: expectedHash, actual: log[i].prevHash });
+    }
+  }
+  if (log[0].prevHash !== '0') {
+    errors.unshift({ index: 0, id: log[0].id, message: '先頭エントリのprevHashが不正' });
+  }
+  return { valid: errors.length === 0, entries: log.length, errors };
 }
 
 // Yuw connect 有給付与テーブル（月数ベース：労基法準拠）
@@ -551,16 +621,20 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ error: 'IDまたはパスワードが正しくありません' });
 
   const ok = await bcrypt.compare(password, staff.password_hash);
-  if (!ok)
+  if (!ok) {
+    auditLog(req, 'auth.login_failed', { type: 'auth', id: loginId, label: 'パスワード不一致' });
     return res.status(401).json({ error: 'IDまたはパスワードが正しくありません' });
+  }
 
   req.session.staffId   = staff.id;
   req.session.staffName = staff.name;
   req.session.staffType = staff.type;
+  auditLog(req, 'auth.login', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
 });
 
 app.post('/api/logout', (req, res) => {
+  auditLog(req, 'auth.logout', { type: 'auth', id: req.session?.staffId, label: req.session?.staffName });
   req.session = null;
   res.json({ success: true });
 });
@@ -719,6 +793,7 @@ app.post('/api/webauthn/login-verify', async (req, res) => {
     req.session.staffId = staff.id;
     req.session.staffName = staff.name;
     req.session.staffType = staff.type;
+    auditLog(req, 'auth.webauthn_login', { type: 'auth', id: staff.id, label: staff.name });
     res.json({ success: true });
   } catch (e) {
     console.error('WebAuthn login-verify error:', e.message);
@@ -729,6 +804,7 @@ app.post('/api/webauthn/login-verify', async (req, res) => {
 app.post('/api/webauthn/delete', requireStaff, async (req, res) => {
   try {
     await deleteCredentials(req.session.staffId);
+    auditLog(req, 'auth.webauthn_delete', { type: 'auth', id: req.session.staffId, label: req.session.staffName });
     res.json({ success: true });
   } catch (e) {
     console.error('WebAuthn delete error:', e.message);
@@ -755,6 +831,7 @@ app.post('/api/change-password', requireStaff, async (req, res) => {
 
   staff.password_hash = await bcrypt.hash(newPassword, 10);
   saveStaff(data);
+  auditLog(req, 'auth.change_password', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
 });
 
@@ -838,6 +915,7 @@ app.post('/api/record', requireStaff, async (req, res) => {
           ],
         },
       }));
+      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, kaigo: kVal, iryo: iVal });
       res.json({ success: true, kaigo: kVal, iryo: iVal });
     } else {
       const { value } = req.body;
@@ -848,6 +926,7 @@ app.post('/api/record', requireStaff, async (req, res) => {
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [[val]] },
       }));
+      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, value: val });
       res.json({ success: true, value: val });
     }
   } catch (e) {
@@ -898,6 +977,7 @@ app.post('/api/schedules', requireStaff, (req, res) => {
 
   data.schedules.push(entry);
   saveSchedules(data);
+  auditLog(req, 'schedule.create', { type: 'schedule', id: entry.id, label: `${req.session.staffName} ${date}` });
   res.json({ success: true, schedule: entry });
 });
 
@@ -945,6 +1025,7 @@ app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
     }
     data.schedules.splice(idx, 1);
     saveSchedules(data);
+    auditLog(req, 'record.confirm_schedule', { type: 'schedule', id: req.params.id, label: `${schedule.staffName || req.session.staffName} ${schedule.date}` });
     res.json({ success: true });
   } catch (e) {
     const detail = e.response?.data?.error?.message || e.message;
@@ -956,8 +1037,10 @@ app.delete('/api/schedules/:id', requireStaff, (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
+  const removed = data.schedules[idx];
   data.schedules.splice(idx, 1);
   saveSchedules(data);
+  auditLog(req, 'schedule.delete', { type: 'schedule', id: req.params.id, label: `${req.session.staffName} ${removed.date}` });
   res.json({ success: true });
 });
 
@@ -969,8 +1052,10 @@ app.delete('/api/admin/schedules/:id', requireAdmin, (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
+  const removed = data.schedules[idx];
   data.schedules.splice(idx, 1);
   saveSchedules(data);
+  auditLog(req, 'schedule.admin_delete', { type: 'schedule', id: req.params.id, label: `${removed.staffName} ${removed.date}` });
   res.json({ success: true });
 });
 
@@ -1235,6 +1320,7 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
         requestBody: { values: [[val]] },
       }));
     }
+    auditLog(req, 'record.admin_edit', { type: 'visit_record', id: staffId, label: `${staff.name} ${date}` }, { date, ...req.body });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
@@ -1260,6 +1346,7 @@ app.post('/api/admin/incentive/defaults', requireAdmin, (req, res) => {
   const data = loadStaff();
   data.incentive_defaults = { nurse: Number(nurse), rehab: Number(rehab) };
   saveStaff(data);
+  auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: Number(nurse), rehab: Number(rehab) });
   res.json({ success: true });
 });
 
@@ -1270,6 +1357,7 @@ app.post('/api/admin/staff/:id/incentive', requireAdmin, (req, res) => {
   const { line } = req.body;
   staff.incentive_line = (line != null) ? Number(line) : null;
   saveStaff(data);
+  auditLog(req, 'incentive.staff_update', { type: 'incentive', id: staff.id, label: staff.name }, { line: staff.incentive_line });
   res.json({ success: true });
 });
 
@@ -1277,12 +1365,15 @@ app.post('/api/admin/staff/:id/incentive', requireAdmin, (req, res) => {
 app.post('/api/admin/login', (req, res) => {
   if (req.body.password === process.env.ADMIN_PASSWORD) {
     req.session.isAdmin = true;
+    auditLog(req, 'auth.admin_login', { type: 'auth', label: '管理者' });
     res.json({ success: true });
   } else {
+    auditLog(req, 'auth.admin_login_failed', { type: 'auth', label: '管理者ログイン失敗' });
     res.status(401).json({ error: 'パスワードが正しくありません' });
   }
 });
 app.post('/api/admin/logout', (req, res) => {
+  auditLog(req, 'auth.admin_logout', { type: 'auth', label: '管理者' });
   req.session.isAdmin = false;
   res.json({ success: true });
 });
@@ -1301,6 +1392,7 @@ app.patch('/api/admin/staff/:id/archive', requireAdmin, (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   staff.archived = !staff.archived;
   saveStaff(data);
+  auditLog(req, 'staff.archive_toggle', { type: 'staff', id: staff.id, label: staff.name }, { archived: staff.archived });
   res.json({ success: true, archived: staff.archived, staff: data.staff });
 });
 
@@ -1578,6 +1670,7 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
 
     data.staff.push(newEntry);
     saveStaff(data);
+    auditLog(req, 'staff.create', { type: 'staff', id: loginId, label: name }, { type, loginId });
     res.json({ success: true, staff: data.staff });
   } catch (e) {
     console.error(e);
@@ -1595,6 +1688,7 @@ app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
   staff.furigana_family  = furigana_family  ?? staff.furigana_family;
   staff.furigana_given   = furigana_given   ?? staff.furigana_given;
   saveStaff(data);
+  auditLog(req, 'staff.update', { type: 'staff', id: staff.id, label: name });
   res.json({ success: true, staff: data.staff });
 });
 
@@ -1703,6 +1797,7 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
     }
 
     saveStaff(data);
+    auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
     res.json({ success: true, removed, staff: data.staff });
   } catch (e) {
     console.error(e);
@@ -1718,6 +1813,7 @@ app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) =
   const newPw = staff.initial_pw || Math.random().toString(36).slice(-4).toUpperCase();
   staff.password_hash = await bcrypt.hash(newPw, 10);
   saveStaff(data);
+  auditLog(req, 'staff.reset_password', { type: 'staff', id: staff.id, label: staff.name });
   res.json({ success: true, initial_pw: newPw });
 });
 
@@ -2065,6 +2161,7 @@ app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => 
   };
   leaveData.requests.push(request);
   saveLeave(leaveData);
+  auditLog(req, 'leave.request', { type: 'leave', id: request.id, label: `${staff.name} ${start}` }, { type, dates });
   res.json({ ok: true, request });
 });
 
@@ -2080,6 +2177,7 @@ app.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, (re
   request.status = 'cancelled';
   request.cancelledAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
   saveLeave(leaveData);
+  auditLog(req, 'leave.cancel', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
   res.json({ ok: true });
 });
 
@@ -2145,6 +2243,7 @@ app.post('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => 
   // オンコール有給を自動再計算
   updateOncallLeave(req.session.staffId);
 
+  auditLog(req, 'oncall.upsert', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${date}` }, { date, count: c, totalMinutes: tm, transportCount: tc });
   res.json({ ok: true });
 });
 
@@ -2154,8 +2253,10 @@ app.delete('/api/oncall/records/:id', requireStaff, (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'レコードが見つかりません' });
   if (data.records[idx].staffId !== req.session.staffId)
     return res.status(403).json({ error: '自分のレコードのみ削除できます' });
+  const removed = data.records[idx];
   data.records.splice(idx, 1);
   saveOncall(data);
+  auditLog(req, 'oncall.delete', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${removed.date}` });
   res.json({ ok: true });
 });
 
@@ -2227,6 +2328,7 @@ app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   staff.oncall_eligible = !!req.body.oncall_eligible;
   saveStaff(staffData);
+  auditLog(req, 'oncall.eligible_update', { type: 'staff', id: staff.id, label: staff.name }, { oncall_eligible: staff.oncall_eligible });
   res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
 });
 
@@ -2263,6 +2365,7 @@ app.post('/api/admin/leave/requests/:id/approve', requireAdmin, (req, res) => {
   request.adminComment = req.body.comment || null;
   request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
   saveLeave(leaveData);
+  auditLog(req, 'leave.approve', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
 
   // 通知を作成
   const dateStr = request.dates.length === 1
@@ -2288,6 +2391,7 @@ app.post('/api/admin/leave/requests/:id/reject', requireAdmin, (req, res) => {
   request.adminComment = req.body.comment || null;
   request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
   saveLeave(leaveData);
+  auditLog(req, 'leave.reject', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
 
   // 通知を作成
   const dateStr = request.dates.length === 1
@@ -2358,6 +2462,7 @@ app.post('/api/admin/staff/:id/leave-balance', requireAdmin, (req, res) => {
   if (grant_date !== undefined)       staff.leave_grant_date = grant_date;
 
   saveStaff(staffData);
+  auditLog(req, 'leave.balance_update', { type: 'leave', id: staff.id, label: staff.name }, { granted, carried_over, manual_adjustment, grant_date });
   res.json({ ok: true, balance: calcLeaveBalance(staff) });
 });
 
@@ -2378,6 +2483,7 @@ app.post('/api/admin/staff/:id/hire-date', requireAdmin, (req, res) => {
     staff.leave_grant_date = getTodayJST();
   }
   saveStaff(staffData);
+  auditLog(req, 'staff.hire_date_update', { type: 'staff', id: staff.id, label: staff.name }, { hire_date, auto_apply });
   res.json({ ok: true, auto_grant_days: calcLeaveGrantDays(hire_date) });
 });
 
@@ -2455,6 +2561,7 @@ app.post('/api/admin/notices', requireAdmin, (req, res) => {
   };
   data.notices.push(notice);
   saveNotices(data);
+  auditLog(req, 'notice.create', { type: 'notice', id: notice.id, label: title });
   res.json({ ok: true, notice });
 });
 
@@ -2465,6 +2572,7 @@ app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
   if (req.body.title) notice.title = req.body.title;
   if (req.body.body) notice.body = req.body.body;
   saveNotices(data);
+  auditLog(req, 'notice.update', { type: 'notice', id: notice.id, label: notice.title });
   res.json({ ok: true, notice });
 });
 
@@ -2472,13 +2580,43 @@ app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
   const data = loadNotices();
   const idx = data.notices.findIndex(n => n.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });
+  const removedNotice = data.notices[idx];
   data.notices.splice(idx, 1);
   // readStatus からも削除
   for (const staffId in data.readStatus) {
     data.readStatus[staffId] = data.readStatus[staffId].filter(id => id !== req.params.id);
   }
   saveNotices(data);
+  auditLog(req, 'notice.delete', { type: 'notice', id: req.params.id, label: removedNotice.title });
   res.json({ ok: true });
+});
+
+// ─── API: 監査ログ（管理者向け） ──────────────────────────────
+app.get('/api/admin/audit-log', requireAdmin, (req, res) => {
+  const log = loadAuditLog();
+  const { from, to, action, actor, page = 1, limit = 50 } = req.query;
+  let filtered = log;
+
+  if (from) filtered = filtered.filter(e => e.timestamp >= from);
+  if (to)   filtered = filtered.filter(e => e.timestamp <= to + 'T23:59:59');
+  if (action) filtered = filtered.filter(e => e.action.startsWith(action));
+  if (actor)  filtered = filtered.filter(e => e.actor.staffId === actor || e.actor.type === actor);
+
+  // 新しい順
+  filtered.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+  const total = filtered.length;
+  const p = Math.max(1, Number(page));
+  const l = Math.min(100, Math.max(1, Number(limit)));
+  const start = (p - 1) * l;
+  const entries = filtered.slice(start, start + l);
+
+  res.json({ total, page: p, limit: l, pages: Math.ceil(total / l), entries });
+});
+
+app.get('/api/admin/audit-log/verify', requireAdmin, (_req, res) => {
+  const result = verifyAuditChain();
+  res.json(result);
 });
 
 // ─── 運営お知らせ自動発信 ────────────────────────────────────────
@@ -2532,6 +2670,10 @@ async function ensureDataDir() {
   // oncall-records.json も同様
   if (!fs.existsSync(ONCALL_PATH)) {
     fs.writeFileSync(ONCALL_PATH, JSON.stringify({ records: [] }, null, 2));
+  }
+  // audit-log.json
+  if (!fs.existsSync(AUDIT_LOG_PATH)) {
+    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
   }
 }
 

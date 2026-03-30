@@ -222,7 +222,7 @@
         </div>
         <div class="card-body">
           <div class="spinner" id="tableSpinner">読み込み中...</div>
-          <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 アーカイブ済みを表示</button>
+          <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 格納済みを表示</button>
           <div class="table-wrap">
             <table class="staff-table">
               <colgroup>
@@ -277,6 +277,54 @@
           </div>
         </div>
       </div>
+
+    <!-- 操作履歴 -->
+    <div class="card">
+      <h2 onclick="toggleCard(this)" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        操作履歴
+        <span style="font-size:11px;color:var(--muted)">▼</span>
+      </h2>
+      <div class="card-body" style="max-height:0;overflow:hidden;transition:max-height .35s ease">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <select id="auditActionFilter" style="width:auto;padding:6px 8px;font-size:12px">
+            <option value="">全て</option>
+            <option value="auth">認証</option>
+            <option value="record">実績入力</option>
+            <option value="schedule">予定</option>
+            <option value="staff">スタッフ管理</option>
+            <option value="leave">有給</option>
+            <option value="oncall">オンコール</option>
+            <option value="notice">お知らせ</option>
+            <option value="incentive">インセンティブ</option>
+          </select>
+          <input type="date" id="auditDateFrom" style="width:auto;padding:6px 8px;font-size:12px" placeholder="開始日">
+          <input type="date" id="auditDateTo" style="width:auto;padding:6px 8px;font-size:12px" placeholder="終了日">
+          <button class="btn btn-blue btn-sm" onclick="loadAuditLog()">検索</button>
+          <button class="btn btn-sm" style="background:#e8ecf2;color:var(--text)" onclick="verifyAuditChain()">整合性チェック</button>
+          <span id="auditVerifyResult" style="font-size:11px;line-height:28px"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="table-wrap" style="width:100%;font-size:11px">
+            <thead>
+              <tr style="background:#f7f9fb">
+                <th style="padding:6px;white-space:nowrap">日時</th>
+                <th style="padding:6px;white-space:nowrap">操作者</th>
+                <th style="padding:6px;white-space:nowrap">操作</th>
+                <th style="padding:6px;white-space:nowrap">対象</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogBody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <span id="auditPageInfo" style="font-size:11px;color:var(--muted)"></span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm" style="background:#e8ecf2" id="auditPrev" onclick="auditPageNav(-1)">←</button>
+            <button class="btn btn-sm" style="background:#e8ecf2" id="auditNext" onclick="auditPageNav(1)">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     </div>
   </div>
@@ -747,6 +795,19 @@
 
 <script>
   // ── カテゴリ折りたたみ ──────────────────────────────────────
+  function toggleCard(h2) {
+    const body = h2.nextElementSibling;
+    if (!body) return;
+    if (body.style.maxHeight && body.style.maxHeight !== '0px') {
+      body.style.maxHeight = '0';
+      h2.querySelector('span').textContent = '▼';
+    } else {
+      body.style.maxHeight = body.scrollHeight + 'px';
+      body.style.overflow = 'visible';
+      h2.querySelector('span').textContent = '▲';
+    }
+  }
+
   function toggleCategory(header) {
     const body = header.nextElementSibling;
     const icon = header.querySelector('.category-icon');
@@ -884,7 +945,7 @@
   function toggleArchivedView() {
     showArchived = !showArchived;
     const btn = document.getElementById('archiveToggleBtn');
-    btn.textContent = showArchived ? '📦 アーカイブ済みを非表示' : '📦 アーカイブ済みを表示';
+    btn.textContent = showArchived ? '📦 格納済みを非表示' : '📦 格納済みを表示';
     loadStaff();
   }
 
@@ -937,7 +998,7 @@
   }
 
   async function toggleArchive(id, name, archive) {
-    const msg = archive ? `「${name}」をアーカイブに格納しますか？` : `「${name}」を復元しますか？`;
+    const msg = archive ? `「${name}」を格納しますか？` : `「${name}」を復元しますか？`;
     if (!confirm(msg)) return;
     try {
       const res  = await fetch(`/api/admin/staff/${encodeURIComponent(id)}/archive`, { method: 'PATCH' });
@@ -2089,6 +2150,100 @@
       });
     }
   }).catch(() => {});
+
+  // ── 監査ログ ──────────────────────────────────────────────
+  const AUDIT_ACTION_LABELS = {
+    'auth.login': 'ログイン',
+    'auth.login_failed': 'ログイン失敗',
+    'auth.logout': 'ログアウト',
+    'auth.admin_login': '管理者ログイン',
+    'auth.admin_login_failed': '管理者ログイン失敗',
+    'auth.admin_logout': '管理者ログアウト',
+    'auth.webauthn_login': 'WebAuthnログイン',
+    'auth.webauthn_delete': 'WebAuthn削除',
+    'auth.change_password': 'パスワード変更',
+    'record.create': '実績入力',
+    'record.confirm_schedule': '予定確定',
+    'record.admin_edit': '管理者実績編集',
+    'schedule.create': '予定登録',
+    'schedule.delete': '予定削除',
+    'schedule.admin_delete': '管理者予定削除',
+    'staff.create': 'スタッフ追加',
+    'staff.update': 'スタッフ編集',
+    'staff.delete': 'スタッフ削除',
+    'staff.archive_toggle': '格納切替',
+    'staff.reset_password': 'PW リセット',
+    'staff.hire_date_update': '入社日変更',
+    'leave.request': '有給申請',
+    'leave.cancel': '有給取消',
+    'leave.approve': '有給承認',
+    'leave.reject': '有給却下',
+    'leave.balance_update': '有給残調整',
+    'oncall.upsert': 'OC記録登録',
+    'oncall.delete': 'OC記録削除',
+    'oncall.eligible_update': 'OC対象変更',
+    'notice.create': 'お知らせ作成',
+    'notice.update': 'お知らせ編集',
+    'notice.delete': 'お知らせ削除',
+    'incentive.defaults_update': 'インセンティブ既定変更',
+    'incentive.staff_update': 'インセンティブ個別変更',
+  };
+
+  let auditCurrentPage = 1;
+  function loadAuditLog(page) {
+    auditCurrentPage = page || 1;
+    const action = document.getElementById('auditActionFilter').value;
+    const from = document.getElementById('auditDateFrom').value;
+    const to = document.getElementById('auditDateTo').value;
+    const params = new URLSearchParams({ page: auditCurrentPage, limit: 30 });
+    if (action) params.set('action', action);
+    if (from)   params.set('from', from);
+    if (to)     params.set('to', to);
+
+    fetch('/api/admin/audit-log?' + params)
+      .then(r => r.json())
+      .then(data => {
+        const tbody = document.getElementById('auditLogBody');
+        if (data.entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--muted)">ログがありません</td></tr>';
+        } else {
+          tbody.innerHTML = data.entries.map(e => {
+            const dt = new Date(e.timestamp);
+            const timeStr = `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+            const actorStr = e.actor.staffName || e.actor.type;
+            const actionLabel = AUDIT_ACTION_LABELS[e.action] || e.action;
+            const targetStr = e.target?.label || '';
+            return `<tr>
+              <td style="padding:5px 6px;white-space:nowrap">${timeStr}</td>
+              <td style="padding:5px 6px;white-space:nowrap">${actorStr}</td>
+              <td style="padding:5px 6px;white-space:nowrap">${actionLabel}</td>
+              <td style="padding:5px 6px">${targetStr}</td>
+            </tr>`;
+          }).join('');
+        }
+        document.getElementById('auditPageInfo').textContent = `${data.page}/${data.pages} (${data.total}件)`;
+        document.getElementById('auditPrev').disabled = data.page <= 1;
+        document.getElementById('auditNext').disabled = data.page >= data.pages;
+      })
+      .catch(err => console.error('Audit log error:', err));
+  }
+
+  function auditPageNav(dir) {
+    loadAuditLog(auditCurrentPage + dir);
+  }
+
+  function verifyAuditChain() {
+    fetch('/api/admin/audit-log/verify')
+      .then(r => r.json())
+      .then(data => {
+        const el = document.getElementById('auditVerifyResult');
+        if (data.valid) {
+          el.innerHTML = `<span style="color:var(--ok)">✅ 整合性OK (${data.entries}件)</span>`;
+        } else {
+          el.innerHTML = `<span style="color:var(--danger)">❌ 不整合 ${data.errors.length}件検出</span>`;
+        }
+      });
+  }
 </script>
 <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
 </body>
