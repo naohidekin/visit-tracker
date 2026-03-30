@@ -37,6 +37,8 @@
     .btn-sm    {padding:5px 11px;font-size:12px}
     .btn-danger{background:var(--danger);color:#fff}
     .btn-reset {background:#e8a020;color:#fff}
+    .btn-csv{background:transparent;border:1.5px solid var(--blue);color:var(--blue);padding:4px 10px;font-size:11px;border-radius:6px;cursor:pointer;white-space:nowrap}
+    .btn-csv:active{opacity:.7}
     /* ── スタッフ月次実績 ── */
     .a-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
     .a-stat-box{border-radius:10px;padding:12px 14px}
@@ -222,7 +224,10 @@
         </div>
         <div class="card-body">
           <div class="spinner" id="tableSpinner">読み込み中...</div>
-          <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 格納済みを表示</button>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <button class="archive-toggle" id="archiveToggleBtn" onclick="toggleArchivedView()">📦 格納済みを表示</button>
+            <button class="btn-csv" onclick="exportStaffCSV()">CSV出力</button>
+          </div>
           <div class="table-wrap">
             <table class="staff-table">
               <colgroup>
@@ -301,6 +306,7 @@
           <input type="date" id="auditDateTo" style="width:auto;padding:6px 8px;font-size:12px" placeholder="終了日">
           <button class="btn btn-blue btn-sm" onclick="loadAuditLog()">検索</button>
           <button class="btn btn-sm" style="background:#e8ecf2;color:var(--text)" onclick="verifyAuditChain()">整合性チェック</button>
+          <button class="btn-csv" onclick="exportAuditCSV()">CSV出力</button>
           <span id="auditVerifyResult" style="font-size:11px;line-height:28px"></span>
         </div>
         <div style="overflow-x:auto">
@@ -367,7 +373,10 @@
           </select>
         </div>
       </div>
-      <button class="btn btn-blue" onclick="loadAdminMonthly()">表示</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-blue" onclick="loadAdminMonthly()">表示</button>
+        <button class="btn-csv" id="monthlyCSVBtn" style="display:none" onclick="exportMonthlyCSV()">CSV出力</button>
+      </div>
 
       <div id="adminMonthlyResult" style="display:none;margin-top:18px">
         <div class="spinner" id="adminMonthlySpinner">読み込み中...</div>
@@ -539,6 +548,7 @@
             <option value="rejected">却下</option>
             <option value="cancelled">取消済</option>
           </select>
+          <button class="btn-csv" onclick="exportLeaveHistoryCSV()">CSV出力</button>
         </div>
         <div class="spinner" id="leaveHistorySpinner">読み込み中...</div>
         <div id="leaveHistoryEmpty" style="display:none;color:var(--muted);font-size:13px;padding:8px 0">該当する申請はありません</div>
@@ -554,6 +564,7 @@
 
       <!-- 残日数管理タブ -->
       <div id="leaveBalance" style="display:none">
+        <div style="margin-bottom:8px"><button class="btn-csv" onclick="exportLeaveBalanceCSV()">CSV出力</button></div>
         <div class="spinner" id="leaveBalanceSpinner">読み込み中...</div>
         <div class="table-wrap" id="leaveBalanceTableWrap" style="display:none">
           <table>
@@ -617,8 +628,9 @@
       <span class="acc-icon">▼</span>
     </div>
     <div class="card-body">
-      <div style="margin-bottom:12px">
-        <select id="oncallMonth" onchange="loadOncallSummary()" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <select id="oncallMonth" onchange="loadOncallSummary()" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
+        <button class="btn-csv" id="oncallCSVBtn" style="display:none" onclick="exportOncallCSV()">CSV出力</button>
       </div>
       <div id="oncallSpinner" class="spinner" style="display:none">読み込み中...</div>
       <div id="oncallContent" style="display:none">
@@ -1430,6 +1442,7 @@
       document.getElementById('adminMonthlySpinner').style.display = 'none';
       document.getElementById('adminStatsSection').style.display   = 'block';
       document.getElementById('adminTableSection').style.display   = 'block';
+      document.getElementById('monthlyCSVBtn').style.display       = '';
     } catch (e) {
       document.getElementById('adminMonthlySpinner').textContent = 'エラー: ' + e.message;
     }
@@ -1898,6 +1911,7 @@
 
   // ── オンコール管理 ────────────────────────────────────────────
   let oncallMonthInited = false;
+  let lastOncallSummary = [];
   function initOncallMonth() {
     if (oncallMonthInited) return;
     oncallMonthInited = true;
@@ -1952,6 +1966,8 @@
       `;
       document.getElementById('oncallSpinner').style.display = 'none';
       document.getElementById('oncallContent').style.display = '';
+      document.getElementById('oncallCSVBtn').style.display = '';
+      lastOncallSummary = summary;
     } catch (e) {
       document.getElementById('oncallSpinner').style.display = 'none';
       document.getElementById('oncallEmpty').textContent = 'データの取得に失敗しました';
@@ -2242,6 +2258,139 @@
         } else {
           el.innerHTML = `<span style="color:var(--danger)">❌ 不整合 ${data.errors.length}件検出</span>`;
         }
+      });
+  }
+
+  // ── CSV エクスポート共通 ──────────────────────────────────────
+  function downloadCSV(headers, rows, filename) {
+    const escape = v => {
+      const s = String(v == null ? '' : v);
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))];
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 1) スタッフ一覧
+  function exportStaffCSV() {
+    fetch('/api/admin/staff?includeArchived=true')
+      .then(r => r.json())
+      .then(list => {
+        const headers = ['ID', '名前', 'ふりがな', '職種', '入社日', 'OC対象', '状態'];
+        const rows = list.map(s => [
+          s.id, s.name,
+          (s.furigana_family || '') + ' ' + (s.furigana_given || ''),
+          s.type === 'nurse' ? '看護師' : s.type,
+          s.hire_date || '', s.oncall_eligible ? '○' : '',
+          s.archived ? '格納済' : '有効'
+        ]);
+        downloadCSV(headers, rows, `スタッフ一覧_${today}.csv`);
+      });
+  }
+
+  // 2) スタッフ月次実績
+  function exportMonthlyCSV() {
+    if (!currentAdminData) return;
+    const d = currentAdminData;
+    const staffName = document.getElementById('viewStaff').selectedOptions[0]?.textContent || '';
+    const y = document.getElementById('viewYear').value;
+    const m = document.getElementById('viewMonth').value;
+    let headers, rows;
+    if (d.type === 'nurse') {
+      headers = ['日', '曜日', '介護', '医療', '合計'];
+      rows = d.days.map(r => [r.day, r.weekday, r.kaigo ?? '', r.iryo ?? '', r.total ?? '']);
+      rows.push(['合計', '', d.stats.total_kaigo, d.stats.total_iryo, d.stats.total]);
+      rows.push(['稼働日数', d.stats.working_days, '', '', '']);
+    } else {
+      headers = ['日', '曜日', '単位数'];
+      rows = d.days.map(r => [r.day, r.weekday, r.value ?? '']);
+      rows.push(['合計', '', d.stats.total_units]);
+      rows.push(['稼働日数', d.stats.working_days, '']);
+    }
+    downloadCSV(headers, rows, `月次実績_${staffName}_${y}年${m}月.csv`);
+  }
+
+  // 3) 有給残日数
+  function exportLeaveBalanceCSV() {
+    fetch('/api/admin/leave/summary')
+      .then(r => r.json())
+      .then(({ summary }) => {
+        const headers = ['名前', '職種', '入社日', '自動付与', '付与', '繰越', '調整', '使用', '申請中', '残日数'];
+        const rows = summary.map(s => [
+          s.name, s.type === 'nurse' ? '看護師' : s.type,
+          s.hire_date || '', s.auto_grant_days, s.granted, s.carried_over,
+          s.manual_adjustment, s.used, s.pending, s.balance
+        ]);
+        downloadCSV(headers, rows, `有給残日数一覧_${today}.csv`);
+      });
+  }
+
+  // 4) 有給申請履歴
+  function exportLeaveHistoryCSV() {
+    const staffFilter = document.getElementById('leaveHistoryStaff')?.value || '';
+    const statusFilter = document.getElementById('leaveHistoryStatus')?.value || '';
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('status', statusFilter);
+    fetch('/api/admin/leave/requests?' + params)
+      .then(r => r.json())
+      .then(({ requests }) => {
+        let filtered = requests;
+        if (staffFilter) filtered = filtered.filter(r => r.staffId === staffFilter);
+        const typeLabel = t => t === 'full' ? '全日' : t === 'half_am' ? '午前半休' : '午後半休';
+        const statusLabel = s => ({pending:'承認待ち',approved:'承認済',rejected:'却下',cancelled:'取消済'}[s] || s);
+        const headers = ['名前', '日付', '種別', 'ステータス', '理由', 'コメント', '申請日', '処理日'];
+        const rows = filtered.map(r => [
+          r.staffName, r.dates.join(' / '), typeLabel(r.type), statusLabel(r.status),
+          r.reason || '', r.adminComment || '',
+          r.createdAt ? r.createdAt.slice(0, 10) : '', r.reviewedAt ? r.reviewedAt.slice(0, 10) : ''
+        ]);
+        downloadCSV(headers, rows, `有給申請履歴_${today}.csv`);
+      });
+  }
+
+  // 5) オンコール集計
+  function exportOncallCSV() {
+    if (!lastOncallSummary || lastOncallSummary.length === 0) return;
+    const month = document.getElementById('oncallMonth').value;
+    const headers = ['名前', '職種', '件数', '時間(h)', '交通費件数', '日数'];
+    const rows = lastOncallSummary.filter(s => s.recordDays > 0).map(s => [
+      s.name, s.type === 'nurse' ? '看護師' : s.type,
+      s.totalCount, (s.totalMinutes / 60).toFixed(1), s.totalTransportCount, s.recordDays
+    ]);
+    downloadCSV(headers, rows, `オンコール集計_${month}.csv`);
+  }
+
+  // 6) 監査ログ
+  function exportAuditCSV() {
+    const action = document.getElementById('auditActionFilter').value;
+    const from = document.getElementById('auditDateFrom').value;
+    const to = document.getElementById('auditDateTo').value;
+    const params = new URLSearchParams({ limit: 10000 });
+    if (action) params.set('action', action);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    fetch('/api/admin/audit-log?' + params)
+      .then(r => r.json())
+      .then(data => {
+        const headers = ['日時', '操作者', '操作', '対象', '詳細'];
+        const rows = data.entries.map(e => {
+          const dt = new Date(e.timestamp);
+          const timeStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+          return [
+            timeStr, e.actor.staffName || e.actor.type,
+            AUDIT_ACTION_LABELS[e.action] || e.action,
+            e.target?.label || '', JSON.stringify(e.details || {})
+          ];
+        });
+        downloadCSV(headers, rows, `操作履歴_${today}.csv`);
       });
   }
 </script>
