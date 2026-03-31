@@ -461,6 +461,9 @@
     if (!res.ok) { location.href = '/login'; return; }
     currentUser = await res.json();
 
+    // 事務は訪問入力不要 → 有給管理へリダイレクト
+    if (currentUser.type === 'office') { location.href = '/leave'; return; }
+
     if (currentUser.leave_oncall_enabled) {
       const drawer = document.getElementById('menuDrawer');
       const historyLink = drawer.querySelector('a[href="/history"]');

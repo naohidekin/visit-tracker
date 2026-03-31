@@ -717,6 +717,7 @@
             <option value="PT">PT</option>
             <option value="OT">OT</option>
             <option value="ST">ST</option>
+            <option value="office">事務</option>
           </select>
         </div>
         <div class="field">
@@ -902,9 +903,9 @@
 
   // ── ユーティリティ ────────────────────────────────────────
   function staffTypeBadge(type) {
-    return type === 'nurse'
-      ? '<span class="badge badge-nurse">看</span>'
-      : `<span class="badge badge-rehab">${type}</span>`;
+    if (type === 'nurse')  return '<span class="badge badge-nurse">看</span>';
+    if (type === 'office') return '<span class="badge badge-rehab">事務</span>';
+    return `<span class="badge badge-rehab">${type}</span>`;
   }
 
   // ── 状態 ──────────────────────────────────────────────────
@@ -1425,7 +1426,7 @@
     for (const s of staffList) {
       const opt = document.createElement('option');
       opt.value = s.id;
-      opt.textContent = s.name + `（${s.type === 'nurse' ? '看護師' : s.type}）`;
+      opt.textContent = s.name + `（${s.type === 'nurse' ? '看護師' : s.type === 'office' ? '事務' : s.type}）`;
       sel.appendChild(opt);
     }
     if (cur) sel.value = cur;
