@@ -63,20 +63,11 @@
       </button>
     </div>
     <div class="forgot">
-      <a onclick="document.getElementById('forgotModal').classList.add('show')">パスワードを忘れた方はこちら</a>
+      <a href="/forgot-password">パスワードを忘れた方はこちら</a>
     </div>
   </div>
 
   <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
-
-  <div class="modal-overlay" id="forgotModal">
-    <div class="modal">
-      <h2>🔐 パスワードをお忘れの方</h2>
-      <p>管理者にご連絡ください</p>
-      <p style="margin-top:14px"><a href="tel:09046613113">090-4661-3113</a></p>
-      <button class="modal-close" onclick="document.getElementById('forgotModal').classList.remove('show')">閉じる</button>
-    </div>
-  </div>
 
   <script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
   <script>
