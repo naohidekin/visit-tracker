@@ -19,6 +19,7 @@
     .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
     .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
     .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .header-user-name{font-size:11px;font-weight:600;opacity:.85;margin-top:1px}
     .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
     .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
     .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
@@ -72,6 +73,7 @@
     <div class="header-brand-text">
       <span class="header-app-name">にこっと Web App</span>
       <span class="header-page-name">お知らせ</span>
+      <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
   <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
@@ -102,6 +104,9 @@
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.id) { location.href = '/login'; return; }
+
+    const elUser = document.getElementById('headerUserName');
+    if (elUser) elUser.textContent = `👤 ${me.name}（${me.type === 'nurse' ? '看護師' : me.type === 'office' ? '事務' : me.type}）`;
 
     if (me.leave_oncall_enabled) {
       const drawer = document.getElementById('menuDrawer');
