@@ -66,6 +66,7 @@
     .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:700}
     .badge-nurse{background:#dbeafe;color:#1e40af}
     .badge-rehab{background:#dcfce7;color:#166534}
+    .badge-office{background:#fef3c7;color:#92400e}
     .td-btns{display:flex;gap:3px;flex-wrap:wrap}
     .edit-input{padding:5px 8px;font-size:13px;border:1.5px solid var(--blue);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;width:100%;min-width:80px;box-sizing:border-box}
     .btn-edit{background:#6b7a99;color:#fff}
@@ -904,7 +905,7 @@
   // ── ユーティリティ ────────────────────────────────────────
   function staffTypeBadge(type) {
     if (type === 'nurse')  return '<span class="badge badge-nurse">看</span>';
-    if (type === 'office') return '<span class="badge badge-rehab">事務</span>';
+    if (type === 'office') return '<span class="badge badge-office">事</span>';
     return `<span class="badge badge-rehab">${type}</span>`;
   }
 
