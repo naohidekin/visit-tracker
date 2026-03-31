@@ -570,7 +570,7 @@
         <div class="table-wrap" id="leaveBalanceTableWrap" style="display:none">
           <table>
             <thead>
-              <tr><th>名前</th><th>入社日</th><th>自動付与</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
+              <tr><th>名前</th><th>入社日</th><th>最終付与</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
             </thead>
             <tbody id="leaveBalanceBody"></tbody>
           </table>
@@ -2374,7 +2374,7 @@
     fetch('/api/admin/leave/summary')
       .then(r => r.json())
       .then(({ summary }) => {
-        const headers = ['名前', '職種', '入社日', '自動付与', '付与', '繰越', '調整', '使用', '申請中', '残日数'];
+        const headers = ['名前', '職種', '入社日', '最終付与', '付与', '繰越', '調整', '使用', '申請中', '残日数'];
         const rows = summary.map(s => [
           s.name, s.type === 'nurse' ? '看護師' : s.type,
           s.hire_date || '', s.auto_grant_days, s.granted, s.carried_over,
