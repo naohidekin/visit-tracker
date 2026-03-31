@@ -687,12 +687,12 @@ app.get('/notices', (req, res) => {
 });
 app.get('/leave', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId)) return res.redirect('/');
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office') return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'leave.html'));
 });
 app.get('/oncall', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId)) return res.redirect('/');
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office') return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'oncall.html'));
 });
 app.get('/forgot-password', (_r, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
@@ -824,7 +824,7 @@ app.get('/api/me', (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   const oncall_eligible = staff ? !!staff.oncall_eligible : false;
-  const leave_oncall_enabled = LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId);
+  const leave_oncall_enabled = LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) || req.session.staffType === 'office';
   res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType, oncall_eligible, leave_oncall_enabled });
 });
 
@@ -1871,10 +1871,20 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
 
+    } else if (type === 'office') {
+      // 事務職 — スプレッドシートに列を追加しない（有給管理のみ）
+      newEntry = { id: loginId, name,
+        furigana_family: furigana_family || '', furigana_given: furigana_given || '',
+        type: 'office',
+        seq: nextSeq, initial_pw: initialPw,
+        hire_date: hire_date || null,
+        email: email || null,
+        password_hash: await bcrypt.hash(initialPw, 10) };
+
     } else {
       // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
       const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
-      const rehabCount = data.staff.filter(s => s.type !== 'nurse' && !s.archived).length;
+      const rehabCount = data.staff.filter(s => !['nurse','office'].includes(s.type) && !s.archived).length;
       const newColIdx = 2 + nurseCount * 2 + rehabCount;
       const newCol    = idxToCol(newColIdx);
 
@@ -2286,7 +2296,7 @@ app.get('/api/admin/excel-results/:yearMonth', requireAdmin, (req, res) => {
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
 function requireLeaveOncall(req, res, next) {
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId))
+  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office')
     return res.status(403).json({ error: 'この機能は現在ご利用いただけません' });
   next();
 }
