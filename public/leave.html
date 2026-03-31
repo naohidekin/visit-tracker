@@ -224,6 +224,15 @@
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.id) { location.href = '/login'; return; }
 
+    // 事務は入力画面・月次実績メニューを非表示
+    if (me.type === 'office') {
+      const drawer = document.getElementById('menuDrawer');
+      ['a[href="/"]', 'a[href="/history"]'].forEach(sel => {
+        const el = drawer.querySelector(sel);
+        if (el) el.style.display = 'none';
+      });
+    }
+
     if (me.leave_oncall_enabled) {
       const drawer = document.getElementById('menuDrawer');
       const historyLink = drawer.querySelector('a[href="/history"]');
@@ -231,10 +240,13 @@
         const leaveLink = document.createElement('a');
         leaveLink.href = '/leave';
         leaveLink.textContent = '有給管理';
-        const oncallLink = document.createElement('a');
-        oncallLink.href = '/oncall';
-        oncallLink.textContent = 'オンコール';
-        historyLink.after(leaveLink, oncallLink);
+        historyLink.after(leaveLink);
+        if (me.oncall_eligible) {
+          const oncallLink = document.createElement('a');
+          oncallLink.href = '/oncall';
+          oncallLink.textContent = 'オンコール';
+          leaveLink.after(oncallLink);
+        }
       }
     }
 

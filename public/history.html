@@ -210,10 +210,13 @@
         const leaveLink = document.createElement('a');
         leaveLink.href = '/leave';
         leaveLink.textContent = '有給管理';
-        const oncallLink = document.createElement('a');
-        oncallLink.href = '/oncall';
-        oncallLink.textContent = 'オンコール';
-        historyLink.after(leaveLink, oncallLink);
+        historyLink.after(leaveLink);
+        if (currentUser.oncall_eligible) {
+          const oncallLink = document.createElement('a');
+          oncallLink.href = '/oncall';
+          oncallLink.textContent = 'オンコール';
+          leaveLink.after(oncallLink);
+        }
       }
     }
 

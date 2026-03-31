@@ -230,7 +230,7 @@
     location.href = '/login';
   }
   (async()=>{try{const r=await fetch('/api/notices/unread-count');const{count}=await r.json();const b=document.getElementById('menuBadge');if(count>0){b.textContent=count;b.style.display='flex';}}catch{}})();
-  (async()=>{try{const r=await fetch('/api/me');if(!r.ok){location.href='/login';return;}const d=await r.json();const el=document.getElementById('headerUserName');if(el)el.textContent=`👤 ${d.name}（${d.type==='nurse'?'看護師':d.type}）`;if(d.leave_oncall_enabled){const drawer=document.getElementById('menuDrawer');const historyLink=drawer.querySelector('a[href="/history"]');if(historyLink){const leaveLink=document.createElement('a');leaveLink.href='/leave';leaveLink.textContent='有給管理';const oncallLink=document.createElement('a');oncallLink.href='/oncall';oncallLink.textContent='オンコール';historyLink.after(leaveLink,oncallLink);}}}catch{}})();
+  (async()=>{try{const r=await fetch('/api/me');if(!r.ok){location.href='/login';return;}const d=await r.json();const el=document.getElementById('headerUserName');if(el)el.textContent=`👤 ${d.name}（${d.type==='nurse'?'看護師':d.type}）`;if(d.leave_oncall_enabled){const drawer=document.getElementById('menuDrawer');const historyLink=drawer.querySelector('a[href="/history"]');if(historyLink){const leaveLink=document.createElement('a');leaveLink.href='/leave';leaveLink.textContent='有給管理';historyLink.after(leaveLink);if(d.oncall_eligible){const oncallLink=document.createElement('a');oncallLink.href='/oncall';oncallLink.textContent='オンコール';leaveLink.after(oncallLink);}}}  }catch{}})();
 </script>
 </div><!-- /page-wrapper -->
 </body>
