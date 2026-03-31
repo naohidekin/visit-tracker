@@ -101,7 +101,7 @@
 <script>
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
-    if (!me.staffId) { location.href = '/login'; return; }
+    if (!me.id) { location.href = '/login'; return; }
 
     if (me.leave_oncall_enabled) {
       const drawer = document.getElementById('menuDrawer');
@@ -110,10 +110,13 @@
         const leaveLink = document.createElement('a');
         leaveLink.href = '/leave';
         leaveLink.textContent = '有給管理';
-        const oncallLink = document.createElement('a');
-        oncallLink.href = '/oncall';
-        oncallLink.textContent = 'オンコール';
-        historyLink.after(leaveLink, oncallLink);
+        historyLink.after(leaveLink);
+        if (me.oncall_eligible) {
+          const oncallLink = document.createElement('a');
+          oncallLink.href = '/oncall';
+          oncallLink.textContent = 'オンコール';
+          leaveLink.after(oncallLink);
+        }
       }
     }
 
