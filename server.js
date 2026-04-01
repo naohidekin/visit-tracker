@@ -477,7 +477,7 @@ function syncLeaveFieldsFromSource() {
   const srcData  = JSON.parse(fs.readFileSync(srcPath, 'utf8'));
   const liveData = loadStaff();
   let changed = false;
-  const syncFields = ['hire_date','leave_granted','leave_grant_date','leave_carried_over','leave_manual_adjustment','oncall_eligible','oncall_leave_granted','celebration_days'];
+  const syncFields = ['hire_date','leave_granted','leave_grant_date','leave_carried_over','leave_manual_adjustment','oncall_eligible','oncall_leave_granted','celebration_days','celebration_used_adj'];
   for (const src of srcData.staff) {
     const live = liveData.staff.find(s => s.id === src.id);
     if (!live) continue;
@@ -507,6 +507,7 @@ function ensureLeaveFields() {
     if (s.oncall_leave_granted === undefined)   { s.oncall_leave_granted = 0;      changed = true; }
     if (s.email === undefined)                  { s.email = null;                  changed = true; }
     if (s.celebration_days === undefined)       { s.celebration_days = 3;          changed = true; }
+    if (s.celebration_used_adj === undefined)   { s.celebration_used_adj = 0;      changed = true; }
   }
   if (changed) { saveStaff(data); console.log('✅ 有給フィールドを初期化しました'); }
 }
@@ -2345,9 +2346,10 @@ app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
 
   const nextGrant = calcNextGrant(staff.hire_date);
 
-  // お祝い休暇の使用日数を計算（入職半年以内の承認済み申請を自動消化）
+  // お祝い休暇の使用日数を計算（手動調整 + 入職半年以内の承認済み申請から自動消化）
   const celebrationDays = staff.celebration_days || 3;
-  let celebrationUsed = 0;
+  const celebrationAdj = staff.celebration_used_adj || 0;
+  let celebrationUsed = celebrationAdj;
   if (staff.hire_date) {
     const hireDate = new Date(staff.hire_date);
     const celebrationExpiry = new Date(hireDate);

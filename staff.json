@@ -62,7 +62,8 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 5
+      "celebration_days": 5,
+      "celebration_used_adj": 4.5
     },
     {
       "id": "kamata04",
