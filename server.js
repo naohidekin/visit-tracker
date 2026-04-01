@@ -1780,13 +1780,16 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
                   startColumnIndex: oldDividerIdx + 1, endColumnIndex: oldDividerIdx + 2 },
                   left: SOLID } },
             ] : []),
-            // 新太線を設定（新iryo列右・PT先頭列左）
-            { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
-                right: SOLID_MEDIUM } },
-            { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
-                left: SOLID_MEDIUM } },
+            // 新太線を設定（リハビリ職がいない場合のみ新iryo列右に設定。いる場合は最終PT列右で管理）
+            ...(() => {
+              const rehabCount = data.staff.filter(s => !['nurse','office'].includes(s.type) && !s.archived).length;
+              if (rehabCount > 0) return []; // リハビリがいる場合は太線を動かさない
+              return [
+                { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                    startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
+                    right: SOLID_MEDIUM } },
+              ];
+            })(),
             // 列幅を既存看護師と同じ 48px に設定
             { updateDimensionProperties: {
                 range: { sheetId: sid, dimension: 'COLUMNS',
@@ -1887,12 +1890,19 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const rehabCount = data.staff.filter(s => !['nurse','office'].includes(s.type) && !s.archived).length;
       const newColIdx = 2 + nurseCount * 2 + rehabCount;
       const newCol    = idxToCol(newColIdx);
+      // 旧最終スタッフ列（太線を移動する元の列）
+      const oldLastColIdx = rehabCount > 0
+        ? 2 + nurseCount * 2 + rehabCount - 1   // 直前のリハビリ最終列
+        : 2 + nurseCount * 2 - 1;                // リハビリ未登録時は看護師最終iryo列
+      const SOLID        = { style: 'SOLID',        color: { red:0, green:0, blue:0 } };
+      const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
 
       for (const ssId of allSids) {
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
         const vm = MONTHS.filter(m => sm[m] !== undefined);
+        // 列挿入
         await api.spreadsheets.batchUpdate({
           spreadsheetId: ssId,
           requestBody: { requests: vm.map(m => ({
@@ -1900,11 +1910,24 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
               startIndex: newColIdx, endIndex: newColIdx + 1 }, inheritFromBefore: false },
           })) },
         });
+        // ヘッダー名
         await api.spreadsheets.values.batchUpdate({
           spreadsheetId: ssId,
           requestBody: { valueInputOption: 'USER_ENTERED', data: vm.map(m => ({
             range: `${m}!${newCol}${HEADER_ROW}`, values: [[name]],
           })) },
+        });
+        // 太線を旧最終列右から新最終列右へ移動
+        await api.spreadsheets.batchUpdate({
+          spreadsheetId: ssId,
+          requestBody: { requests: vm.flatMap(m => {
+            const sid = sm[m];
+            const rowRange = (ci) => ({ sheetId: sid, startRowIndex: 0, endRowIndex: 37, startColumnIndex: ci, endColumnIndex: ci + 1 });
+            return [
+              { updateBorders: { range: rowRange(oldLastColIdx), right: SOLID } },        // 旧太線を解除
+              { updateBorders: { range: rowRange(newColIdx),     right: SOLID_MEDIUM } }, // 新太線を設定
+            ];
+          }) },
         });
       }
       newEntry = { id: loginId, name,
