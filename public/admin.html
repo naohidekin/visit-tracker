@@ -2790,7 +2790,7 @@
         </td>
         <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:right;font-size:12px;font-weight:600">${feeDisplay}</td>
         <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center">
-          <input type="checkbox" ${isRainy ? 'checked' : ''} onchange="toggleRainyDay('${dateStr}')" style="cursor:pointer;width:16px;height:16px">
+          <input type="checkbox" ${isRainy ? 'checked' : ''} onchange="toggleRainyDay('${dateStr}', this)" style="cursor:pointer;width:16px;height:16px">
         </td>
       </tr>`;
     }
@@ -2826,13 +2826,14 @@
     }
   }
 
-  async function toggleRainyDay(date) {
+  async function toggleRainyDay(date, cb) {
     try {
       const res = await fetch('/api/admin/rainy/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date }),
       });
+      if (!res.ok) { showToast('雨の日の更新に失敗しました'); if (cb) cb.checked = !cb.checked; return; }
       const data = await res.json();
       if (data.rainy) {
         if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
@@ -2843,6 +2844,7 @@
       renderStandbyTable();
     } catch (e) {
       showToast('雨の日の更新に失敗しました');
+      if (cb) cb.checked = !cb.checked;
     }
   }
 
