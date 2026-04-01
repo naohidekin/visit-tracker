@@ -55,7 +55,7 @@
       "seq": 3,
       "password_hash": "$2a$10$wsq/nSw7Do23Psr.Rc1IBesr99IeGMWtYFPu4Ii9ugN8cQX.TNfZS",
       "incentive_line": null,
-      "hire_date": null,
+      "hire_date": "2026-01-05",
       "leave_granted": 0,
       "leave_grant_date": null,
       "leave_carried_over": 0,
