@@ -653,6 +653,116 @@
     </div>
   </div>
 
+  <!-- 待機・雨の日管理 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>📋 待機・雨の日管理</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="standbyMonth" onchange="loadStandbyData()" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
+        <button class="btn-csv" id="standbyCSVBtn" style="display:none" onclick="exportStandbyCSV()">CSV出力</button>
+        <button class="btn-csv" onclick="toggleCustomHolidays()" style="font-size:11px;background:#f8f4e8;color:#8b6914;border:1px solid #d4b84a">祝日設定</button>
+      </div>
+      <!-- カスタム祝日設定 -->
+      <div id="customHolidaySection" style="display:none;margin-bottom:14px;padding:10px;background:#fffbe6;border-radius:8px;border:1px solid #f0e6b0">
+        <div style="font-weight:600;font-size:12px;margin-bottom:6px;color:#8b6914">追加祝日（年末年始等）</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <input type="date" id="customHolidayDate" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <button onclick="addCustomHoliday()" style="padding:6px 12px;border:none;background:var(--blue);color:#fff;border-radius:6px;font-size:12px;cursor:pointer">追加</button>
+        </div>
+        <div id="customHolidayList" style="font-size:12px;color:#555"></div>
+      </div>
+      <div id="standbySpinner" class="spinner" style="display:none">読み込み中...</div>
+      <div id="standbyContent" style="display:none">
+        <!-- 日別一覧テーブル -->
+        <div class="table-wrap">
+          <table style="width:100%;font-size:12px;border-collapse:collapse;min-width:480px">
+            <thead>
+              <tr style="background:#f0f4f8">
+                <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border);width:70px">日付</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:30px">曜日</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:40px">区分</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border)">待機者</th>
+                <th style="padding:6px;text-align:right;border-bottom:2px solid var(--border);width:60px">待機料</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:30px" title="雨の日">🌧</th>
+              </tr>
+            </thead>
+            <tbody id="standbyBody"></tbody>
+          </table>
+        </div>
+        <!-- 集計 -->
+        <div style="margin-top:14px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--blue-dark)">待機集計</div>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="background:#f0f4f8">
+                <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">平日</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">土曜</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">日祝</th>
+                <th style="padding:6px;text-align:right;border-bottom:2px solid var(--border)">合計金額</th>
+              </tr>
+            </thead>
+            <tbody id="standbySummaryBody"></tbody>
+            <tfoot id="standbySummaryFoot"></tfoot>
+          </table>
+        </div>
+        <div id="standbyRainySummary" style="margin-top:14px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--blue-dark)">🌧 雨の日集計</div>
+          <div id="rainyLoading" style="display:none;font-size:12px;color:#999">出勤データ取得中...</div>
+          <table id="rainySummaryTable" style="width:100%;font-size:12px;border-collapse:collapse;display:none">
+            <thead>
+              <tr style="background:#f0f4f8">
+                <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">出勤雨日数</th>
+                <th style="padding:6px;text-align:right;border-bottom:2px solid var(--border)">手当額</th>
+              </tr>
+            </thead>
+            <tbody id="rainySummaryBody"></tbody>
+            <tfoot id="rainySummaryFoot"></tfoot>
+          </table>
+          <div id="rainyEmpty" style="display:none;font-size:12px;color:#999">雨の日の登録なし</div>
+        </div>
+      </div>
+      <div id="standbyEmpty" class="empty-msg" style="display:none">データがありません</div>
+    </div>
+  </div>
+
+  <!-- 出勤確定 月次集計 -->
+  <div class="card">
+    <div class="card-header" onclick="toggleAccordion(this)">
+      <h2>✅ 出勤確定 月次集計</h2>
+      <span class="acc-icon">▼</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="attendanceMonth" onchange="loadAttendanceMonthly()" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
+        <button class="btn-csv" onclick="exportAttendanceCSV()">CSV出力</button>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px">有給未申請＋訪問記録入力済み＝出勤として自動確定（毎日18時に集計）</p>
+      <div id="attendanceMonthlySpinner" class="spinner" style="display:none">読み込み中...</div>
+      <div class="table-wrap" id="attendanceMonthlyTableWrap" style="display:none">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f0f4f8">
+              <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">職種</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">営業日</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">出勤</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">欠勤</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">休暇</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:45px">未確認</th>
+              <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border);width:55px" title="雨の日出勤数">🌧出勤</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceMonthlyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
     </div>
   </div>
 
@@ -858,6 +968,14 @@
       if (h2 && h2.textContent.includes('オンコール管理')) {
         initOncallMonth();
         loadOncallSummary();
+      }
+      if (h2 && h2.textContent.includes('待機・雨の日管理')) {
+        initStandbyMonth();
+        loadStandbyData();
+      }
+      if (h2 && h2.textContent.includes('出勤確定')) {
+        initAttendanceMonth();
+        loadAttendanceMonthly();
       }
     }
   }
@@ -2417,6 +2535,449 @@
       s.totalCount, (s.totalMinutes / 60).toFixed(1), s.totalTransportCount, s.recordDays
     ]);
     downloadCSV(headers, rows, `オンコール集計_${month}.csv`);
+  }
+
+  // ── 待機・雨の日管理 ─────────────────────────────────────────
+  let standbyMonthInited = false;
+  let standbyEligibleStaff = [];
+  let lastStandbyRecords = [];
+  let lastRainyDays = [];
+  let lastCustomHolidays = [];
+  let lastStandbyStartDate = '';
+  let lastStandbyEndDate = '';
+
+  const DOW_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+  function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  const NATIONAL_HOLIDAYS = new Set([
+    '2026-01-01','2026-01-12','2026-02-11','2026-02-23',
+    '2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06',
+    '2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23',
+    '2026-10-12','2026-11-03','2026-11-23',
+    '2027-01-01','2027-01-11','2027-02-11','2027-02-23',
+    '2027-03-21','2027-04-29','2027-05-03','2027-05-04','2027-05-05',
+    '2027-07-19','2027-08-11','2027-09-20','2027-09-23',
+    '2027-10-11','2027-11-03','2027-11-23',
+  ]);
+
+  function initStandbyMonth() {
+    if (standbyMonthInited) return;
+    standbyMonthInited = true;
+    const sel = document.getElementById('standbyMonth');
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const label = d.getFullYear() + '年' + (d.getMonth() + 1) + '月（' + (d.getMonth() === 0 ? 12 : d.getMonth()) + '/16〜' + (d.getMonth() + 1) + '/15）';
+      sel.innerHTML += `<option value="${val}">${label}</option>`;
+    }
+  }
+
+  function getDateCategory(dateStr, customHols) {
+    const chSet = new Set(customHols || []);
+    if (NATIONAL_HOLIDAYS.has(dateStr) || chSet.has(dateStr)) return { category: '祝日', fee: 10000 };
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = d.getDay();
+    if (dow === 0) return { category: '日曜', fee: 10000 };
+    if (dow === 6) return { category: '土曜', fee: 5000 };
+    return { category: '平日', fee: 2000 };
+  }
+
+  async function loadStandbyData() {
+    const month = document.getElementById('standbyMonth').value;
+    if (!month) return;
+    document.getElementById('standbySpinner').style.display = '';
+    document.getElementById('standbyContent').style.display = 'none';
+    document.getElementById('standbyEmpty').style.display = 'none';
+    try {
+      const [staffRes, recRes] = await Promise.all([
+        fetch('/api/admin/standby/eligible-staff').then(r => r.json()),
+        fetch('/api/admin/standby/records?month=' + month).then(r => r.json()),
+      ]);
+      standbyEligibleStaff = staffRes.staff || [];
+      lastStandbyRecords = recRes.records || [];
+      lastRainyDays = recRes.rainyDays || [];
+      lastCustomHolidays = recRes.customHolidays || [];
+      lastStandbyStartDate = recRes.startDate;
+      lastStandbyEndDate = recRes.endDate;
+
+      renderStandbyTable();
+      await loadStandbySummary(month);
+    } catch (e) {
+      console.error('standby load error:', e);
+      showToast('待機データの読み込みに失敗しました');
+    }
+    document.getElementById('standbySpinner').style.display = 'none';
+  }
+
+  function renderStandbyTable() {
+    const recordMap = {};
+    for (const r of lastStandbyRecords) recordMap[r.date] = r.staffId;
+    const rainySet = new Set(lastRainyDays);
+
+    const start = new Date(lastStandbyStartDate + 'T00:00:00');
+    const end = new Date(lastStandbyEndDate + 'T00:00:00');
+    let html = '';
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = fmtDate(d);
+      const dow = d.getDay();
+      const dowName = DOW_NAMES[dow];
+      const { category, fee } = getDateCategory(dateStr, lastCustomHolidays);
+      const selectedStaff = recordMap[dateStr] || '';
+      const isRainy = rainySet.has(dateStr);
+
+      let rowBg = '';
+      if (category === '日曜' || category === '祝日') rowBg = 'background:#fff0f0;';
+      else if (category === '土曜') rowBg = 'background:#f0f4ff;';
+
+      const dowColor = dow === 0 || category === '祝日' ? 'color:#c0392b;' : dow === 6 ? 'color:#2E75B6;' : '';
+
+      let optionsHtml = '<option value="">--</option>';
+      for (const s of standbyEligibleStaff) {
+        const sel = s.id === selectedStaff ? ' selected' : '';
+        optionsHtml += `<option value="${esc(s.id)}"${sel}>${esc(s.name)}</option>`;
+      }
+
+      const displayDate = (d.getMonth() + 1) + '/' + d.getDate();
+      const feeDisplay = selectedStaff ? '¥' + fee.toLocaleString() : '-';
+
+      html += `<tr style="${rowBg}">
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;font-size:12px;white-space:nowrap">${displayDate}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center;${dowColor}font-weight:600">${dowName}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center;font-size:11px">${category}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4">
+          <select onchange="saveStandbyRecord('${dateStr}', this.value)" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+            ${optionsHtml}
+          </select>
+        </td>
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:right;font-size:12px;font-weight:600">${feeDisplay}</td>
+        <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center">
+          <input type="checkbox" ${isRainy ? 'checked' : ''} onchange="toggleRainyDay('${dateStr}')" style="cursor:pointer;width:16px;height:16px">
+        </td>
+      </tr>`;
+    }
+    document.getElementById('standbyBody').innerHTML = html;
+    document.getElementById('standbyContent').style.display = '';
+    document.getElementById('standbyCSVBtn').style.display = '';
+
+    // 雨の日集計を読み込み
+    const month = document.getElementById('standbyMonth').value;
+    loadRainySummary(month);
+  }
+
+  async function saveStandbyRecord(date, staffId) {
+    try {
+      await fetch('/api/admin/standby/records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, staffId }),
+      });
+      // ローカルデータも更新
+      const idx = lastStandbyRecords.findIndex(r => r.date === date);
+      if (!staffId) {
+        if (idx >= 0) lastStandbyRecords.splice(idx, 1);
+      } else {
+        if (idx >= 0) lastStandbyRecords[idx].staffId = staffId;
+        else lastStandbyRecords.push({ date, staffId });
+      }
+      renderStandbyTable();
+      const month = document.getElementById('standbyMonth').value;
+      loadStandbySummary(month);
+    } catch (e) {
+      showToast('保存に失敗しました');
+    }
+  }
+
+  async function toggleRainyDay(date) {
+    try {
+      const res = await fetch('/api/admin/rainy/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date }),
+      });
+      const data = await res.json();
+      if (data.rainy) {
+        if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
+      } else {
+        const idx = lastRainyDays.indexOf(date);
+        if (idx >= 0) lastRainyDays.splice(idx, 1);
+      }
+      renderStandbyTable();
+    } catch (e) {
+      showToast('雨の日の更新に失敗しました');
+    }
+  }
+
+  async function loadStandbySummary(month) {
+    try {
+      const res = await fetch('/api/admin/standby/summary?month=' + month);
+      const data = await res.json();
+      const summaryBody = document.getElementById('standbySummaryBody');
+      const summaryFoot = document.getElementById('standbySummaryFoot');
+      if (!data.summary || data.summary.length === 0) {
+        summaryBody.innerHTML = '<tr><td colspan="5" style="padding:8px;text-align:center;color:#999">待機記録なし</td></tr>';
+        summaryFoot.innerHTML = '';
+        return;
+      }
+      summaryBody.innerHTML = data.summary.map(s => `
+        <tr>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;font-weight:600">${esc(s.name)}</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.weekday}日</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.saturday}日</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.sundayHoliday}日</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:right;font-weight:700">¥${s.total.toLocaleString()}</td>
+        </tr>
+      `).join('');
+      const totals = data.summary.reduce((a, s) => ({
+        weekday: a.weekday + s.weekday,
+        saturday: a.saturday + s.saturday,
+        sundayHoliday: a.sundayHoliday + s.sundayHoliday,
+        total: a.total + s.total,
+      }), { weekday: 0, saturday: 0, sundayHoliday: 0, total: 0 });
+      summaryFoot.innerHTML = `
+        <tr style="background:#f0f4f8;font-weight:800">
+          <td style="padding:6px;border-top:2px solid var(--border)">合計</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.weekday}日</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.saturday}日</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.sundayHoliday}日</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:right">¥${totals.total.toLocaleString()}</td>
+        </tr>
+      `;
+    } catch (e) {
+      console.error('standby summary error:', e);
+    }
+  }
+
+  async function loadRainySummary(month) {
+    const table = document.getElementById('rainySummaryTable');
+    const empty = document.getElementById('rainyEmpty');
+    const loading = document.getElementById('rainyLoading');
+    const body = document.getElementById('rainySummaryBody');
+    const foot = document.getElementById('rainySummaryFoot');
+
+    if (lastRainyDays.length === 0) {
+      table.style.display = 'none';
+      loading.style.display = 'none';
+      empty.style.display = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+    table.style.display = 'none';
+    loading.style.display = '';
+
+    try {
+      const res = await fetch('/api/admin/rainy/summary?month=' + month);
+      const data = await res.json();
+      loading.style.display = 'none';
+
+      if (!data.summary || data.summary.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" style="padding:8px;text-align:center;color:#999">出勤者データなし（雨の日: ' + data.rainyDayCount + '日）</td></tr>';
+        foot.innerHTML = '';
+        table.style.display = '';
+        return;
+      }
+
+      body.innerHTML = data.summary.map(s => `
+        <tr>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;font-weight:600">${esc(s.name)}</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.days}日</td>
+          <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:right;font-weight:700">¥${s.amount.toLocaleString()}</td>
+        </tr>
+      `).join('');
+
+      const totalDays = data.summary.reduce((a, s) => a + s.days, 0);
+      const totalAmount = data.summary.reduce((a, s) => a + s.amount, 0);
+      foot.innerHTML = `
+        <tr style="background:#f0f4f8;font-weight:800">
+          <td style="padding:6px;border-top:2px solid var(--border)">合計（雨の日: ${data.rainyDayCount}日）</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totalDays}日</td>
+          <td style="padding:6px;border-top:2px solid var(--border);text-align:right">¥${totalAmount.toLocaleString()}</td>
+        </tr>
+      `;
+      table.style.display = '';
+    } catch (e) {
+      loading.style.display = 'none';
+      empty.textContent = '雨の日集計の取得に失敗しました';
+      empty.style.display = '';
+      console.error('rainy summary error:', e);
+    }
+  }
+
+  function toggleCustomHolidays() {
+    const sec = document.getElementById('customHolidaySection');
+    sec.style.display = sec.style.display === 'none' ? '' : 'none';
+    if (sec.style.display !== 'none') renderCustomHolidays();
+  }
+
+  async function renderCustomHolidays() {
+    try {
+      const res = await fetch('/api/admin/standby/custom-holidays');
+      const data = await res.json();
+      lastCustomHolidays = data.customHolidays || [];
+      const list = document.getElementById('customHolidayList');
+      if (lastCustomHolidays.length === 0) {
+        list.innerHTML = '<span style="color:#999">追加祝日なし</span>';
+        return;
+      }
+      list.innerHTML = lastCustomHolidays.map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        const label = (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + DOW_NAMES[dt.getDay()] + ')';
+        return `<span style="display:inline-block;background:#fff;border:1px solid #d4b84a;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px">${label} <span onclick="removeCustomHoliday('${d}')" style="color:#c0392b;cursor:pointer;font-weight:700;margin-left:4px">&times;</span></span>`;
+      }).join('');
+    } catch (e) {
+      console.error('custom holidays error:', e);
+    }
+  }
+
+  async function addCustomHoliday() {
+    const input = document.getElementById('customHolidayDate');
+    const date = input.value;
+    if (!date) return;
+    if (lastCustomHolidays.includes(date)) { showToast('既に追加済みです'); return; }
+    const newDates = [...lastCustomHolidays, date].sort();
+    try {
+      await fetch('/api/admin/standby/custom-holidays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dates: newDates }),
+      });
+      lastCustomHolidays = newDates;
+      input.value = '';
+      renderCustomHolidays();
+      loadStandbyData();
+    } catch (e) {
+      showToast('祝日の追加に失敗しました');
+    }
+  }
+
+  async function removeCustomHoliday(date) {
+    const newDates = lastCustomHolidays.filter(d => d !== date);
+    try {
+      await fetch('/api/admin/standby/custom-holidays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dates: newDates }),
+      });
+      lastCustomHolidays = newDates;
+      renderCustomHolidays();
+      loadStandbyData();
+    } catch (e) {
+      showToast('祝日の削除に失敗しました');
+    }
+  }
+
+  function exportStandbyCSV() {
+    const month = document.getElementById('standbyMonth').value;
+    const recordMap = {};
+    for (const r of lastStandbyRecords) recordMap[r.date] = r.staffId;
+    const staffMap = {};
+    for (const s of standbyEligibleStaff) staffMap[s.id] = s.name;
+    const rainySet = new Set(lastRainyDays);
+
+    const headers = ['日付', '曜日', '区分', '待機者', '待機料', '雨の日'];
+    const rows = [];
+    const start = new Date(lastStandbyStartDate + 'T00:00:00');
+    const end = new Date(lastStandbyEndDate + 'T00:00:00');
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = fmtDate(d);
+      const { category, fee } = getDateCategory(dateStr, lastCustomHolidays);
+      const staffId = recordMap[dateStr] || '';
+      rows.push([
+        dateStr,
+        DOW_NAMES[d.getDay()],
+        category,
+        staffId ? (staffMap[staffId] || staffId) : '',
+        staffId ? fee : '',
+        rainySet.has(dateStr) ? '○' : '',
+      ]);
+    }
+    downloadCSV(headers, rows, `待機一覧_${month}.csv`);
+  }
+
+  // ── 出勤確定 月次集計 ──────────────────────────────────────────
+  let attendanceMonthInited = false;
+
+  function initAttendanceMonth() {
+    if (attendanceMonthInited) return;
+    attendanceMonthInited = true;
+    const sel = document.getElementById('attendanceMonth');
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const curY = now.getFullYear();
+    const curM = now.getMonth() + 1;
+    for (let offset = 2; offset >= -12; offset--) {
+      let y = curY, m = curM - offset;
+      if (m < 1) { y--; m += 12; }
+      if (m > 12) { y++; m -= 12; }
+      const val = `${y}-${String(m).padStart(2, '0')}`;
+      const label = `${y}年${m}月`;
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if (offset === 0) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  const TYPE_LABELS = { nurse: '看護師', PT: 'PT', OT: 'OT', ST: 'ST' };
+
+  async function loadAttendanceMonthly() {
+    const month = document.getElementById('attendanceMonth').value;
+    if (!month) return;
+
+    const spinner = document.getElementById('attendanceMonthlySpinner');
+    const tableWrap = document.getElementById('attendanceMonthlyTableWrap');
+    spinner.style.display = '';
+    tableWrap.style.display = 'none';
+
+    try {
+      const resp = await fetch(`/api/admin/attendance/monthly?month=${month}`);
+      const data = await resp.json();
+      spinner.style.display = 'none';
+
+      const tbody = document.getElementById('attendanceMonthlyBody');
+      tbody.innerHTML = '';
+
+      if (!data.staff || data.staff.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--muted)">データがありません</td></tr>';
+        tableWrap.style.display = '';
+        return;
+      }
+
+      for (const s of data.staff) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="padding:6px;border-bottom:1px solid var(--border)">${s.name}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);font-size:11px">${TYPE_LABELS[s.type] || s.type}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border)">${s.workDays}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--ok);font-weight:600">${s.confirmedDays}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--danger)">${s.absentDays}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--muted)">${s.leaveDays}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:${s.unconfirmedDays > 0 ? '#8b6914' : 'var(--muted)'};font-weight:${s.unconfirmedDays > 0 ? '600' : '400'}">${s.unconfirmedDays}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:#2563eb;font-weight:600">${s.rainyDayAttendance}</td>`;
+        tbody.appendChild(tr);
+      }
+
+      tableWrap.style.display = '';
+    } catch (e) {
+      spinner.style.display = 'none';
+      showToast('月次集計の取得に失敗しました');
+    }
+  }
+
+  function exportAttendanceCSV() {
+    const month = document.getElementById('attendanceMonth').value;
+    if (!month) return;
+    fetch(`/api/admin/attendance/monthly?month=${month}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.staff) return;
+        const headers = ['名前', '職種', '営業日数', '出勤日数', '欠勤', '休暇', '未確認', '雨の日出勤'];
+        const rows = data.staff.map(s => [
+          s.name, TYPE_LABELS[s.type] || s.type, s.workDays, s.confirmedDays,
+          s.absentDays, s.leaveDays, s.unconfirmedDays, s.rainyDayAttendance,
+        ]);
+        downloadCSV(headers, rows, `出勤集計_${month}.csv`);
+      });
   }
 
   // 6) 監査ログ

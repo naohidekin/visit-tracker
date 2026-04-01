@@ -55,6 +55,8 @@ const LEAVE_PATH         = path.join(DATA_DIR, 'leave-requests.json');
 const ONCALL_PATH        = path.join(DATA_DIR, 'oncall-records.json');
 const AUDIT_LOG_PATH     = path.join(DATA_DIR, 'audit-log.json');
 const RESET_TOKENS_PATH  = path.join(DATA_DIR, 'password-reset-tokens.json');
+const STANDBY_PATH       = path.join(DATA_DIR, 'standby-records.json');
+const ATTENDANCE_PATH    = path.join(DATA_DIR, 'attendance.json');
 const APP_BASE_URL       = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
@@ -195,6 +197,27 @@ function loadOncall() {
 }
 function saveOncall(data) {
   fs.writeFileSync(ONCALL_PATH, JSON.stringify(data, null, 2));
+}
+function loadStandby() {
+  if (!fs.existsSync(STANDBY_PATH)) return { records: [], customHolidays: [], rainyDays: [] };
+  const data = JSON.parse(fs.readFileSync(STANDBY_PATH, 'utf8'));
+  if (!data.records) data.records = [];
+  if (!data.customHolidays) data.customHolidays = [];
+  if (!data.rainyDays) data.rainyDays = [];
+  return data;
+}
+function saveStandby(data) {
+  fs.writeFileSync(STANDBY_PATH, JSON.stringify(data, null, 2));
+}
+function loadAttendance() {
+  if (!fs.existsSync(ATTENDANCE_PATH)) return { records: {}, reminders_sent: {} };
+  const data = JSON.parse(fs.readFileSync(ATTENDANCE_PATH, 'utf8'));
+  if (!data.records) data.records = {};
+  if (!data.reminders_sent) data.reminders_sent = {};
+  return data;
+}
+function saveAttendance(data) {
+  fs.writeFileSync(ATTENDANCE_PATH, JSON.stringify(data, null, 2));
 }
 
 // ─── 監査ログ（改ざん検知チェーン付き） ─────────────────────────
@@ -2651,6 +2674,180 @@ app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, (req, res) => {
   res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
 });
 
+// ─── API: 待機管理（管理者向け） ──────────────────────────────
+
+function formatLocalDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 待機対象スタッフ一覧（看護師 + oncall_eligible）
+app.get('/api/admin/standby/eligible-staff', requireAdmin, (req, res) => {
+  const staffData = loadStaff();
+  const eligible = staffData.staff
+    .filter(s => !s.archived && s.type === 'nurse' && s.oncall_eligible)
+    .map(s => ({ id: s.id, name: s.name }));
+  res.json({ staff: eligible });
+});
+
+// 待機記録取得（16日〜15日期間）
+app.get('/api/admin/standby/records', requireAdmin, (req, res) => {
+  const month = req.query.month; // 支払月 YYYY-MM
+  if (!month) return res.status(400).json({ error: 'month は必須です' });
+  const data = loadStandby();
+  const [y, m] = month.split('-').map(Number);
+  const startDate = new Date(y, m - 2, 16);
+  const endDate = new Date(y, m - 1, 15);
+  const startStr = formatLocalDate(startDate);
+  const endStr = formatLocalDate(endDate);
+  const records = data.records.filter(r => r.date >= startStr && r.date <= endStr);
+  const rainyDays = (data.rainyDays || []).filter(d => d >= startStr && d <= endStr);
+  const customHolidays = data.customHolidays || [];
+  res.json({ records, rainyDays, customHolidays, startDate: startStr, endDate: endStr });
+});
+
+// 待機者登録/更新
+app.post('/api/admin/standby/records', requireAdmin, (req, res) => {
+  const { date, staffId } = req.body;
+  if (!date) return res.status(400).json({ error: 'date は必須です' });
+  const data = loadStandby();
+  const idx = data.records.findIndex(r => r.date === date);
+  if (!staffId || staffId === '') {
+    if (idx >= 0) data.records.splice(idx, 1);
+  } else {
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+      data.records[idx].staffId = staffId;
+      data.records[idx].updatedAt = now;
+    } else {
+      data.records.push({ date, staffId, createdAt: now, updatedAt: now });
+    }
+  }
+  saveStandby(data);
+  auditLog(req, 'standby.upsert', { type: 'standby', id: date }, { date, staffId: staffId || '(削除)' });
+  res.json({ ok: true });
+});
+
+// 待機記録削除
+app.delete('/api/admin/standby/records/:date', requireAdmin, (req, res) => {
+  const data = loadStandby();
+  const idx = data.records.findIndex(r => r.date === req.params.date);
+  if (idx < 0) return res.status(404).json({ error: '記録が見つかりません' });
+  data.records.splice(idx, 1);
+  saveStandby(data);
+  auditLog(req, 'standby.delete', { type: 'standby', id: req.params.date }, {});
+  res.json({ ok: true });
+});
+
+// 待機集計（16日〜15日締め）
+app.get('/api/admin/standby/summary', requireAdmin, (req, res) => {
+  const month = req.query.month;
+  if (!month) return res.status(400).json({ error: 'month は必須です' });
+  const data = loadStandby();
+  const customHols = new Set(data.customHolidays || []);
+  const [y, m] = month.split('-').map(Number);
+  const startDate = new Date(y, m - 2, 16);
+  const endDate = new Date(y, m - 1, 15);
+  const startStr = formatLocalDate(startDate);
+  const endStr = formatLocalDate(endDate);
+  const records = data.records.filter(r => r.date >= startStr && r.date <= endStr);
+
+  const staffData = loadStaff();
+  const staffMap = {};
+  for (const s of staffData.staff) staffMap[s.id] = s.name;
+
+  const summary = {};
+  for (const rec of records) {
+    if (!summary[rec.staffId]) {
+      summary[rec.staffId] = { staffId: rec.staffId, name: staffMap[rec.staffId] || rec.staffId, weekday: 0, saturday: 0, sundayHoliday: 0, total: 0 };
+    }
+    const { fee, category } = getStandbyFeeWithCustom(rec.date, customHols);
+    summary[rec.staffId].total += fee;
+    if (category === '平日') summary[rec.staffId].weekday++;
+    else if (category === '土曜') summary[rec.staffId].saturday++;
+    else summary[rec.staffId].sundayHoliday++;
+  }
+
+  const rainyDays = (data.rainyDays || []).filter(d => d >= startStr && d <= endStr);
+  res.json({ summary: Object.values(summary), rainyDayCount: rainyDays.length });
+});
+
+// カスタム祝日取得
+app.get('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
+  const data = loadStandby();
+  res.json({ customHolidays: data.customHolidays || [] });
+});
+
+// カスタム祝日設定
+app.post('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
+  const { dates } = req.body;
+  if (!Array.isArray(dates)) return res.status(400).json({ error: 'dates は配列で指定してください' });
+  const data = loadStandby();
+  data.customHolidays = dates.sort();
+  saveStandby(data);
+  auditLog(req, 'standby.custom_holidays', { type: 'standby', id: 'custom-holidays' }, { count: dates.length });
+  res.json({ ok: true, customHolidays: data.customHolidays });
+});
+
+// ─── API: 雨の日管理（管理者向け） ──────────────────────────────
+
+app.post('/api/admin/rainy/toggle', requireAdmin, (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.status(400).json({ error: 'date は必須です' });
+  const data = loadStandby();
+  const idx = data.rainyDays.indexOf(date);
+  if (idx >= 0) {
+    data.rainyDays.splice(idx, 1);
+  } else {
+    data.rainyDays.push(date);
+    data.rainyDays.sort();
+  }
+  saveStandby(data);
+  const isRainy = data.rainyDays.includes(date);
+  auditLog(req, 'rainy.toggle', { type: 'rainy', id: date }, { rainy: isRainy });
+  res.json({ ok: true, rainy: isRainy });
+});
+
+// 雨の日集計（16日〜15日締め、出勤判定付き）
+app.get('/api/admin/rainy/summary', requireAdmin, async (req, res) => {
+  const month = req.query.month;
+  if (!month) return res.status(400).json({ error: 'month は必須です' });
+  const data = loadStandby();
+  const [y, m] = month.split('-').map(Number);
+  const startDate = new Date(y, m - 2, 16);
+  const endDate = new Date(y, m - 1, 15);
+  const startStr = formatLocalDate(startDate);
+  const endStr = formatLocalDate(endDate);
+  const rainyDays = (data.rainyDays || []).filter(d => d >= startStr && d <= endStr).sort();
+
+  if (rainyDays.length === 0) {
+    return res.json({ summary: [], rainyDayCount: 0, details: [] });
+  }
+
+  // 各雨の日の出勤者を取得
+  const staffCounts = {}; // staffId => { name, days }
+  const details = []; // 日別詳細
+  for (const dateStr of rainyDays) {
+    try {
+      const status = await getAllStaffRecordStatus(dateStr);
+      const worked = status.entered || [];
+      details.push({ date: dateStr, workedStaff: worked.map(s => s.name) });
+      for (const s of worked) {
+        if (!staffCounts[s.id]) staffCounts[s.id] = { name: s.name, days: 0 };
+        staffCounts[s.id].days++;
+      }
+    } catch (e) {
+      console.error(`雨の日集計エラー (${dateStr}):`, e.message);
+      details.push({ date: dateStr, workedStaff: [], error: e.message });
+    }
+  }
+
+  const summary = Object.values(staffCounts)
+    .map(s => ({ name: s.name, days: s.days, amount: s.days * 500 }))
+    .sort((a, b) => b.days - a.days);
+
+  res.json({ summary, rainyDayCount: rainyDays.length, details });
+});
+
 // ─── API: 有給休暇（管理者向け） ───────────────────────────────
 app.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
   const leaveData = loadLeave();
@@ -2963,6 +3160,26 @@ function isWorkday(dateStr) {
   return true;
 }
 
+function getStandbyFee(dateStr) {
+  const standbyData = loadStandby();
+  const customHols = new Set(standbyData.customHolidays || []);
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  if (ALL_HOLIDAYS.has(dateStr) || customHols.has(dateStr)) return { fee: 10000, category: '祝日' };
+  if (dow === 0) return { fee: 10000, category: '日曜' };
+  if (dow === 6) return { fee: 5000, category: '土曜' };
+  return { fee: 2000, category: '平日' };
+}
+
+function getStandbyFeeWithCustom(dateStr, customHols) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const dow = d.getDay();
+  if (ALL_HOLIDAYS.has(dateStr) || customHols.has(dateStr)) return { fee: 10000, category: '祝日' };
+  if (dow === 0) return { fee: 10000, category: '日曜' };
+  if (dow === 6) return { fee: 5000, category: '土曜' };
+  return { fee: 2000, category: '平日' };
+}
+
 function isOnLeaveToday(staffId, dateStr) {
   const leaveData = loadLeave();
   return leaveData.requests.some(r =>
@@ -3088,7 +3305,83 @@ app.get('/api/reminder/today-status', requireStaff, async (req, res) => {
   res.json({ date: today, hasRecord, isWorkday: true, isOnLeave: false });
 });
 
-// 管理者向け: 全スタッフの今日の入力状況
+// ─── 出勤確定 月次集計 API ──────────────────────────────────────
+
+// 月次出勤集計
+app.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
+  const { month } = req.query;
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: '月の形式が不正です (YYYY-MM)' });
+
+  const [yearStr, monthStr] = month.split('-');
+  const year = Number(yearStr);
+  const m = Number(monthStr);
+  const daysInMonth = new Date(year, m, 0).getDate();
+
+  const staffData = loadStaff();
+  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
+  const attendanceData = loadAttendance();
+  const leaveData = loadLeave();
+
+  // 雨の日データを待機データから取得
+  const standbyData = loadStandby();
+  const rainyDaysSet = new Set((standbyData.rainyDays || []).filter(d => d.startsWith(month)));
+
+  // スタッフ別集計初期化
+  const summary = {};
+  for (const s of activeStaff) {
+    summary[s.id] = {
+      staffId: s.id, name: s.name, type: s.type,
+      workDays: 0, confirmedDays: 0, absentDays: 0, leaveDays: 0,
+      unconfirmedDays: 0, rainyDayAttendance: 0,
+    };
+  }
+
+  // 日ごとに集計
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${yearStr}-${monthStr}-${String(d).padStart(2, '0')}`;
+    if (!isWorkday(dateStr)) continue;
+
+    const dayRecords = attendanceData.records[dateStr] || {};
+    const isRainy = rainyDaysSet.has(dateStr);
+
+    for (const s of activeStaff) {
+      summary[s.id].workDays++;
+
+      const manual = dayRecords[s.id];
+      const onLeave = leaveData.requests.some(r =>
+        r.staffId === s.id && r.status === 'approved' && r.dates.includes(dateStr)
+      );
+
+      let status;
+      if (manual) {
+        status = manual.status;
+      } else if (onLeave) {
+        status = 'leave';
+      } else {
+        status = 'unconfirmed';
+      }
+
+      if (status === 'confirmed') {
+        summary[s.id].confirmedDays++;
+        if (isRainy) summary[s.id].rainyDayAttendance++;
+      } else if (status === 'absent') {
+        summary[s.id].absentDays++;
+      } else if (status === 'leave') {
+        summary[s.id].leaveDays++;
+      } else {
+        summary[s.id].unconfirmedDays++;
+      }
+    }
+  }
+
+  res.json({
+    month,
+    rainyDays: Array.from(rainyDaysSet).sort(),
+    rainyDayCount: rainyDaysSet.size,
+    staff: Object.values(summary),
+  });
+});
+
 // ─── 運営お知らせ自動発信 ────────────────────────────────────────
 function createSystemNotice(title, body) {
   const data = loadNotices();
@@ -3144,6 +3437,10 @@ async function ensureDataDir() {
   // audit-log.json
   if (!fs.existsSync(AUDIT_LOG_PATH)) {
     fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
+  }
+  // attendance.json
+  if (!fs.existsSync(ATTENDANCE_PATH)) {
+    fs.writeFileSync(ATTENDANCE_PATH, JSON.stringify({ records: {}, reminders_sent: {} }, null, 2));
   }
 }
 
@@ -3213,11 +3510,33 @@ async function main() {
       if (results.missing.length > 0) {
         console.log(`[cron] リマインダー送信: ${results.missing.map(s => s.name).join(', ')}`);
       }
+
+      // 出勤自動確定: 入力済み→confirmed, 休暇中→leave
+      const attendanceData = loadAttendance();
+      if (!attendanceData.records[today]) attendanceData.records[today] = {};
+      for (const s of results.entered) {
+        if (!attendanceData.records[today][s.id]) {
+          attendanceData.records[today][s.id] = {
+            status: 'confirmed', source: 'auto',
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+      for (const s of results.onLeave) {
+        if (!attendanceData.records[today][s.id]) {
+          attendanceData.records[today][s.id] = {
+            status: 'leave', source: 'auto',
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+      saveAttendance(attendanceData);
+      console.log(`[cron] 出勤自動確定: confirmed=${results.entered.length}, leave=${results.onLeave.length}`);
     } catch (e) {
       console.error('[cron] リマインダーエラー:', e.message);
     }
   });
-  console.log('📝 未入力リマインダー: 毎日 18:00 (JST) 平日のみ');
+  console.log('📝 未入力リマインダー & 出勤自動確定: 毎日 18:00 (JST) 平日のみ');
 
   // 毎日0:00 UTC: 期限切れリセットトークンを削除
   cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); });

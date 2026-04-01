@@ -14,11 +14,11 @@
       "id": "testns-2026-03-27-1774541803509",
       "staffId": "testns",
       "date": "2026-03-27",
-      "count": 2,
-      "totalMinutes": 90,
+      "count": 0,
+      "totalMinutes": 570,
       "transportCount": 1,
       "createdAt": "2026-03-27T01:16:43.508Z",
-      "updatedAt": "2026-03-27T02:23:06.094Z"
+      "updatedAt": "2026-03-27T22:34:41.420Z"
     },
     {
       "id": "testns-2026-03-26-1774543067728",

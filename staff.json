@@ -22,7 +22,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "suzuki02",
@@ -42,7 +42,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "goto03",
@@ -62,8 +62,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 5,
-      "celebration_used_adj": 4.5
+      "email": null
     },
     {
       "id": "kamata04",
@@ -83,7 +82,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 5
+      "email": null
     },
     {
       "id": "nakashima05",
@@ -102,7 +101,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "ozawa06",
@@ -121,7 +120,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 5
+      "email": null
     },
     {
       "id": "ooe07",
@@ -140,7 +139,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 5
+      "email": null
     },
     {
       "id": "testns",
@@ -161,7 +160,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": true,
       "oncall_leave_granted": 1,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "testpt",
@@ -181,7 +180,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "morobe08",
@@ -201,7 +200,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     },
     {
       "id": "sahara09",
@@ -221,7 +220,7 @@
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
       "oncall_leave_granted": 0,
-      "celebration_days": 3
+      "email": null
     }
   ]
 }
