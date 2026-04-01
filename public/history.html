@@ -183,9 +183,9 @@
   <div class="card" id="chartSection" style="display:none">
     <div class="section-title" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;-webkit-tap-highlight-color:transparent" onclick="toggleChart()">
       📊 日別訪問グラフ
-      <span id="chartArrow" style="font-size:11px;color:var(--muted)">▲</span>
+      <span id="chartArrow" style="font-size:11px;color:var(--muted)">▼</span>
     </div>
-    <div id="chartBody" class="collapsible-body">
+    <div id="chartBody" class="collapsible-body collapsed">
       <div class="chart-container">
         <canvas id="visitChart"></canvas>
       </div>
@@ -357,7 +357,8 @@
       ? `<p class="incentive-note">※ 残り${data.days_remaining}日分未入力（見込額は変動します）</p>`
       : '';
 
-    const collapsed = document.getElementById('incentiveBody')?.classList.contains('collapsed');
+    const isFirst = !document.getElementById('incentiveBody');
+    const collapsed = isFirst ? true : document.getElementById('incentiveBody')?.classList.contains('collapsed');
     document.getElementById('incentiveCard').innerHTML = `
       <div class="incentive-card">
         <div class="incentive-card-header" onclick="toggleIncentive()">
