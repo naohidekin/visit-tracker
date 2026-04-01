@@ -1318,7 +1318,7 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
       const avg2      = working_days > 0 ? total_units / working_days : 0;
       const threshold2     = iline2 * working_days;
       const over_units2    = Math.max(0, total_units - threshold2);
-      const incentive_amount2 = Math.floor(over_units2) * 1000;
+      const incentive_amount2 = Math.floor(over_units2) * 500;
       res.json({ total_units, working_days,
                  incentive_line: iline2, incentive_triggered: avg2 > iline2,
                  over_units: Math.floor(over_units2), incentive_amount: incentive_amount2,
@@ -1429,7 +1429,7 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
       const avg = working_days > 0 ? total_units / working_days : 0;
       const threshold        = ilineR * working_days;
       const over_units       = Math.max(0, total_units - threshold);
-      const incentive_amount = Math.floor(over_units) * 1000;
+      const incentive_amount = Math.floor(over_units) * 500;
       res.json({ type: 'rehab', year: y, month: m, days,
         stats: { total_units, working_days,
                  incentive_line: ilineR, incentive_triggered: avg > ilineR,
@@ -1512,13 +1512,107 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const avg = working_days > 0 ? total_units / working_days : 0;
       const threshold        = ilineAR * working_days;
       const over_units       = Math.max(0, total_units - threshold);
-      const incentive_amount = Math.floor(over_units) * 1000;
+      const incentive_amount = Math.floor(over_units) * 500;
       res.json({ type: 'rehab', year: y, month: m, days,
         stats: { total_units, working_days,
                  incentive_line: ilineAR, incentive_triggered: avg > ilineAR,
                  over_units: Math.floor(over_units), incentive_amount,
                  work_hours: staff.work_hours ?? null } });
     }
+  } catch (e) {
+    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+  }
+});
+
+// ─── API: 管理者用 インセンティブ月次集計 ──────────────────────────
+app.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
+  const { year, month } = req.query;
+  if (!year || !month) return res.status(400).json({ error: 'パラメータ不足' });
+
+  const y = Number(year), m = Number(month);
+  const sid = getSpreadsheetIdForYear(y);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const endRow = DATA_START_ROW + daysInMonth - 1;
+
+  const staffData = loadStaff();
+  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
+
+  try {
+    const api = await getSheets();
+    const results = [];
+    let total_amount = 0;
+
+    for (const staff of activeStaff) {
+      try {
+        if (staff.type === 'nurse') {
+          const resp = await sheetsRetry(() => api.spreadsheets.values.get({
+            spreadsheetId: sid,
+            range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
+          }));
+          const rows = resp.data.values ?? [];
+          let total_kaigo = 0, total_iryo = 0, working_days = 0;
+          for (const r of rows) {
+            const k = parseFloat(r?.[0]) || 0;
+            const i = parseFloat(r?.[1]) || 0;
+            total_kaigo += k; total_iryo += i;
+            if (k > 0 || i > 0) working_days++;
+          }
+          const total = total_kaigo + total_iryo;
+          const rawLine = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+          const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+          const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
+          const threshold = effectiveLine * working_days;
+          const overHours = Math.max(0, total - threshold);
+          const amount = Math.floor(overHours / 0.5) * 2000;
+          total_amount += amount;
+          results.push({
+            id: staff.id, name: staff.name, type: 'nurse',
+            work_hours: staff.work_hours ?? null,
+            incentive_line: rawLine, effective_line: effectiveLine,
+            working_days, threshold: Math.round(threshold * 100) / 100,
+            total: Math.round(total * 10) / 10,
+            total_kaigo: Math.round(total_kaigo * 10) / 10,
+            total_iryo: Math.round(total_iryo * 10) / 10,
+            over: Math.round(overHours * 10) / 10, amount
+          });
+        } else if (staff.type === 'PT') {
+          const resp = await sheetsRetry(() => api.spreadsheets.values.get({
+            spreadsheetId: sid,
+            range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
+          }));
+          const rows = resp.data.values ?? [];
+          let total_units = 0, working_days = 0;
+          for (const r of rows) {
+            const v = parseFloat(r?.[0]) || 0;
+            total_units += v;
+            if (v > 0) working_days++;
+          }
+          const rawLine = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+          const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+          const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
+          const threshold = effectiveLine * working_days;
+          const overUnits = Math.max(0, total_units - threshold);
+          const amount = Math.floor(overUnits) * 500;
+          total_amount += amount;
+          results.push({
+            id: staff.id, name: staff.name, type: 'PT',
+            work_hours: staff.work_hours ?? null,
+            incentive_line: rawLine, effective_line: effectiveLine,
+            working_days, threshold: Math.round(threshold * 100) / 100,
+            total: total_units,
+            over: Math.floor(overUnits), amount
+          });
+        }
+      } catch (staffErr) {
+        results.push({
+          id: staff.id, name: staff.name, type: staff.type,
+          error: staffErr.message
+        });
+      }
+    }
+
+    res.json({ year: y, month: m, staff: results, total_amount });
   } catch (e) {
     res.status(500).json({ error: e.response?.data?.error?.message || e.message });
   }
