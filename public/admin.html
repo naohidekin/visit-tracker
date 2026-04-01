@@ -928,6 +928,7 @@
     if (!body) return;
     if (body.style.maxHeight && body.style.maxHeight !== '0px') {
       body.style.maxHeight = '0';
+      body.style.overflow = 'hidden';
       h2.querySelector('span').textContent = '▼';
     } else {
       body.style.maxHeight = body.scrollHeight + 'px';
