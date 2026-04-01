@@ -157,6 +157,7 @@
       <div class="balance-calc-row balance-calc-total"><div class="balance-calc-left"><span class="balance-calc-op">=</span><span class="balance-calc-label">残日数</span></div><span class="balance-calc-val" id="balTotal">-</span></div>
     </div>
     <div class="balance-carry-note" id="carryNote"><span>⏳</span><span>前年繰越 <span id="carryDays">-</span>日 は <span class="carry-date" id="carryExpiry">-</span> に期限切れ</span></div>
+    <div class="balance-carry-note" id="celebNote" style="display:none"><span>🎉</span><span>お祝い休暇 <span class="carry-date" id="celebStatus">-</span></span></div>
   </div>
 
   <!-- 付与情報カード -->
@@ -278,6 +279,16 @@
     document.getElementById('balanceNum').textContent = data.balance;
     document.getElementById('balGranted').textContent = data.granted + '日';
     document.getElementById('balCarried').textContent = data.carried_over + '日';
+    // お祝い休暇（入職半年以内のみ表示）
+    const celebDays = data.celebration_days || 0;
+    const celebUsed = data.celebration_used || 0;
+    const celebRemain = celebDays - celebUsed;
+    if (data.next_grant && data.next_grant.celebration_active && celebDays > 0) {
+      document.getElementById('celebNote').style.display = 'flex';
+      document.getElementById('celebStatus').textContent = celebRemain > 0
+        ? '残り ' + celebRemain + '日 / ' + celebDays + '日（有給から自動消化）'
+        : '使用済（' + celebDays + '日）';
+    }
     const oncall = data.oncall_leave || 0;
     if (oncall > 0) {
       document.getElementById('balOcRow').style.display = '';
