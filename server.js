@@ -58,8 +58,8 @@ const RESET_TOKENS_PATH  = path.join(DATA_DIR, 'password-reset-tokens.json');
 const APP_BASE_URL       = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
 const MONTHS          = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
-// ─── 有給・オンコール機能の公開対象スタッフID ──────────────────
-const LEAVE_ONCALL_ENABLED_IDS = ['testns', 'testpt'];
+// ─── 有給・オンコール機能の公開対象スタッフID（全員対象のため空配列に）──
+const LEAVE_ONCALL_ENABLED_IDS = [];
 const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
 const WD              = ['日','月','火','水','木','金','土'];
@@ -687,12 +687,10 @@ app.get('/notices', (req, res) => {
 });
 app.get('/leave', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office') return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'leave.html'));
 });
 app.get('/oncall', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office') return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'oncall.html'));
 });
 app.get('/forgot-password', (_r, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
@@ -824,7 +822,7 @@ app.get('/api/me', (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   const oncall_eligible = staff ? !!staff.oncall_eligible : false;
-  const leave_oncall_enabled = LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) || req.session.staffType === 'office';
+  const leave_oncall_enabled = true; // 全職員対象
   res.json({ id: req.session.staffId, name: req.session.staffName, type: req.session.staffType, oncall_eligible, leave_oncall_enabled });
 });
 
@@ -2319,8 +2317,7 @@ app.get('/api/admin/excel-results/:yearMonth', requireAdmin, (req, res) => {
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
 function requireLeaveOncall(req, res, next) {
-  if (!LEAVE_ONCALL_ENABLED_IDS.includes(req.session.staffId) && req.session.staffType !== 'office')
-    return res.status(403).json({ error: 'この機能は現在ご利用いただけません' });
+  // 全職員対象のため制限なし
   next();
 }
 
