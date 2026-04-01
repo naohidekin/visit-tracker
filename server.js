@@ -1442,6 +1442,148 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
   }
 });
 
+// ─── API: インセンティブ見込（16日〜15日締め） ─────────────────
+app.get('/api/incentive-estimate', requireStaff, async (req, res) => {
+  const { payMonth } = req.query;
+  if (!payMonth || !/^\d{4}-\d{1,2}$/.test(payMonth))
+    return res.status(400).json({ error: 'payMonth パラメータが必要です (YYYY-MM)' });
+
+  const [payYear, payM] = payMonth.split('-').map(Number);
+  // 対象期間: 前月16日 〜 当月15日
+  const prevM    = payM === 1 ? 12 : payM - 1;
+  const prevYear = payM === 1 ? payYear - 1 : payYear;
+  const daysInPrev = new Date(prevYear, prevM, 0).getDate();
+
+  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-16`;
+  const billingEnd   = `${payYear}-${String(payM).padStart(2,'0')}-15`;
+  const payDate      = `${payYear}-${String(payM).padStart(2,'0')}-25`;
+
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+
+  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+
+  try {
+    const api = await getSheets();
+    const sidPrev = getSpreadsheetIdForYear(prevYear);
+    const sidCur  = getSpreadsheetIdForYear(payYear);
+
+    // 取得する列を決定
+    const isNurse = staff.type === 'nurse';
+    const colRange = isNurse
+      ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
+      : `${staff.col}%s:${staff.col}%s`;
+
+    // Range A: 前月16日〜末日 (row = DATA_START_ROW + day - 1)
+    const startRowA = DATA_START_ROW + 15; // 16日 = row 20
+    const endRowA   = DATA_START_ROW + daysInPrev - 1;
+    const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
+
+    // Range B: 当月1日〜15日
+    const startRowB = DATA_START_ROW;     // 1日 = row 5
+    const endRowB   = DATA_START_ROW + 14; // 15日 = row 19
+    const rangeB = `${payM}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
+
+    // 並列フェッチ
+    const [respA, respB] = await Promise.all([
+      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidPrev, range: rangeA })).catch(() => ({ data: { values: [] } })),
+      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidCur,  range: rangeB })).catch(() => ({ data: { values: [] } })),
+    ]);
+
+    const rowsA = respA.data.values ?? [];
+    const rowsB = respB.data.values ?? [];
+
+    // 今日の日付で残日数・確定判定
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const isFinalized = todayStr > billingEnd;
+
+    if (isNurse) {
+      let total_kaigo = 0, total_iryo = 0, working_days = 0, daysRemaining = 0;
+
+      // Range A: 前月16日〜末日
+      for (let i = 0; i < (daysInPrev - 15); i++) {
+        const day = 16 + i;
+        const dateStr = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const row = rowsA[i] ?? [];
+        const k = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
+        const ir = (row[1] !== undefined && row[1] !== '') ? (parseFloat(row[1]) || 0) : 0;
+        total_kaigo += k; total_iryo += ir;
+        if (k > 0 || ir > 0) working_days++;
+        if (!isFinalized && dateStr >= todayStr && k === 0 && ir === 0) daysRemaining++;
+      }
+      // Range B: 当月1日〜15日
+      for (let i = 0; i < 15; i++) {
+        const day = 1 + i;
+        const dateStr = `${payYear}-${String(payM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const row = rowsB[i] ?? [];
+        const k = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
+        const ir = (row[1] !== undefined && row[1] !== '') ? (parseFloat(row[1]) || 0) : 0;
+        total_kaigo += k; total_iryo += ir;
+        if (k > 0 || ir > 0) working_days++;
+        if (!isFinalized && dateStr >= todayStr && k === 0 && ir === 0) daysRemaining++;
+      }
+
+      const total = total_kaigo + total_iryo;
+      const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
+      const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const iline     = Math.round(rawLine * workRatio * 100) / 100;
+      const threshold     = iline * working_days;
+      const over_hours    = Math.max(0, total - threshold);
+      const incentive_count  = Math.floor(over_hours / 0.5);
+      const incentive_amount = incentive_count * 2000;
+
+      res.json({
+        type: 'nurse', billing_start: billingStart, billing_end: billingEnd, pay_date: payDate,
+        total, total_kaigo, total_iryo, working_days,
+        incentive_line: iline, threshold: Math.round(threshold * 10) / 10,
+        over_hours: Math.round(over_hours * 10) / 10,
+        incentive_amount, incentive_triggered: over_hours > 0,
+        days_remaining: daysRemaining, is_finalized: isFinalized,
+      });
+    } else {
+      let total_units = 0, working_days = 0, daysRemaining = 0;
+
+      for (let i = 0; i < (daysInPrev - 15); i++) {
+        const day = 16 + i;
+        const dateStr = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const row = rowsA[i] ?? [];
+        const v = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
+        if (v > 0) { total_units += v; working_days++; }
+        if (!isFinalized && dateStr >= todayStr && v === 0) daysRemaining++;
+      }
+      for (let i = 0; i < 15; i++) {
+        const day = 1 + i;
+        const dateStr = `${payYear}-${String(payM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const row = rowsB[i] ?? [];
+        const v = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
+        if (v > 0) { total_units += v; working_days++; }
+        if (!isFinalized && dateStr >= todayStr && v === 0) daysRemaining++;
+      }
+
+      const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
+      const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
+      const iline     = Math.round(rawLine * workRatio * 100) / 100;
+      const threshold       = iline * working_days;
+      const over_units      = Math.max(0, total_units - threshold);
+      const incentive_amount = Math.floor(over_units) * 500;
+
+      res.json({
+        type: 'rehab', billing_start: billingStart, billing_end: billingEnd, pay_date: payDate,
+        total_units, working_days,
+        incentive_line: iline, threshold: Math.round(threshold * 10) / 10,
+        over_units: Math.floor(over_units),
+        incentive_amount, incentive_triggered: over_units > 0,
+        days_remaining: daysRemaining, is_finalized: isFinalized,
+      });
+    }
+  } catch (e) {
+    console.error('incentive-estimate error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── API: 管理者用 月別日別明細 ────────────────────────────────
 app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const { staffId, year, month } = req.query;

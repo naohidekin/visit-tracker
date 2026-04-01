@@ -106,6 +106,24 @@
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
     /* グラフカード */
     .chart-container{position:relative;width:100%;height:220px}
+    /* インセンティブ見込カード */
+    .incentive-card{background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px;border:1.5px solid #fbbf24}
+    .incentive-card-header{display:flex;align-items:center;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    .incentive-card-title{font-size:13px;font-weight:800;color:#92400e;white-space:nowrap}
+    .incentive-card-period{font-size:11px;color:#a16207;white-space:nowrap}
+    .incentive-toggle{font-size:11px;color:#a16207;margin-left:auto;flex-shrink:0}
+    .incentive-card-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;max-height:200px;opacity:1}
+    .incentive-card-body.collapsed{max-height:0;opacity:0;margin:0;padding:0}
+    .incentive-amount-box{display:flex;align-items:baseline;justify-content:center;gap:8px;padding:4px 0}
+    .incentive-amount-label{font-size:11px;font-weight:700;color:#92400e}
+    .incentive-amount-val{font-size:26px;font-weight:900;color:#dc2626}
+    .incentive-detail{font-size:12px;color:#78350f;text-align:center;margin-top:2px}
+    .incentive-not-reached{text-align:center;padding:4px 0}
+    .incentive-not-reached-msg{font-size:13px;font-weight:700;color:#92400e;margin-bottom:2px}
+    .incentive-not-reached-remain{font-size:12px;color:#a16207}
+    .incentive-note{font-size:10px;color:#a16207;text-align:center;margin-top:6px;padding-top:6px;border-top:1px dashed #e5b94e}
+    .collapsible-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;max-height:300px;opacity:1}
+    .collapsible-body.collapsed{max-height:0;opacity:0}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
@@ -156,11 +174,21 @@
     <div id="statsCard"></div>
   </div>
 
+  <!-- インセンティブ見込カード -->
+  <div id="incentiveSection" style="display:none">
+    <div id="incentiveCard"></div>
+  </div>
+
   <!-- 月次グラフ -->
   <div class="card" id="chartSection" style="display:none">
-    <div class="section-title">📊 日別訪問グラフ</div>
-    <div class="chart-container">
-      <canvas id="visitChart"></canvas>
+    <div class="section-title" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;-webkit-tap-highlight-color:transparent" onclick="toggleChart()">
+      📊 日別訪問グラフ
+      <span id="chartArrow" style="font-size:11px;color:var(--muted)">▲</span>
+    </div>
+    <div id="chartBody" class="collapsible-body">
+      <div class="chart-container">
+        <canvas id="visitChart"></canvas>
+      </div>
     </div>
   </div>
 
@@ -250,6 +278,7 @@
     const [year, month] = document.getElementById('monthSelect').value.split('-').map(Number);
     document.getElementById('loadingView').style.display    = 'block';
     document.getElementById('statsCardSection').style.display = 'none';
+    document.getElementById('incentiveSection').style.display = 'none';
     document.getElementById('chartSection').style.display    = 'none';
     document.getElementById('tableSection').style.display    = 'none';
 
@@ -264,9 +293,83 @@
       document.getElementById('statsCardSection').style.display = 'block';
       document.getElementById('chartSection').style.display    = 'block';
       document.getElementById('tableSection').style.display    = 'block';
+      // インセンティブ見込を非同期で読み込み
+      loadIncentiveEstimate(year, month);
     } catch (e) {
       document.getElementById('loadingView').textContent = '読み込みに失敗しました: ' + e.message;
     }
+  }
+
+  async function loadIncentiveEstimate(year, month) {
+    try {
+      const res = await fetch(`/api/incentive-estimate?payMonth=${year}-${month}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderIncentiveCard(data);
+      document.getElementById('incentiveSection').style.display = 'block';
+    } catch (_) {
+      // インセンティブ見込の取得に失敗しても他の表示には影響しない
+    }
+  }
+
+  function renderIncentiveCard(data) {
+    const payDate = new Date(data.pay_date);
+    const payLabel = `${payDate.getMonth()+1}月${payDate.getDate()}日`;
+    const bStart = new Date(data.billing_start);
+    const bEnd   = new Date(data.billing_end);
+    const periodLabel = `${bStart.getMonth()+1}/${bStart.getDate()} ～ ${bEnd.getMonth()+1}/${bEnd.getDate()}`;
+
+    let bodyHtml;
+    if (data.incentive_triggered) {
+      const amount = data.incentive_amount.toLocaleString('ja-JP');
+      let detailHtml;
+      if (data.type === 'nurse') {
+        detailHtml = `超過 ${data.over_hours}時間（4,000円/時間）`;
+      } else {
+        detailHtml = `超過 ${data.over_units}単位（500円/単位）`;
+      }
+      bodyHtml = `
+        <div class="incentive-amount-box">
+          <div class="incentive-amount-label">見込額</div>
+          <div class="incentive-amount-val">¥${amount}</div>
+        </div>
+        <p class="incentive-detail">${detailHtml}</p>`;
+    } else {
+      const threshold = data.threshold || 0;
+      let remainHtml;
+      if (data.type === 'nurse') {
+        const total = data.total || 0;
+        const remain = Math.max(0, threshold - total);
+        remainHtml = `目安まであと ${remain.toFixed(1)}時間`;
+      } else {
+        const total = data.total_units || 0;
+        const remain = Math.max(0, threshold - total);
+        remainHtml = `目安まであと ${Math.ceil(remain)}単位`;
+      }
+      bodyHtml = `
+        <div class="incentive-not-reached">
+          <p class="incentive-not-reached-msg">インセンティブ未達</p>
+          <p class="incentive-not-reached-remain">${remainHtml}</p>
+        </div>`;
+    }
+
+    const noteHtml = (!data.is_finalized && data.days_remaining > 0)
+      ? `<p class="incentive-note">※ 残り${data.days_remaining}日分未入力（見込額は変動します）</p>`
+      : '';
+
+    const collapsed = document.getElementById('incentiveBody')?.classList.contains('collapsed');
+    document.getElementById('incentiveCard').innerHTML = `
+      <div class="incentive-card">
+        <div class="incentive-card-header" onclick="toggleIncentive()">
+          <span class="incentive-card-title">💰 インセンティブ見込</span>
+          <span class="incentive-card-period">${payLabel}支給（${periodLabel}）</span>
+          <span class="incentive-toggle" id="incentiveArrow">${collapsed ? '▼' : '▲'}</span>
+        </div>
+        <div class="incentive-card-body${collapsed ? ' collapsed' : ''}" id="incentiveBody">
+          ${bodyHtml}
+          ${noteHtml}
+        </div>
+      </div>`;
   }
 
   function renderStatsCard(data) {
@@ -319,13 +422,13 @@
             const overUnits = s.over_units || 0;
             const amount    = s.incentive_amount.toLocaleString('ja-JP');
             return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
-                    <p class="result-incentive-amount">超過 ${overUnits}単位 × 1,000円 ＝ <strong>¥${amount}</strong></p>`;
+                    <p class="result-incentive-amount">超過 ${overUnits}単位 × 500円 ＝ <strong>¥${amount}</strong></p>`;
           }
           if (data.type === 'nurse' && s.incentive_amount != null) {
             const overHours = s.over_hours || 0;
             const amount    = s.incentive_amount.toLocaleString('ja-JP');
             return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
-                    <p class="result-incentive-amount">超過 ${overHours}時間 × 2,000円 ＝ <strong>¥${amount}</strong></p>`;
+                    <p class="result-incentive-amount">超過 ${overHours}時間 × 4,000円 ＝ <strong>¥${amount}</strong></p>`;
           }
           return '<p class="result-incentive-msg">インセンティブが発生しています💰</p>';
         })()
@@ -514,6 +617,22 @@
 
   function editDate(dateStr) {
     location.href = `/?date=${dateStr}`;
+  }
+
+  function toggleChart() {
+    const body = document.getElementById('chartBody');
+    const arrow = document.getElementById('chartArrow');
+    if (!body) return;
+    body.classList.toggle('collapsed');
+    arrow.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
+  }
+
+  function toggleIncentive() {
+    const body = document.getElementById('incentiveBody');
+    const arrow = document.getElementById('incentiveArrow');
+    if (!body) return;
+    body.classList.toggle('collapsed');
+    arrow.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
   }
 
   function toggleMenu() {
