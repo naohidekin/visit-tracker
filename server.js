@@ -477,7 +477,7 @@ function syncLeaveFieldsFromSource() {
   const srcData  = JSON.parse(fs.readFileSync(srcPath, 'utf8'));
   const liveData = loadStaff();
   let changed = false;
-  const syncFields = ['hire_date','leave_granted','leave_grant_date','leave_carried_over','leave_manual_adjustment','oncall_eligible','oncall_leave_granted'];
+  const syncFields = ['hire_date','leave_granted','leave_grant_date','leave_carried_over','leave_manual_adjustment','oncall_eligible','oncall_leave_granted','celebration_days'];
   for (const src of srcData.staff) {
     const live = liveData.staff.find(s => s.id === src.id);
     if (!live) continue;
@@ -506,6 +506,7 @@ function ensureLeaveFields() {
     if (s.oncall_eligible === undefined)        { s.oncall_eligible = false;       changed = true; }
     if (s.oncall_leave_granted === undefined)   { s.oncall_leave_granted = 0;      changed = true; }
     if (s.email === undefined)                  { s.email = null;                  changed = true; }
+    if (s.celebration_days === undefined)       { s.celebration_days = 3;          changed = true; }
   }
   if (changed) { saveStaff(data); console.log('✅ 有給フィールドを初期化しました'); }
 }
@@ -2344,6 +2345,26 @@ app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
 
   const nextGrant = calcNextGrant(staff.hire_date);
 
+  // お祝い休暇の使用日数を計算（入職半年以内の承認済み申請を自動消化）
+  const celebrationDays = staff.celebration_days || 3;
+  let celebrationUsed = 0;
+  if (staff.hire_date) {
+    const hireDate = new Date(staff.hire_date);
+    const celebrationExpiry = new Date(hireDate);
+    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+    for (const r of approved) {
+      if (celebrationUsed >= celebrationDays) break;
+      for (const d of r.dates) {
+        if (celebrationUsed >= celebrationDays) break;
+        if (new Date(d) < celebrationExpiry) {
+          const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          celebrationUsed += perDate;
+        }
+      }
+    }
+    celebrationUsed = Math.min(celebrationUsed, celebrationDays);
+  }
+
   res.json({
     balance,
     granted,
@@ -2355,6 +2376,8 @@ app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
     auto_grant_days: autoGrantDays,
     grant_date: staff.leave_grant_date,
     next_grant: nextGrant,
+    celebration_days: celebrationDays,
+    celebration_used: celebrationUsed,
   });
 });
 
@@ -2369,7 +2392,7 @@ app.get('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
 app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
-  if (!['full', 'half_am', 'half_pm'].includes(type))
+  if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
     return res.status(400).json({ error: '種別が不正です' });
   if (!isValidDate(startDate)) return res.status(400).json({ error: '開始日の形式が不正です' });
   if (endDate && !isValidDate(endDate)) return res.status(400).json({ error: '終了日の形式が不正です' });
@@ -2393,18 +2416,41 @@ app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  const balance = calcLeaveBalance(staff);
-  const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
-  // pending 分も考慮
   const leaveData = loadLeave();
-  const pendingDays = leaveData.requests
-    .filter(r => r.staffId === staff.id && r.status === 'pending')
-    .reduce((sum, r) => {
-      const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-      return sum + r.dates.length * per;
-    }, 0);
-  if (balance - pendingDays < requestDays)
-    return res.status(400).json({ error: '有給残日数が不足しています' });
+
+  if (type === 'celebration') {
+    // お祝い休暇: 入職6ヶ月以内かチェック
+    if (!staff.hire_date) return res.status(400).json({ error: 'お祝い休暇は入職日が設定されている場合のみ利用できます' });
+    const hire = new Date(staff.hire_date);
+    const celebrationExpiry = new Date(hire);
+    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+    const now = new Date(getTodayJST());
+    if (now >= celebrationExpiry) return res.status(400).json({ error: 'お祝い休暇の有効期限（入職から6ヶ月）が過ぎています' });
+
+    // 残日数チェック（celebration は常に1日/date）
+    const celebrationDays = staff.celebration_days || 3;
+    const celebrationUsed = leaveData.requests.filter(r =>
+      r.staffId === staff.id && r.status === 'approved' && r.type === 'celebration'
+    ).reduce((sum, r) => sum + r.dates.length, 0);
+    const celebrationPending = leaveData.requests.filter(r =>
+      r.staffId === staff.id && r.status === 'pending' && r.type === 'celebration'
+    ).reduce((sum, r) => sum + r.dates.length, 0);
+    const celebrationRemaining = celebrationDays - celebrationUsed - celebrationPending;
+    if (celebrationRemaining < dates.length)
+      return res.status(400).json({ error: 'お祝い休暇の残日数が不足しています' });
+  } else {
+    const balance = calcLeaveBalance(staff);
+    const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
+    // pending 分も考慮（celebration以外のpending）
+    const pendingDays = leaveData.requests
+      .filter(r => r.staffId === staff.id && r.status === 'pending' && r.type !== 'celebration')
+      .reduce((sum, r) => {
+        const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        return sum + r.dates.length * per;
+      }, 0);
+    if (balance - pendingDays < requestDays)
+      return res.status(400).json({ error: '有給残日数が不足しています' });
+  }
 
   // 重複チェック（同日に pending/approved がないか）
   const existingDates = new Set();

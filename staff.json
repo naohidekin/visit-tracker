@@ -21,7 +21,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     },
     {
       "id": "suzuki02",
@@ -40,7 +41,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     },
     {
       "id": "goto03",
@@ -59,7 +61,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 5
     },
     {
       "id": "kamata04",
@@ -78,7 +81,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 5
     },
     {
       "id": "nakashima05",
@@ -96,7 +100,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     },
     {
       "id": "ozawa06",
@@ -114,7 +119,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 5
     },
     {
       "id": "ooe07",
@@ -132,7 +138,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 5
     },
     {
       "id": "testns",
@@ -152,7 +159,8 @@
       "leave_carried_over": 4,
       "leave_manual_adjustment": 0,
       "oncall_eligible": true,
-      "oncall_leave_granted": 1
+      "oncall_leave_granted": 1,
+      "celebration_days": 3
     },
     {
       "id": "testpt",
@@ -171,7 +179,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     },
     {
       "id": "morobe08",
@@ -190,7 +199,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     },
     {
       "id": "sahara09",
@@ -209,7 +219,8 @@
       "leave_carried_over": 0,
       "leave_manual_adjustment": 0,
       "oncall_eligible": false,
-      "oncall_leave_granted": 0
+      "oncall_leave_granted": 0,
+      "celebration_days": 3
     }
   ]
 }
