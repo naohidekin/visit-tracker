@@ -56,7 +56,7 @@
     .edit-sel{padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text);font-family:inherit;max-width:95px}
     /* ── ログイン ── */
     #loginCard{max-width:360px;margin:60px auto 0}
-    #mainContent{display:none}
+    #appLayout{display:none}
     /* ── テーブル ── */
     .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
     table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
@@ -159,23 +159,92 @@
     .leave-status.approved{background:#dcfce7;color:#166534}
     .leave-status.rejected{background:#fee2e2;color:#b91c1c}
     .leave-status.cancelled{background:#f0f0f0;color:#6b7a99}
+
+    /* ══════ サイドバーレイアウト ══════ */
+    #appLayout{display:none;min-height:100vh}
+    /* --- Sidebar --- */
+    #sidebar{
+      width:230px;min-width:230px;background:var(--blue-dark);color:#fff;
+      display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;
+      z-index:60;overflow-y:auto;overflow-x:hidden;
+      transition:transform .25s ease;
+    }
+    .sidebar-brand{padding:14px 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.12)}
+    .sidebar-brand img{width:30px;height:30px;border-radius:8px}
+    .sidebar-brand .titles{display:flex;flex-direction:column;gap:1px;min-width:0}
+    .sidebar-brand h1{font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sidebar-brand .sub{font-size:9px;opacity:.55;letter-spacing:.03em}
+    .sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
+    .nav-group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);padding:14px 16px 5px}
+    .nav-item{
+      display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:13px;color:rgba(255,255,255,.75);
+      cursor:pointer;text-decoration:none;transition:background .15s,color .15s;border:none;background:none;width:100%;text-align:left;font-family:inherit;
+    }
+    .nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+    .nav-item.active{background:rgba(255,255,255,.14);color:#fff;font-weight:700}
+    .nav-item .nav-icon{width:18px;text-align:center;flex-shrink:0;font-size:14px}
+    .nav-item .nav-badge{margin-left:auto;background:#e74c3c;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:16px;text-align:center}
+    .sidebar-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:8px}
+    .sidebar-footer .admin-name{font-size:12px;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:6px}
+    .sidebar-footer .sidebar-links{display:flex;gap:6px}
+    .sidebar-footer .sidebar-btn{
+      flex:1;padding:6px;border:1px solid rgba(255,255,255,.25);border-radius:6px;
+      background:transparent;color:rgba(255,255,255,.8);font-size:11px;cursor:pointer;text-align:center;text-decoration:none;font-family:inherit;
+    }
+    .sidebar-footer .sidebar-btn:hover{background:rgba(255,255,255,.1)}
+    /* --- Main area --- */
+    #mainArea{margin-left:230px;flex:1;min-height:100vh;background:var(--bg);overflow-y:auto}
+    .page-topbar{
+      position:sticky;top:0;z-index:30;background:var(--bg);
+      padding:14px 24px 10px;display:flex;align-items:center;gap:12px;
+      border-bottom:1px solid var(--border);
+    }
+    .page-topbar h2{font-size:16px;font-weight:800;color:var(--blue-dark);margin:0}
+    #sidebarToggle{display:none;background:none;border:none;font-size:22px;cursor:pointer;color:var(--blue-dark);padding:0}
+    .page-content{padding:20px 24px;max-width:1100px}
+    /* --- Section visibility --- */
+    .page-section{display:none}
+    .page-section.active{display:block}
+    /* --- Dashboard --- */
+    .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+    .dash-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:box-shadow .15s}
+    .dash-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
+    .dash-card .dash-icon{font-size:22px}
+    .dash-card .dash-label{font-size:12px;font-weight:600;color:var(--muted)}
+    .dash-card .dash-value{font-size:26px;font-weight:800;color:var(--text)}
+    .dash-card .dash-unit{font-size:13px;color:var(--muted);margin-left:2px}
+    .dash-alerts{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:20px}
+    .dash-alerts h3{font-size:13px;font-weight:700;color:var(--danger);margin-bottom:10px}
+    .dash-alert-item{font-size:13px;line-height:1.8;color:var(--text);padding-left:16px;position:relative}
+    .dash-alert-item::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;background:var(--danger);border-radius:50%}
+    .dash-alert-none{font-size:13px;color:var(--muted)}
+    /* --- Sidebar overlay for mobile --- */
+    .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55}
+    .sidebar-overlay.show{display:block}
+    /* --- Mobile --- */
+    @media(max-width:768px){
+      #sidebar{transform:translateX(-100%)}
+      #sidebar.open{transform:translateX(0)}
+      #mainArea{margin-left:0}
+      #sidebarToggle{display:block}
+      .page-topbar{padding:10px 14px 8px}
+      .page-content{padding:14px}
+    }
+    /* --- 旧header非表示 --- */
+    header{display:none}
+    #loginCard ~ header{display:none}
+    /* --- カテゴリセクション非表示（サイドバーに置き換え） --- */
+    .category-header{display:none!important}
+    .category-body{max-height:none!important;overflow:visible!important}
+    .category-body.collapsed{max-height:none!important}
+    /* --- Card always open in sidebar layout --- */
+    .page-section .card-body{max-height:none!important;overflow:visible!important}
+    .page-section .card-header{cursor:default}
+    .page-section .acc-icon{display:none}
+    .page-section .card{box-shadow:var(--shadow);margin-bottom:14px}
   </style>
 </head>
 <body>
-<header>
-  <div class="header-brand">
-    <img src="/logo.png" class="header-logo" alt="にこっと">
-    <div class="header-titles">
-      <h1>にこっとweb App管理ポータル</h1>
-      <span class="header-sub">for にこっと訪問看護ステーション</span>
-    </div>
-  </div>
-  <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-    <span id="adminNameDisplay" style="font-size:12px;color:#b0bec5;margin-right:4px"></span>
-    <a href="/admin-manual" class="logout-btn" style="text-decoration:none;text-align:center">マニュアル</a>
-    <button class="logout-btn" id="logoutBtn">ログアウト</button>
-  </div>
-</header>
 
 <!-- ログイン: ID入力 → Face IDまたはパスワードに自動分岐 -->
 <div class="card" id="loginCard">
@@ -220,17 +289,113 @@
   </div>
 </div>
 
-<!-- メインコンテンツ -->
-<div id="mainContent" class="container">
-
-  <!-- ═══ 日常業務 ═══ -->
-  <div class="category-section">
-    <div class="category-header">
-      <span class="category-title">日常業務</span>
-      <span class="category-icon">▼</span>
+<!-- ══════ アプリレイアウト ══════ -->
+<div id="appLayout">
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <img src="/logo.png" alt="にこっと">
+      <div class="titles">
+        <h1>にこっとweb App</h1>
+        <span class="sub">管理ポータル</span>
+      </div>
     </div>
-    <div class="category-body collapsed">
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">🏠</span>ダッシュボード
+      </button>
+      <div class="nav-group-label">日常業務</div>
+      <button class="nav-item" data-section="sec-schedules">
+        <span class="nav-icon">📋</span>未確定の予定<span class="nav-badge" id="badgeSchedules" style="display:none"></span>
+      </button>
+      <button class="nav-item" data-section="sec-staff">
+        <span class="nav-icon">👥</span>スタッフ一覧
+      </button>
+      <button class="nav-item" data-section="sec-notices">
+        <span class="nav-icon">📢</span>お知らせ管理
+      </button>
+      <button class="nav-item" data-section="sec-leave">
+        <span class="nav-icon">🏖</span>有給休暇管理<span class="nav-badge" id="badgeLeave" style="display:none"></span>
+      </button>
+      <button class="nav-item" data-section="sec-audit">
+        <span class="nav-icon">📝</span>操作履歴
+      </button>
+      <div class="nav-group-label">月次業務</div>
+      <button class="nav-item" data-section="sec-standby">
+        <span class="nav-icon">📋</span>待機・雨の日
+      </button>
+      <button class="nav-item" data-section="sec-oncall">
+        <span class="nav-icon">📞</span>オンコール
+      </button>
+      <button class="nav-item" data-section="sec-incentive-summary">
+        <span class="nav-icon">💰</span>インセンティブ集計
+      </button>
+      <button class="nav-item" data-section="sec-monthly">
+        <span class="nav-icon">📊</span>スタッフ月次実績
+      </button>
+      <button class="nav-item" data-section="sec-excel">
+        <span class="nav-icon">📂</span>iBow Excel集計
+      </button>
+      <button class="nav-item" data-section="sec-excel-history">
+        <span class="nav-icon">📊</span>iBow集計履歴
+      </button>
+      <button class="nav-item" data-section="sec-attendance">
+        <span class="nav-icon">✅</span>出勤確定
+      </button>
+      <div class="nav-group-label">設定・マスタ</div>
+      <button class="nav-item" data-section="sec-incentive-settings">
+        <span class="nav-icon">💰</span>インセンティブ設定
+      </button>
+      <button class="nav-item" data-section="sec-add-staff">
+        <span class="nav-icon">➕</span>スタッフ追加
+      </button>
+      <button class="nav-item" data-section="sec-next-year">
+        <span class="nav-icon">📅</span>翌年スプレッドシート
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-name">👤 <span id="adminNameDisplay">管理者</span></div>
+      <div class="sidebar-links">
+        <a href="/admin-manual" class="sidebar-btn">マニュアル</a>
+        <button class="sidebar-btn" id="logoutBtn">ログアウト</button>
+      </div>
+    </div>
+  </aside>
 
+  <div id="mainArea">
+    <div class="page-topbar">
+      <button id="sidebarToggle">☰</button>
+      <h2 id="pageTitle">ダッシュボード</h2>
+    </div>
+    <div class="page-content">
+
+      <!-- ══ ダッシュボード ══ -->
+      <div class="page-section active" id="dashboard">
+        <div class="dash-grid">
+          <div class="dash-card" data-goto="sec-schedules">
+            <div class="dash-icon">📋</div>
+            <div class="dash-label">未確定の予定</div>
+            <div><span class="dash-value" id="dashSchedules">-</span><span class="dash-unit">件</span></div>
+          </div>
+          <div class="dash-card" data-goto="sec-leave">
+            <div class="dash-icon">🏖</div>
+            <div class="dash-label">未処理の有給申請</div>
+            <div><span class="dash-value" id="dashLeave">-</span><span class="dash-unit">件</span></div>
+          </div>
+          <div class="dash-card" data-goto="sec-staff">
+            <div class="dash-icon">👥</div>
+            <div class="dash-label">スタッフ数</div>
+            <div><span class="dash-value" id="dashStaff">-</span><span class="dash-unit">名</span></div>
+          </div>
+        </div>
+        <div class="dash-alerts" id="dashAlerts">
+          <h3>⚠️ 要対応</h3>
+          <div id="dashAlertList"><div class="dash-alert-none">読み込み中...</div></div>
+        </div>
+      </div>
+
+      <!-- ══ 日常業務 ══ -->
+      <div class="page-section" id="sec-schedules">
       <!-- 未確定の予定一覧 -->
       <div class="card">
         <div class="card-header">
@@ -251,6 +416,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-schedules -->
+
+      <div class="page-section" id="sec-staff">
       <!-- スタッフ一覧 -->
       <div class="card">
         <div class="card-header">
@@ -279,6 +447,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-staff -->
+
+      <div class="page-section" id="sec-notices">
       <!-- お知らせ管理 -->
       <div class="card">
         <div class="card-header">
@@ -318,6 +489,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-notices -->
+
+      <div class="page-section" id="sec-leave">
       <!-- 有給休暇管理 -->
       <div class="card">
         <div class="card-header">
@@ -429,6 +603,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-leave -->
+
+      <div class="page-section" id="sec-audit">
       <!-- 操作履歴 -->
       <div class="card">
         <h2 id="auditCardToggle" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -478,17 +655,10 @@
         </div>
       </div>
 
-    </div>
-  </div>
+      </div><!-- /sec-audit -->
 
-  <!-- ═══ 月次業務 ═══ -->
-  <div class="category-section">
-    <div class="category-header">
-      <span class="category-title">月次業務</span>
-      <span class="category-icon">▼</span>
-    </div>
-    <div class="category-body collapsed">
-
+      <!-- ══ 月次業務 ══ -->
+      <div class="page-section" id="sec-standby">
       <!-- 待機・雨の日管理 -->
       <div class="card">
         <div class="card-header">
@@ -566,6 +736,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-standby -->
+
+      <div class="page-section" id="sec-oncall">
       <!-- オンコール管理 -->
       <div class="card">
         <div class="card-header">
@@ -597,6 +770,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-oncall -->
+
+      <div class="page-section" id="sec-incentive-summary">
       <!-- インセンティブ月次集計 -->
       <div class="card">
         <div class="card-header">
@@ -634,6 +810,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-incentive-summary -->
+
+      <div class="page-section" id="sec-monthly">
       <!-- スタッフ月次実績 -->
       <div class="card">
         <div class="card-header">
@@ -683,6 +862,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-monthly -->
+
+      <div class="page-section" id="sec-excel">
       <!-- Excel集計 -->
       <div class="card">
         <div class="card-header">
@@ -743,6 +925,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-excel -->
+
+      <div class="page-section" id="sec-excel-history">
       <!-- Excel集計履歴 -->
       <div class="card">
         <div class="card-header">
@@ -797,6 +982,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-excel-history -->
+
+      <div class="page-section" id="sec-attendance">
       <!-- 出勤確定 月次集計 -->
       <div class="card">
         <div class="card-header">
@@ -830,17 +1018,10 @@
         </div>
       </div>
 
-    </div>
-  </div>
+      </div><!-- /sec-attendance -->
 
-  <!-- ═══ 設定・マスタ ═══ -->
-  <div class="category-section">
-    <div class="category-header">
-      <span class="category-title">設定・マスタ</span>
-      <span class="category-icon">▼</span>
-    </div>
-    <div class="category-body collapsed">
-
+      <!-- ══ 設定・マスタ ══ -->
+      <div class="page-section" id="sec-incentive-settings">
       <!-- インセンティブ設定 -->
       <div class="card">
         <div class="card-header">
@@ -874,6 +1055,9 @@
         </div>
       </div>
 
+      </div><!-- /sec-incentive-settings -->
+
+      <div class="page-section" id="sec-add-staff">
       <!-- スタッフ追加 -->
   <div class="card">
     <div class="card-header">
@@ -939,26 +1123,29 @@
     </div>
   </div>
 
-  <!-- 翌年スプレッドシート作成（一番下） -->
-  <div class="card">
-    <div class="card-header">
-      <h2>📅 翌年スプレッドシート作成</h2>
-      <span class="acc-icon">▼</span>
-    </div>
-    <div class="card-body">
-      <p style="font-size:13px;color:var(--muted)">
-        翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
-        作成後、新しいスプレッドシートURLが表示されます。
-      </p>
-      <button class="btn btn-blue" id="createNextYearBtn" style="margin-top:14px">翌年シートを作成</button>
-      <div id="createSheetResult" style="display:none;margin-top:14px"></div>
-    </div>
-  </div>
+      </div><!-- /sec-add-staff -->
 
-    </div>
-  </div>
+      <div class="page-section" id="sec-next-year">
+      <!-- 翌年スプレッドシート作成 -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📅 翌年スプレッドシート作成</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted)">
+            翌年（<span id="nextYearLabel"></span>年）のスプレッドシートを作成します。<br>
+            作成後、新しいスプレッドシートURLが表示されます。
+          </p>
+          <button class="btn btn-blue" id="createNextYearBtn" style="margin-top:14px">翌年シートを作成</button>
+          <div id="createSheetResult" style="display:none;margin-top:14px"></div>
+        </div>
+      </div>
+      </div><!-- /sec-next-year -->
 
-</div>
+    </div><!-- /page-content -->
+  </div><!-- /mainArea -->
+</div><!-- /appLayout -->
 
 <!-- 削除確認モーダル -->
 <div class="modal-overlay" id="delModal">
@@ -1057,6 +1244,120 @@
     }
   }
 
+  // ── サイドバーナビゲーション ──────────────────────────────────
+  const SECTION_TITLES = {
+    'dashboard': 'ダッシュボード',
+    'sec-schedules': '未確定の予定一覧',
+    'sec-staff': 'スタッフ一覧',
+    'sec-notices': 'お知らせ管理',
+    'sec-leave': '有給休暇管理',
+    'sec-audit': '操作履歴',
+    'sec-standby': '待機・雨の日管理',
+    'sec-oncall': 'オンコール管理',
+    'sec-incentive-summary': 'インセンティブ月次集計',
+    'sec-monthly': 'スタッフ月次実績',
+    'sec-excel': 'iBow Excel集計',
+    'sec-excel-history': 'iBow集計履歴',
+    'sec-attendance': '出勤確定 月次集計',
+    'sec-incentive-settings': 'インセンティブ設定',
+    'sec-add-staff': 'スタッフ追加',
+    'sec-next-year': '翌年スプレッドシート作成',
+  };
+
+  // セクション初期化済みフラグ
+  const sectionLoaded = {};
+
+  function navigateTo(sectionId) {
+    // セクション切り替え
+    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.add('active');
+
+    // ナビアイテムのアクティブ状態
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    const navItem = document.querySelector(`.nav-item[data-section="${sectionId}"]`);
+    if (navItem) navItem.classList.add('active');
+
+    // ページタイトル更新
+    document.getElementById('pageTitle').textContent = SECTION_TITLES[sectionId] || '';
+
+    // モバイル: サイドバーを閉じる
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
+
+    // セクション別の遅延ロード
+    if (!sectionLoaded[sectionId]) {
+      sectionLoaded[sectionId] = true;
+      switch (sectionId) {
+        case 'sec-leave':
+          loadLeavePending(); break;
+        case 'sec-oncall':
+          initOncallMonth(); loadOncallSummary(); break;
+        case 'sec-standby':
+          initStandbyMonth(); loadStandbyData(); break;
+        case 'sec-attendance':
+          initAttendanceMonth(); loadAttendanceMonthly(); break;
+        case 'sec-incentive-summary':
+          initIncentiveSummaryMonth(); loadIncentiveSummary(); break;
+      }
+    }
+
+    // スクロール位置リセット
+    document.getElementById('mainArea').scrollTop = 0;
+  }
+
+  // ダッシュボード読み込み
+  async function loadDashboard() {
+    try {
+      // 未確定予定の件数
+      const sRes = await fetch('/api/admin/schedules');
+      if (sRes.ok) {
+        const schedules = await sRes.json();
+        const pending = Array.isArray(schedules) ? schedules.filter(s => !s.confirmed).length : 0;
+        document.getElementById('dashSchedules').textContent = pending;
+        const badge = document.getElementById('badgeSchedules');
+        if (pending > 0) { badge.textContent = pending; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+      }
+    } catch {}
+    try {
+      // 未処理有給申請
+      const lRes = await fetch('/api/leave');
+      if (lRes.ok) {
+        const leave = await lRes.json();
+        const pendingLeave = Array.isArray(leave.requests)
+          ? leave.requests.filter(r => r.status === 'pending').length : 0;
+        document.getElementById('dashLeave').textContent = pendingLeave;
+        const badge = document.getElementById('badgeLeave');
+        if (pendingLeave > 0) { badge.textContent = pendingLeave; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+      }
+    } catch {}
+    // スタッフ数
+    const activeCount = staffList ? staffList.filter(s => !s.archived).length : 0;
+    document.getElementById('dashStaff').textContent = activeCount;
+
+    // アラートリスト構築
+    buildDashAlerts();
+  }
+
+  function buildDashAlerts() {
+    const list = document.getElementById('dashAlertList');
+    const alerts = [];
+
+    const schedCount = parseInt(document.getElementById('dashSchedules').textContent) || 0;
+    if (schedCount > 0) alerts.push(`未確定の予定が ${schedCount} 件あります`);
+
+    const leaveCount = parseInt(document.getElementById('dashLeave').textContent) || 0;
+    if (leaveCount > 0) alerts.push(`未処理の有給申請が ${leaveCount} 件あります`);
+
+    if (alerts.length === 0) {
+      list.innerHTML = '<div class="dash-alert-none">対応が必要な項目はありません</div>';
+    } else {
+      list.innerHTML = alerts.map(a => `<div class="dash-alert-item">${esc(a)}</div>`).join('');
+    }
+  }
+
   // ── ひらがな → ヘボン式ローマ字 ──────────────────────────────
   const HIRA = {
     'あ':'a','い':'i','う':'u','え':'e','お':'o',
@@ -1120,9 +1421,10 @@
   function onLoginSuccess() {
     document.getElementById('loginCard').style.display = 'none';
     document.getElementById('emergencyLoginCard').style.display = 'none';
-    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('appLayout').style.display = 'flex';
     loadAdminIdentity();
     loadStaff();
+    loadDashboard();
   }
 
   function showLoginErr(msg) {
@@ -2778,14 +3080,17 @@
     if (r.ok) {
       document.getElementById('loginCard').style.display = 'none';
       document.getElementById('emergencyLoginCard').style.display = 'none';
-      document.getElementById('mainContent').style.display = 'block';
+      document.getElementById('appLayout').style.display = 'flex';
       loadAdminIdentity();
+      loadDashboard();
       r.json().then(list => {
         staffList = list;
         renderTable();
         loadIncentive();
         updateAdminStaffSelect();
         loadAdminSchedules();
+        initAdminMonthlySelectors();
+        initExcelSelectors();
       });
     }
   }).catch(() => {});
@@ -3493,21 +3798,22 @@
     }
   });
 
-  // Category headers (event delegation)
-  document.addEventListener('click', function(e) {
-    const categoryHeader = e.target.closest('.category-header');
-    if (categoryHeader) { toggleCategory(categoryHeader); return; }
+  // ── サイドバーナビゲーション ──
+  document.querySelectorAll('.nav-item[data-section]').forEach(btn => {
+    btn.addEventListener('click', () => navigateTo(btn.dataset.section));
   });
-
-  // Accordion card-headers (event delegation)
-  document.addEventListener('click', function(e) {
-    const cardHeader = e.target.closest('.card-header');
-    if (cardHeader) { toggleAccordion(cardHeader); return; }
+  // ダッシュボードカードクリック → セクション遷移
+  document.querySelectorAll('.dash-card[data-goto]').forEach(card => {
+    card.addEventListener('click', () => navigateTo(card.dataset.goto));
   });
-
-  // Audit card toggle (h2)
-  document.getElementById('auditCardToggle').addEventListener('click', function() {
-    toggleCard(this);
+  // モバイル: サイドバートグル
+  document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('show');
+  });
+  document.getElementById('sidebarOverlay').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
   });
 
   // Staff management
