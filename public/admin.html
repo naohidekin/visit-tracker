@@ -1832,9 +1832,9 @@
                              hire_date: hireDate, oncall, email }),
     });
     const data = await res.json();
-    btn.disabled = false; btn.textContent = '追加する';
 
     if (data.success) {
+      btn.disabled = false; btn.textContent = '追加する';
       staffList = data.staff;
       renderTable();
       // フォームリセット
@@ -1847,6 +1847,7 @@
       document.getElementById('oncallField').style.display = 'none';
       showToast(`✅ ${name} を追加しました`);
     } else {
+      btn.disabled = false; btn.textContent = '追加する';
       err.textContent = 'エラー: ' + (data.error || '追加失敗');
       err.style.display = 'block';
     }
@@ -2428,6 +2429,11 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ comment }),
     });
+    if (!res.ok) {
+      closeLeaveModal();
+      showToast('エラー: サーバーエラー (' + res.status + ')');
+      return;
+    }
     const data = await res.json();
     closeLeaveModal();
     if (data.ok) {
@@ -3236,7 +3242,8 @@
           s.archived ? '格納済' : '有効'
         ]);
         downloadCSV(headers, rows, `スタッフ一覧_${today}.csv`);
-      });
+      })
+      .catch(e => showToast('CSV出力に失敗しました'));
   }
 
   // 2) スタッフ月次実績
@@ -3273,7 +3280,8 @@
           s.manual_adjustment, s.used, s.pending, s.balance
         ]);
         downloadCSV(headers, rows, `有給残日数一覧_${today}.csv`);
-      });
+      })
+      .catch(e => showToast('CSV出力に失敗しました'));
   }
 
   // 4) 有給申請履歴
@@ -3296,7 +3304,8 @@
           r.createdAt ? r.createdAt.slice(0, 10) : '', r.reviewedAt ? r.reviewedAt.slice(0, 10) : ''
         ]);
         downloadCSV(headers, rows, `有給申請履歴_${today}.csv`);
-      });
+      })
+      .catch(e => showToast('CSV出力に失敗しました'));
   }
 
   // 5) オンコール集計
@@ -3626,7 +3635,8 @@
   async function addCustomHoliday() {
     const input = document.getElementById('customHolidayDate');
     const date = input.value;
-    if (!date) return;
+    if (!date) { showToast('日付を選択してください'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { showToast('日付の形式が不正です'); return; }
     if (lastCustomHolidays.includes(date)) { showToast('既に追加済みです'); return; }
     const newDates = [...lastCustomHolidays, date].sort();
     try {
@@ -3777,7 +3787,8 @@
           s.absentDays, s.leaveDays, s.unconfirmedDays, s.rainyDayAttendance,
         ]);
         downloadCSV(headers, rows, `出勤集計_${month}.csv`);
-      });
+      })
+      .catch(e => showToast('CSV出力に失敗しました'));
   }
 
   // 6) 監査ログ
@@ -3803,7 +3814,8 @@
           ];
         });
         downloadCSV(headers, rows, `操作履歴_${today}.csv`);
-      });
+      })
+      .catch(e => showToast('CSV出力に失敗しました'));
   }
 
   // ── イベントリスナー登録 ────────────────────────────────────────

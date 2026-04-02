@@ -22,7 +22,7 @@ const { checkRateLimit, lockedRoute, isValidDate, validateUnitValue, validateNum
 const { auditLog, loadAuditLog, verifyAuditChain } = require('../lib/audit');
 const { getSheets, sheetsRetry, createSpreadsheetForYear } = require('../lib/sheets');
 const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
-const { loadCredentials, getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
+const { loadCredentials, updateCredentialCounter, getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
 const {
   STAFF_PATH, SPREADSHEET_ID, STANDBY_PATH, NOTICES_PATH,
   DATA_START_ROW, HEADER_ROW, MONTHS, WD, ALL_HOLIDAYS,
@@ -582,6 +582,10 @@ router.post('/api/admin/webauthn/login-verify', async (req, res) => {
       return res.status(401).json({ error: 'Face ID認証に失敗しました' });
     }
 
+    // カウンター更新（リプレイ攻撃防止）
+    const newCounter = verification.authenticationInfo.newCounter;
+    await updateCredentialCounter(credential.id, newCounter);
+
     // 認証成功
     const data = loadStaff();
     const staff = data.staff.find(s => s.id === pendingId);
@@ -637,9 +641,7 @@ router.post('/api/admin/staff/:id/revoke-admin', requireAdmin, lockedRoute(STAFF
 router.post('/api/admin/logout', (req, res) => {
   const name = req.session.adminStaffName || '管理者';
   auditLog(req, 'auth.admin_logout', { type: 'auth', label: name });
-  req.session.isAdmin = false;
-  req.session.adminStaffId = null;
-  req.session.adminStaffName = null;
+  req.session = null;
   res.json({ success: true });
 });
 
