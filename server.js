@@ -104,7 +104,7 @@ app.use((req, res, next) => {
   next();
 });
 const CSRF_EXEMPT = new Set([
-  '/api/login', '/api/admin/login',
+  '/api/login', '/api/admin/login', '/api/admin/check',
   '/api/admin/webauthn/login-options', '/api/admin/webauthn/login-verify',
   '/api/forgot-password', '/api/reset-password',
   '/api/webauthn/login-options', '/api/webauthn/login-verify',

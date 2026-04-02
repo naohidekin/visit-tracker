@@ -177,7 +177,7 @@
   </div>
 </header>
 
-<!-- ログイン: ステップ1（ID + PW） -->
+<!-- ログイン: ID入力 → Face IDまたはパスワードに自動分岐 -->
 <div class="card" id="loginCard">
   <h2>管理者ログイン</h2>
   <div class="msg err" id="loginErr"></div>
@@ -185,11 +185,21 @@
     <label for="staffIdInput">スタッフID</label>
     <input type="text" id="staffIdInput" placeholder="スタッフIDを入力" autocomplete="username">
   </div>
-  <div class="field">
-    <label for="pwInput">パスワード</label>
-    <input type="password" id="pwInput" placeholder="パスワードを入力" autocomplete="current-password">
+  <!-- Face IDボタン（Face ID登録済みなら表示） -->
+  <div id="faceIdSection" style="display:none;margin-bottom:12px">
+    <button class="btn btn-blue btn-full" id="faceIdLoginBtn" style="font-size:16px;padding:14px">🔐 Face ID でログイン</button>
+    <div style="margin-top:8px;text-align:center">
+      <a href="#" id="showPasswordLink" style="font-size:12px;color:#888">パスワードでログイン</a>
+    </div>
   </div>
-  <button class="btn btn-blue btn-full" id="loginBtn">ログイン</button>
+  <!-- パスワード欄（Face ID未登録 or パスワードを選択時に表示） -->
+  <div id="passwordSection" style="display:none">
+    <div class="field">
+      <label for="pwInput">パスワード（8文字以上）</label>
+      <input type="password" id="pwInput" placeholder="パスワードを入力" autocomplete="current-password">
+    </div>
+    <button class="btn btn-blue btn-full" id="loginBtn">ログイン</button>
+  </div>
   <div style="margin-top:12px;text-align:center">
     <a href="#" id="emergencyLoginLink" style="font-size:12px;color:#999">緊急ログイン（共有パスワード）</a>
   </div>
@@ -208,14 +218,6 @@
   <div style="margin-top:8px;text-align:center">
     <a href="#" id="backToNormalLogin" style="font-size:12px;color:#666">通常ログインに戻る</a>
   </div>
-</div>
-
-<!-- ログイン: ステップ2（Face ID認証） -->
-<div class="card" id="webauthnCard" style="display:none">
-  <h2>Face ID / 指紋認証</h2>
-  <p style="font-size:13px;color:#666;margin-bottom:16px">本人確認のため、Face IDまたは指紋認証を行ってください。</p>
-  <div class="msg err" id="webauthnErr"></div>
-  <button class="btn btn-blue btn-full" id="webauthnBtn" style="font-size:16px;padding:14px">🔐 Face ID で認証</button>
 </div>
 
 <!-- メインコンテンツ -->
@@ -1106,63 +1108,132 @@
   let staffList = [];
   let deleteTarget = '', resetTarget = '';
 
-  // ── 管理者ログイン（個別アカウント + Face ID） ─────────────
-  function showLoginStep(step) {
-    ['loginCard', 'emergencyLoginCard', 'webauthnCard'].forEach(id => {
-      document.getElementById(id).style.display = 'none';
-    });
-    if (step) document.getElementById(step).style.display = 'block';
+  // ── 管理者ログイン（個別アカウント: Face ID OR パスワード） ────
+  let checkedStaffId = '';   // 最後にcheckした staffId
+  let checkedHasFaceId = false;
+
+  function showLoginCard(cardId) {
+    document.getElementById('loginCard').style.display = cardId === 'loginCard' ? 'block' : 'none';
+    document.getElementById('emergencyLoginCard').style.display = cardId === 'emergencyLoginCard' ? 'block' : 'none';
   }
+
   function onLoginSuccess() {
-    showLoginStep(null);
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('emergencyLoginCard').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
     loadAdminIdentity();
     loadStaff();
   }
 
-  // ログインステップ1: ID + パスワード（8文字以上）
-  async function adminLogin() {
+  function showLoginErr(msg) {
+    const err = document.getElementById('loginErr');
+    err.textContent = msg;
+    err.style.display = 'block';
+  }
+  function hideLoginErr() {
+    document.getElementById('loginErr').style.display = 'none';
+  }
+
+  // スタッフID入力後の自動判定（Face ID登録済み？）
+  async function checkStaffId() {
+    const staffId = document.getElementById('staffIdInput').value.trim();
+    hideLoginErr();
+    document.getElementById('faceIdSection').style.display = 'none';
+    document.getElementById('passwordSection').style.display = 'none';
+    checkedStaffId = '';
+    checkedHasFaceId = false;
+
+    if (!staffId) return;
+
+    try {
+      const res = await fetch('/api/admin/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      });
+      const data = await res.json();
+      if (!data.exists) {
+        showLoginErr('管理者として登録されていません');
+        return;
+      }
+      checkedStaffId = staffId;
+      checkedHasFaceId = data.hasFaceId;
+      if (data.hasFaceId) {
+        // Face ID登録済み → Face IDボタンを表示
+        document.getElementById('faceIdSection').style.display = 'block';
+      } else {
+        // Face ID未登録 → パスワード欄を表示
+        document.getElementById('passwordSection').style.display = 'block';
+        document.getElementById('pwInput').focus();
+      }
+    } catch {
+      showLoginErr('サーバーに接続できません');
+    }
+  }
+
+  // Face IDログイン
+  async function faceIdLogin() {
+    const staffId = document.getElementById('staffIdInput').value.trim();
+    hideLoginErr();
+    if (!staffId) { showLoginErr('スタッフIDを入力してください'); return; }
+
+    try {
+      // 認証オプション取得
+      const optRes = await fetch('/api/admin/webauthn/login-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      });
+      const options = await optRes.json();
+      if (options.error) { showLoginErr(options.error); return; }
+
+      // Face ID / 指紋認証ダイアログ起動
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+      // サーバーで検証
+      const verRes = await fetch('/api/admin/webauthn/login-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authResp),
+      });
+      const result = await verRes.json();
+      if (result.success) { onLoginSuccess(); }
+      else { showLoginErr(result.error || '認証に失敗しました'); }
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        showLoginErr('Face ID / 指紋認証がキャンセルされました。もう一度お試しください。');
+      } else {
+        showLoginErr('Face ID認証でエラーが発生しました: ' + e.message);
+      }
+    }
+  }
+
+  // パスワードログイン
+  async function passwordLogin() {
     const staffId = document.getElementById('staffIdInput').value.trim();
     const pw = document.getElementById('pwInput').value;
-    const err = document.getElementById('loginErr');
-    err.style.display = 'none';
+    hideLoginErr();
 
     if (!staffId || !pw) {
-      err.textContent = 'スタッフIDとパスワードを入力してください';
-      err.style.display = 'block';
+      showLoginErr('スタッフIDとパスワードを入力してください');
       return;
     }
     if (pw.length < 8) {
-      err.textContent = 'パスワードは8文字以上で入力してください';
-      err.style.display = 'block';
+      showLoginErr('パスワードは8文字以上で入力してください');
       return;
     }
 
-    const res = await apiFetch('/api/admin/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ staffId, password: pw }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      err.textContent = data.error || 'ログイン失敗';
-      err.style.display = 'block';
-      return;
-    }
-    if (data.requireWebAuthn) {
-      // Face ID認証ステップへ
-      showLoginStep('webauthnCard');
-      // 自動的にFace IDを起動
-      setTimeout(() => startWebAuthn(), 300);
-    } else {
-      onLoginSuccess();
-      // Face ID未登録の場合、登録を促す
-      if (data.suggestWebAuthn && typeof SimpleWebAuthnBrowser !== 'undefined') {
-        setTimeout(() => {
-          if (confirm('セキュリティ向上のため、Face ID / 指紋認証を登録しませんか？\n次回からパスワード入力後にFace IDで本人確認できます。')) {
-            registerAdminWebAuthn();
-          }
-        }, 1000);
-      }
+    try {
+      const res = await apiFetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, password: pw }),
+      });
+      const data = await res.json();
+      if (data.success) { onLoginSuccess(); }
+      else { showLoginErr(data.error || 'ログイン失敗'); }
+    } catch {
+      showLoginErr('サーバーに接続できません');
     }
   }
 
@@ -1171,64 +1242,16 @@
     const pw = document.getElementById('emergencyPwInput').value;
     const err = document.getElementById('emergencyErr');
     err.style.display = 'none';
-    const res = await apiFetch('/api/admin/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    });
-    const data = await res.json();
-    if (data.success) { onLoginSuccess(); }
-    else { err.textContent = data.error || 'ログイン失敗'; err.style.display = 'block'; }
-  }
-
-  // ログインステップ2: WebAuthn（Face ID / 指紋認証）
-  async function startWebAuthn() {
-    const err = document.getElementById('webauthnErr');
-    err.style.display = 'none';
     try {
-      // 認証オプション取得
-      const optRes = await fetch('/api/admin/webauthn/login-options', {
+      const res = await apiFetch('/api/admin/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
       });
-      const options = await optRes.json();
-      if (options.error) { err.textContent = options.error; err.style.display = 'block'; return; }
-
-      // Face ID / 指紋認証ダイアログ起動
-      const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
-
-      // サーバーで検証
-      const verRes = await fetch('/api/admin/webauthn/login-verify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(authResp),
-      });
-      const result = await verRes.json();
-      if (result.success) { onLoginSuccess(); }
-      else { err.textContent = result.error || '認証に失敗しました'; err.style.display = 'block'; }
-    } catch (e) {
-      if (e.name === 'NotAllowedError') {
-        err.textContent = 'Face ID / 指紋認証がキャンセルされました。もう一度お試しください。';
-      } else {
-        err.textContent = 'Face ID認証でエラーが発生しました: ' + e.message;
-      }
-      err.style.display = 'block';
-    }
-  }
-
-  // Face ID登録（ログイン後、スタッフ側の既存登録APIを使用）
-  async function registerAdminWebAuthn() {
-    try {
-      const optRes = await apiFetch('/api/webauthn/register-options', { method: 'POST' });
-      const options = await optRes.json();
-      if (options.error) { alert(options.error); return; }
-      const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
-      const verRes = await apiFetch('/api/webauthn/register-verify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(regResp),
-      });
-      const result = await verRes.json();
-      if (result.success) alert('Face IDの登録が完了しました。次回から管理者ログイン時にFace ID認証が求められます。');
-      else alert(result.error || '登録に失敗しました');
-    } catch (e) {
-      if (e.name !== 'NotAllowedError') alert('エラー: ' + e.message);
+      const data = await res.json();
+      if (data.success) { onLoginSuccess(); }
+      else { err.textContent = data.error || 'ログイン失敗'; err.style.display = 'block'; }
+    } catch {
+      err.textContent = 'サーバーに接続できません'; err.style.display = 'block';
     }
   }
 
@@ -1243,14 +1266,32 @@
     } catch {}
   }
 
-  // イベントリスナー: ログイン各ステップ
-  document.getElementById('staffIdInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pwInput').focus(); });
-  document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') adminLogin(); });
+  // ── イベントリスナー: ログイン ──
+  // スタッフID入力 → Enter or blur で自動判定
+  document.getElementById('staffIdInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); checkStaffId(); }
+  });
+  document.getElementById('staffIdInput').addEventListener('blur', () => {
+    const val = document.getElementById('staffIdInput').value.trim();
+    if (val && val !== checkedStaffId) checkStaffId();
+  });
+  // Face IDボタン
+  document.getElementById('faceIdLoginBtn').addEventListener('click', faceIdLogin);
+  // 「パスワードでログイン」リンク
+  document.getElementById('showPasswordLink').addEventListener('click', e => {
+    e.preventDefault();
+    document.getElementById('faceIdSection').style.display = 'none';
+    document.getElementById('passwordSection').style.display = 'block';
+    document.getElementById('pwInput').focus();
+  });
+  // パスワード入力 → Enter でログイン
+  document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') passwordLogin(); });
+  document.getElementById('loginBtn').addEventListener('click', passwordLogin);
+  // 緊急ログイン
   document.getElementById('emergencyPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') emergencyLogin(); });
   document.getElementById('emergencyLoginBtn').addEventListener('click', emergencyLogin);
-  document.getElementById('emergencyLoginLink').addEventListener('click', e => { e.preventDefault(); showLoginStep('emergencyLoginCard'); document.getElementById('emergencyPwInput').focus(); });
-  document.getElementById('backToNormalLogin').addEventListener('click', e => { e.preventDefault(); showLoginStep('loginCard'); });
-  document.getElementById('webauthnBtn').addEventListener('click', startWebAuthn);
+  document.getElementById('emergencyLoginLink').addEventListener('click', e => { e.preventDefault(); showLoginCard('emergencyLoginCard'); document.getElementById('emergencyPwInput').focus(); });
+  document.getElementById('backToNormalLogin').addEventListener('click', e => { e.preventDefault(); showLoginCard('loginCard'); });
 
   async function adminLogout() {
     await apiFetch('/api/admin/logout', { method: 'POST' });
@@ -2735,7 +2776,8 @@
   // ── セッション確認（管理者セッションが既にある場合） ──────────
   fetch('/api/admin/staff').then(r => {
     if (r.ok) {
-      showLoginStep(null);
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('emergencyLoginCard').style.display = 'none';
       document.getElementById('mainContent').style.display = 'block';
       loadAdminIdentity();
       r.json().then(list => {

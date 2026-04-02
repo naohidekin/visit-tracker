@@ -441,7 +441,20 @@ router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_P
 }));
 
 // ─── API: 管理者認証（個別アカウント + Face ID/パスワード） ─────
-// ステップ1: ID + パスワード認証（8文字以上必須）
+// Face ID有無チェック（ログイン画面でUIを切り替える用）
+router.post('/api/admin/check', async (req, res) => {
+  try {
+    const { staffId } = req.body;
+    if (!staffId) return res.json({ exists: false });
+    const data = loadStaff();
+    const staff = data.staff.find(s => s.id === staffId && !s.archived && s.is_admin);
+    if (!staff) return res.json({ exists: false });
+    const creds = await loadCredentials(staffId);
+    return res.json({ exists: true, hasFaceId: creds.length > 0 });
+  } catch { return res.json({ exists: false }); }
+});
+
+// ルートA: パスワードログイン（Face ID未登録者向け、8文字以上）
 router.post('/api/admin/login', async (req, res) => {
   try {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -461,12 +474,12 @@ router.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'パスワードが正しくありません' });
     }
 
-    // --- 個別アカウント認証 ---
+    // --- パスワード認証 ---
     if (!staffId || !password) {
       return res.status(400).json({ error: 'スタッフIDとパスワードを入力してください' });
     }
     if (password.length < 8) {
-      return res.status(400).json({ error: 'パスワードは8文字以上で入力してください' });
+      return res.status(400).json({ error: 'パスワードは8文字以上必要です。スタッフ画面でパスワードを変更してください' });
     }
 
     if (!checkRateLimit(`admin-login-id:${staffId}`, 5, 300000))
@@ -487,39 +500,41 @@ router.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'IDまたはパスワードが正しくありません' });
     }
 
-    // パスワードOK → Face ID（WebAuthn）チェック
-    const creds = await loadCredentials(staffId);
-    if (creds.length > 0) {
-      // Face ID登録済み → WebAuthn認証ステップへ
-      req.session.pendingAdminStaffId = staffId;
-      return res.json({ success: true, requireWebAuthn: true });
-    }
-
-    // Face ID未登録 → パスワードのみで認証完了（Face ID登録を促す）
+    // 認証成功
     req.session.isAdmin = true;
     req.session.adminStaffId = staffId;
     req.session.adminStaffName = staff.name;
-    // スタッフセッションも設定（WebAuthn登録APIで必要）
     req.session.staffId = staffId;
     req.session.staffName = staff.name;
     req.session.staffType = staff.type;
     setCsrfCookie(res);
     auditLog(req, 'auth.admin_login', { type: 'auth', id: staffId, label: staff.name });
-    return res.json({ success: true, suggestWebAuthn: true });
+    return res.json({ success: true });
   } catch (e) {
     console.error('管理者ログインエラー:', e);
     res.status(500).json({ error: 'サーバーエラー' });
   }
 });
 
-// ステップ2: WebAuthn（Face ID）認証オプション生成
+// ルートB: Face IDログイン（IDだけ入力 → Face ID → 完了）
 router.post('/api/admin/webauthn/login-options', async (req, res) => {
   try {
-    const pendingId = req.session.pendingAdminStaffId;
-    if (!pendingId) return res.status(401).json({ error: '認証セッションが無効です' });
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    if (!checkRateLimit(`admin-login-ip:${ip}`, 5, 300000))
+      return res.status(429).json({ error: 'ログイン試行回数が上限を超えました' });
 
-    const creds = await loadCredentials(pendingId);
+    const { staffId } = req.body;
+    if (!staffId) return res.status(400).json({ error: 'スタッフIDを入力してください' });
+
+    // 管理者かつFace ID登録済みか確認
+    const data = loadStaff();
+    const staff = data.staff.find(s => s.id === staffId && !s.archived && s.is_admin);
+    if (!staff) return res.status(401).json({ error: 'IDが正しくありません' });
+
+    const creds = await loadCredentials(staffId);
     if (creds.length === 0) return res.status(400).json({ error: 'Face IDが登録されていません' });
+
+    req.session.pendingAdminStaffId = staffId;
 
     const options = await generateAuthenticationOptions({
       rpID: getWebAuthnRpId(req),
