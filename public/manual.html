@@ -8,7 +8,7 @@
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)}
-    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text);font-size:15px}
     header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
     .header-left{display:flex;align-items:center;gap:10px}
     .back-btn{color:#fff;text-decoration:none;font-size:20px;line-height:1;flex-shrink:0;opacity:.85}
@@ -30,7 +30,6 @@
     .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
     .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
     .menu-drawer .menu-logout{color:#c0392b}
-    /* ── PC: スマホ幅中央固定 ── */
     .page-wrapper{width:100%;min-height:100vh}
     .menu-overlay-inner{max-width:390px;margin:0 auto;height:100%;position:relative}
     @media(min-width:480px){
@@ -38,6 +37,14 @@
       .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
     }
     .container{padding:16px;max-width:480px;margin:0 auto}
+
+    /* 目次 */
+    .toc-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;padding:16px}
+    .toc-title{font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:10px}
+    .toc-list{list-style:none;padding:0}
+    .toc-list li{margin-bottom:6px}
+    .toc-list a{font-size:13px;color:var(--blue);text-decoration:none;font-weight:600;display:flex;align-items:center;gap:6px}
+    .toc-list a:hover{text-decoration:underline}
 
     /* セクションカード */
     .section-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
@@ -50,28 +57,27 @@
     .step-num{width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
     .step-content{}
     .step-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px}
-    .step-desc{font-size:12px;color:var(--muted);line-height:1.7}
+    .step-desc{font-size:13px;color:var(--muted);line-height:1.8}
     .step-desc b{color:var(--text);font-weight:700}
 
-    /* ポイントボックス */
     .point-box{background:#f0f7ff;border-radius:9px;padding:10px 14px;margin-top:10px}
-    .point-box p{font-size:12px;color:var(--blue-dark);line-height:1.8}
+    .point-box p{font-size:13px;color:var(--blue-dark);line-height:1.8}
     .point-box p::before{content:"💡 "}
 
-    /* 注意ボックス */
     .warn-box{background:#fff8e1;border-radius:9px;padding:10px 14px;margin-top:10px}
-    .warn-box p{font-size:12px;color:#b45309;line-height:1.8}
+    .warn-box p{font-size:13px;color:#b45309;line-height:1.8}
     .warn-box p::before{content:"⚠️ "}
 
-    /* 計算表 */
-    .calc-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+    .calc-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
     .calc-table th{background:#e8edf5;color:var(--blue-dark);padding:6px 10px;text-align:center;font-weight:700;border:1px solid var(--border)}
     .calc-table td{padding:6px 10px;border:1px solid var(--border);text-align:center}
     .calc-table tr:nth-child(even) td{background:#f8faff}
 
-    /* 翌日ボックス */
     .info-box{border:1.5px solid var(--blue);border-radius:9px;padding:10px 14px;margin-top:8px}
-    .info-box p{font-size:12px;color:var(--blue-dark);line-height:1.8}
+    .info-box p{font-size:13px;color:var(--blue-dark);line-height:1.8}
+
+    .sub-section{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+    .sub-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:8px}
 
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
   </style>
@@ -106,8 +112,73 @@
 
   <div class="container">
 
-    <!-- ① 基本の流れ -->
-    <div class="section-card">
+    <!-- 目次 -->
+    <div class="toc-card">
+      <div class="toc-title">目次</div>
+      <ul class="toc-list">
+        <li><a href="#sec-login">🔐 ログイン・Face ID</a></li>
+        <li><a href="#sec-basic">📋 基本の流れ</a></li>
+        <li><a href="#sec-nurse">💉 看護師の入力方法</a></li>
+        <li><a href="#sec-rehab">🏃 リハビリの入力方法</a></li>
+        <li><a href="#sec-schedule">📝 予定の登録・確定</a></li>
+        <li><a href="#sec-history">📊 月次実績の確認</a></li>
+        <li><a href="#sec-deadline">📅 締日・修正ルール</a></li>
+        <li><a href="#sec-leave">🌴 有給管理</a></li>
+        <li><a href="#sec-oncall">📞 オンコール記録</a></li>
+        <li><a href="#sec-notices">📢 お知らせ</a></li>
+        <li><a href="#sec-password">🔑 パスワード変更・Face ID設定</a></li>
+        <li><a href="#sec-pwa">📱 ホーム画面に追加</a></li>
+      </ul>
+    </div>
+
+    <!-- ① ログイン・Face ID -->
+    <div class="section-card" id="sec-login">
+      <div class="section-head"><span class="icon">🔐</span><h2>ログイン・Face ID</h2></div>
+      <div class="section-body">
+        <div class="sub-title">ID・パスワードでログイン</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">ログインIDとパスワードを入力</div>
+            <div class="step-desc">管理者から伝えられたログインIDとパスワードを入力し、「ログイン」をタップします。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">初回は初期パスワードでログイン</div>
+            <div class="step-desc">初回ログイン後、「PW変更」からパスワードを変更することをおすすめします。</div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">Face ID（生体認証）でログイン</div>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Face IDを事前に登録</div>
+              <div class="step-desc">「PW変更」画面で Face ID を登録すると、次回から生体認証だけでログインできます。</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">ログイン画面で「Face ID でログイン」をタップ</div>
+              <div class="step-desc">ログインIDを入力し、Face ID ボタンをタップすると、顔認証・指紋認証でログインできます。</div>
+            </div>
+          </div>
+          <div class="point-box"><p>Face ID を登録済みの場合、ログイン画面に自動で Face ID ボタンが表示されます。</p></div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">パスワードを忘れた場合</div>
+          <div class="step-desc">ログイン画面下部の「パスワードを忘れた方はこちら」からメールアドレスを入力してリセットを申請できます。メールアドレスが未登録の場合は管理者にご連絡ください。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 基本の流れ -->
+    <div class="section-card" id="sec-basic">
       <div class="section-head"><span class="icon">📋</span><h2>基本の流れ</h2></div>
       <div class="section-body">
         <div class="step">
@@ -115,7 +186,6 @@
           <div class="step-content">
             <div class="step-title">訪問日を選択</div>
             <div class="step-desc">トップ画面で訪問した日付を選びます。当日・翌日・過去の修正可能な日が選べます。</div>
-            <div class="info-box"><p><b>翌日に関して：</b>翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録しておくことができます。翌日になったら、トップ画面の「未確定の予定」から<b>確定</b>してください。確定するまで実績には反映されません。</p></div>
           </div>
         </div>
         <div class="step">
@@ -129,14 +199,15 @@
           <div class="step-num">3</div>
           <div class="step-content">
             <div class="step-title">「記録する」をタップ</div>
-            <div class="step-desc">入力内容が実績に記録されます。完了画面が表示されたら成功です。</div>
+            <div class="step-desc">入力内容が実績に記録されます。完了画面に月の累計実績とインセンティブ情報が表示されます。</div>
           </div>
         </div>
+        <div class="point-box"><p>記録後に「続けて入力する」をタップすると、別の日の入力に移れます。</p></div>
       </div>
     </div>
 
-    <!-- ② 看護師の入力 -->
-    <div class="section-card">
+    <!-- ③ 看護師の入力 -->
+    <div class="section-card" id="sec-nurse">
       <div class="section-head"><span class="icon">💉</span><h2>看護師の入力方法</h2></div>
       <div class="section-body">
         <div class="step-desc" style="margin-bottom:10px">「介護」「医療」それぞれの<b>合計訪問時間（時間単位）</b>を選択します。</div>
@@ -151,19 +222,77 @@
       </div>
     </div>
 
-    <!-- ③ リハビリの入力 -->
-    <div class="section-card">
+    <!-- ④ リハビリの入力 -->
+    <div class="section-card" id="sec-rehab">
       <div class="section-head"><span class="icon">🏃</span><h2>リハビリの入力方法</h2></div>
       <div class="section-body">
         <div class="step-desc" style="margin-bottom:6px"><b>「介護」は10分を「1単位」</b>として単位数を入力します。</div>
-        <div class="step-desc" style="margin-bottom:10px"><b>「医療」は1件「４単位」</b>として計算してください。</div>
+        <div class="step-desc" style="margin-bottom:10px"><b>「医療」は1件「4単位」</b>として計算してください。</div>
         <div class="point-box"><p>例）介護280分 + 医療1件の場合：28単位 + 4単位 ＝ 32単位と入力</p></div>
       </div>
     </div>
 
-    <!-- ④ 締日・修正ルール -->
-    <div class="section-card">
-      <div class="section-head"><span class="icon">📅</span><h2>実績修正ルール</h2></div>
+    <!-- ⑤ 予定の登録・確定 -->
+    <div class="section-card" id="sec-schedule">
+      <div class="section-head"><span class="icon">📝</span><h2>予定の登録・確定</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録できます。</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">翌日の日付を選んで入力</div>
+            <div class="step-desc">日付ピッカーで翌日を選択し、通常どおり時間や単位を入力して「記録する」をタップします。翌日のデータは自動的に「予定」として保存されます。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">翌日になったら「確定」をタップ</div>
+            <div class="step-desc">トップ画面の<b>「未確定の予定」</b>カードに保存された予定が表示されます。内容を確認して「確定」ボタンをタップしてください。</div>
+          </div>
+        </div>
+        <div class="warn-box"><p>確定するまで実績には反映されません。忘れずに確定してください。</p></div>
+        <div class="point-box"><p>予定が変わった場合は「削除」して入力し直すこともできます。</p></div>
+      </div>
+    </div>
+
+    <!-- ⑥ 月次実績の確認 -->
+    <div class="section-card" id="sec-history">
+      <div class="section-head"><span class="icon">📊</span><h2>月次実績の確認</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">メニューの「月次実績」から、月ごとの訪問記録を確認できます。</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">月を選択</div>
+            <div class="step-desc">画面上部のドロップダウンで確認したい月を選びます。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">月間サマリーを確認</div>
+            <div class="step-desc">合計時間（介護・医療の内訳）、稼働日数、インセンティブの目安が表示されます。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">グラフ・日別一覧を展開</div>
+            <div class="step-desc">「グラフを見る」「日別一覧」をタップすると、日ごとの訪問量をグラフや表で確認できます。修正可能な日はここから直接編集もできます。</div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">インセンティブ表示について</div>
+          <div class="step-desc">インセンティブが発生している月は、実績カードに金額目安が表示されます。目標ラインとの差もグラフ上に表示されるので、月の途中での進捗確認にも活用できます。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑦ 締日・修正ルール -->
+    <div class="section-card" id="sec-deadline">
+      <div class="section-head"><span class="icon">📅</span><h2>締日・修正ルール</h2></div>
       <div class="section-body">
         <div class="step">
           <div class="step-num">!</div>
@@ -175,7 +304,7 @@
           <div class="step-num">!</div>
           <div class="step-content">
             <div class="step-title">前月分の修正は当月20日まで</div>
-            <div class="step-desc">前月16日〜当月15日までのデータは当月20日まで修正できます。21日になると前月分（前月16日〜当月15日）は全てロックされ修正できなくなります。</div>
+            <div class="step-desc">前月16日〜当月15日までのデータは当月20日まで修正できます。21日になると前月分は全てロックされ修正できなくなります。</div>
           </div>
         </div>
         <div class="step">
@@ -185,34 +314,226 @@
             <div class="step-desc">当月16日以降に入力したデータは、翌月20日まで修正できます。</div>
           </div>
         </div>
-        <div class="warn-box"><p>修正が必要な場合は早めに申し出て下さい。期限を過ぎた場合は管理者にご連絡ください。</p></div>
+        <div class="info-box"><p>毎月16〜20日に修正可能期間のお知らせが届きます。修正がある方はこの期間内にお願いします。</p></div>
+        <div class="warn-box"><p>期限を過ぎた場合は管理者にご連絡ください。</p></div>
       </div>
     </div>
 
-    <!-- ⑤ パスワード変更 -->
-    <div class="section-card">
-      <div class="section-head"><span class="icon">🔑</span><h2>パスワード変更</h2></div>
+    <!-- ⑧ 有給管理 -->
+    <div class="section-card" id="sec-leave">
+      <div class="section-head"><span class="icon">🌴</span><h2>有給管理</h2></div>
       <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">メニューの「有給管理」から、有給残日数の確認や休暇申請ができます。</div>
+
+        <div class="sub-title">残日数の確認</div>
+        <div class="step-desc" style="margin-bottom:10px">画面上部に現在の有給残日数が大きく表示されます。内訳として年間付与・前年繰越・使用済み日数なども確認できます。</div>
+
+        <div class="sub-section">
+          <div class="sub-title">休暇を申請する</div>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">休暇の種類を選択</div>
+              <div class="step-desc"><b>全日</b>（1日）、<b>午前半休</b>、<b>午後半休</b>から選べます。お祝い休暇が残っている場合は「お祝い休暇」も選択できます。</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">日付を指定</div>
+              <div class="step-desc">開始日を選択します。複数日にまたがる場合は終了日も選択してください。</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">理由を入力して申請</div>
+              <div class="step-desc">必要に応じて理由を入力し、「申請する」をタップします。管理者の承認後に確定します。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">申請の取り消し</div>
+          <div class="step-desc">申請履歴から「保留中」「承認済み」の申請を取り消すことができます。</div>
+        </div>
+
+        <div class="point-box"><p>午前半休と午後半休はそれぞれ0.5日としてカウントされます。同じ日に午前・午後の両方を申請することも可能です。</p></div>
+
+        <div class="sub-section">
+          <div class="sub-title">有給付与のしくみ</div>
+          <table class="calc-table">
+            <tr><th>勤続年数</th><th>付与日数</th></tr>
+            <tr><td>6ヶ月</td><td>10日</td></tr>
+            <tr><td>1年6ヶ月</td><td>11日</td></tr>
+            <tr><td>2年6ヶ月</td><td>12日</td></tr>
+            <tr><td>3年6ヶ月</td><td>14日</td></tr>
+            <tr><td>4年6ヶ月</td><td>16日</td></tr>
+            <tr><td>5年6ヶ月</td><td>18日</td></tr>
+            <tr><td>6年6ヶ月〜</td><td>20日</td></tr>
+          </table>
+          <div class="point-box"><p>前年の未使用分は翌年に繰り越されます（1年間有効）。次回付与日や繰越期限は有給管理画面で確認できます。</p></div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">お祝い休暇</div>
+          <div class="step-desc">入職から6ヶ月以内に使える特別休暇（3日分）です。期限を過ぎると使用できなくなります。残日数は有給管理画面で確認できます。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑨ オンコール記録 -->
+    <div class="section-card" id="sec-oncall">
+      <div class="section-head"><span class="icon">📞</span><h2>オンコール記録</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">オンコール対象のスタッフはメニューに「オンコール」が表示されます。当番の記録を入力・管理できます。</div>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
-            <div class="step-title">ヘッダーの「PW変更」をタップ</div>
-            <div class="step-desc">画面上部のナビメニューから「PW変更」を選びます。</div>
+            <div class="step-title">日付と合計時間を入力</div>
+            <div class="step-desc">オンコール対応を行った日付と合計対応時間を入力します。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">交通費回数を入力</div>
+            <div class="step-desc">交通費が発生した回数を選択します。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">「登録する」をタップ</div>
+            <div class="step-desc">記録が保存されます。同じ日の記録は上書きされます。</div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">月間サマリー</div>
+          <div class="step-desc">画面上部に月の合計時間・交通費回数・担当日数が表示されます。月を切り替えて過去の記録も確認できます。</div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">オンコール代休について</div>
+          <div class="step-desc">累計対応時間が15時間に達するごとに、1日の代休が自動で付与されます。進捗はゲージで確認できます。</div>
+          <div class="point-box"><p>付与された代休日数は有給管理画面の「累積OC付与」にも反映されます。</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑩ お知らせ -->
+    <div class="section-card" id="sec-notices">
+      <div class="section-head"><span class="icon">📢</span><h2>お知らせ</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">管理者からのお知らせやシステム通知を確認できます。</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">未読のお知らせを確認</div>
+            <div class="step-desc">未読のお知らせがある場合、メニューのお知らせ横に赤いバッジが表示されます。タイトルの横に青い丸が表示されているのが未読です。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">タップして内容を表示</div>
+            <div class="step-desc">お知らせをタップすると詳細が開き、自動的に既読になります。</div>
+          </div>
+        </div>
+        <div class="point-box"><p>修正可能期間のお知らせや未入力のリマインダーなど、システムからの自動通知もここに届きます。</p></div>
+      </div>
+    </div>
+
+    <!-- ⑪ パスワード変更・Face ID設定 -->
+    <div class="section-card" id="sec-password">
+      <div class="section-head"><span class="icon">🔑</span><h2>パスワード変更・Face ID設定</h2></div>
+      <div class="section-body">
+        <div class="sub-title">パスワードを変更する</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">メニューから「PW変更」を選択</div>
+            <div class="step-desc">右上のハンバーガーメニューから「PW変更」をタップします。</div>
           </div>
         </div>
         <div class="step">
           <div class="step-num">2</div>
           <div class="step-content">
             <div class="step-title">現在のパスワードと新しいパスワードを入力</div>
-            <div class="step-desc">パスワードは4〜20文字で設定してください。</div>
+            <div class="step-desc">パスワードは<b>4〜20文字</b>で設定してください。確認のため新しいパスワードは2回入力します。</div>
           </div>
         </div>
-        <div class="point-box"><p>パスワードを忘れた場合はログイン画面の「パスワードを忘れた方はこちら」から管理者に連絡してください。</p></div>
+
+        <div class="sub-section">
+          <div class="sub-title">Face ID を設定する</div>
+          <div class="step-desc" style="margin-bottom:10px">パスワード変更画面の上部に「Face ID」セクションがあります。</div>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">「Face ID を登録する」をタップ</div>
+              <div class="step-desc">端末の生体認証（顔認証・指紋認証）の画面が表示されます。</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">認証を完了する</div>
+              <div class="step-desc">登録が完了すると、次回から Face ID でログインできます。</div>
+            </div>
+          </div>
+          <div class="point-box"><p>Face ID は端末ごとに登録が必要です。スマートフォンとPCなど、複数端末で使う場合はそれぞれで登録してください。</p></div>
+          <div class="warn-box"><p>Face ID に対応していない端末では、この機能は表示されません。</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑫ ホーム画面に追加（PWA） -->
+    <div class="section-card" id="sec-pwa">
+      <div class="section-head"><span class="icon">📱</span><h2>ホーム画面に追加</h2></div>
+      <div class="section-body">
+        <div class="step-desc" style="margin-bottom:12px">このアプリはホーム画面に追加すると、アプリのように使えます。</div>
+
+        <div class="sub-title">iPhone（Safari）の場合</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Safariで画面下の共有ボタンをタップ</div>
+            <div class="step-desc">四角に上矢印のアイコンをタップします。</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">「ホーム画面に追加」を選択</div>
+            <div class="step-desc">名前を確認して「追加」をタップすれば完了です。</div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <div class="sub-title">Android（Chrome）の場合</div>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Chromeの右上メニューをタップ</div>
+              <div class="step-desc">「︙」アイコンをタップします。</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">「ホーム画面に追加」を選択</div>
+              <div class="step-desc">名前を確認して「追加」をタップすれば完了です。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="point-box"><p>ホーム画面から起動すると、ブラウザのアドレスバーなしの全画面表示になり、より使いやすくなります。</p></div>
       </div>
     </div>
 
   </div>
-  <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
+  <p class="copyright">&copy; 2026 株式会社Yuw connect All rights reserved.</p>
 <script src="/vendor/api-fetch.js"></script>
 <script src="/vendor/common.js"></script>
 <script>

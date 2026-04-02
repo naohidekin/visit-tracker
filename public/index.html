@@ -704,43 +704,51 @@
     document.getElementById('resultLoadingCard').style.display = 'none';
     const isIncentive = !!stats.incentive_triggered;
     const cls = isIncentive ? ' incentive' : '';
-    const line = stats.incentive_line ?? 0;
-    const days = stats.working_days || 0;
+    const line = Number(stats.incentive_line) || 0;
+    const days = Number(stats.working_days) || 0;
 
+    // 安全な数値変換（XSS防止: API応答値をすべてNumber()経由で無害化）
     let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml;
 
     if (currentUser.type === 'nurse') {
-      const target = (line * days).toFixed(1);
-      goalLine = `インセンティブ目安：${target}時間`;
-      bigLabel = '合計時間'; bigNum = (stats.total || 0).toFixed(1); bigUnit = '時間';
+      const target = esc((line * days).toFixed(1));
+      goalLine = 'インセンティブ目安：' + target + '時間';
+      bigLabel = '合計時間';
+      bigNum = esc((Number(stats.total) || 0).toFixed(1));
+      bigUnit = '時間';
       subCols  = 'cols-3';
+      const kaigo = esc((Number(stats.total_kaigo) || 0).toFixed(1));
+      const iryo  = esc((Number(stats.total_iryo)  || 0).toFixed(1));
+      const daysE = esc(String(days));
       subHtml  = `
         <div class="result-sub-box">
           <div class="result-sub-label">介護</div>
-          <div class="result-sub-val">${(stats.total_kaigo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+          <div class="result-sub-val">${kaigo}<span class="result-sub-unit">時間</span></div>
         </div>
         <div class="result-sub-box">
           <div class="result-sub-label">医療</div>
-          <div class="result-sub-val">${(stats.total_iryo||0).toFixed(1)}<span class="result-sub-unit">時間</span></div>
+          <div class="result-sub-val">${iryo}<span class="result-sub-unit">時間</span></div>
         </div>
         <div class="result-sub-box">
           <div class="result-sub-label">稼働日数</div>
-          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+          <div class="result-sub-val">${daysE}<span class="result-sub-unit">日</span></div>
         </div>`;
     } else {
-      const actual = stats.total_units || 0;
-      const target = (Math.round(line * days * 10) / 10).toFixed(1);
-      goalLine = `インセンティブ目安：${target}単位`;
-      bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
+      const actual = Number(stats.total_units) || 0;
+      const target = esc((Math.round(line * days * 10) / 10).toFixed(1));
+      goalLine = 'インセンティブ目安：' + target + '単位';
+      bigLabel = '合計単位数'; bigNum = esc(String(actual)); bigUnit = '単位';
       subCols  = 'cols-2';
+      const actualE = esc(String(actual));
+      const daysE = esc(String(days));
       subHtml  = `
         <div class="result-sub-box">
           <div class="result-sub-label">合計単位数</div>
-          <div class="result-sub-val">${actual}<span class="result-sub-unit">単位</span></div>
+          <div class="result-sub-val">${actualE}<span class="result-sub-unit">単位</span></div>
         </div>
         <div class="result-sub-box">
           <div class="result-sub-label">稼働日数</div>
-          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+          <div class="result-sub-val">${daysE}<span class="result-sub-unit">日</span></div>
         </div>`;
     }
 
@@ -752,14 +760,14 @@
       <div class="result-card${cls}">
         <p class="result-greeting">ご入力ありがとうございます。<br>お疲れ様でした🙏</p>
         <hr class="result-divider">
-        <p class="result-goal-line">${goalLine}</p>
+        <p class="result-goal-line">${esc(goalLine)}</p>
         <div class="result-big-total">
-          <span class="result-big-label">${bigLabel}</span>
+          <span class="result-big-label">${esc(bigLabel)}</span>
           <span class="result-big-num">${bigNum}</span>
-          <span class="result-big-label">${bigUnit}</span>
+          <span class="result-big-label">${esc(bigUnit)}</span>
         </div>
         ${incentiveMsg}
-        <div class="result-sub-grid ${subCols}">${subHtml}</div>
+        <div class="result-sub-grid ${esc(subCols)}">${subHtml}</div>
       </div>`;
     card.style.display = 'block';
   }
@@ -798,15 +806,15 @@
       const canConfirm = s.date <= today;
       let valText = '';
       if (s.jobType === 'nurse') {
-        const k = s.kaigo != null ? s.kaigo.toFixed(1) + '時間' : '—';
-        const i = s.iryo  != null ? s.iryo.toFixed(1)  + '時間' : '—';
+        const k = s.kaigo != null ? esc(s.kaigo.toFixed(1)) + '時間' : '—';
+        const i = s.iryo  != null ? esc(s.iryo.toFixed(1))  + '時間' : '—';
         valText = `介護：${k} ／ 医療：${i}`;
       } else {
-        valText = s.units != null ? `${s.units}単位` : '—';
+        valText = s.units != null ? `${esc(String(s.units))}単位` : '—';
       }
       return `
         <div class="schedule-item">
-          <div class="schedule-item-date">${formatDateJP(s.date)}</div>
+          <div class="schedule-item-date">${esc(formatDateJP(s.date))}</div>
           <div class="schedule-item-values">${valText}</div>
           <div class="schedule-item-btns">
             <button class="sched-btn sched-confirm" data-action="confirm-schedule" data-id="${esc(s.id)}"
@@ -859,7 +867,7 @@
     const curMonth15 = month; // 当月15日までが前月分の対象
 
     document.getElementById('alertBannerDesc').innerHTML =
-      `${prevMonth}月分（${prevMonth}/16〜${curMonth15}/15）の実績は <b>${month}月20日（${wd}）</b> まで修正できます。お早めにご確認ください。`;
+      `${esc(String(prevMonth))}月分（${esc(String(prevMonth))}/16〜${esc(String(curMonth15))}/15）の実績は <b>${esc(String(month))}月20日（${esc(wd)}）</b> まで修正できます。お早めにご確認ください。`;
     document.getElementById('alertBanner').style.display = 'flex';
   }
   checkAlertBanner();

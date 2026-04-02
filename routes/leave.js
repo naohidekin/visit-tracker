@@ -178,16 +178,33 @@ router.post('/api/leave/requests', requireStaff, requireLeaveOncall, lockedRoute
       return res.status(400).json({ error: '有給残日数が不足しています' });
   }
 
-  // 重複チェック（同日に pending/approved がないか）
-  const existingDates = new Set();
+  // 重複チェック（同日の種別を考慮: 全日は常にNG、半日は同じ区分のみNG）
+  const existingByDate = {};   // { 'YYYY-MM-DD': Set<'full'|'half_am'|'half_pm'|'celebration'> }
   for (const r of leaveData.requests) {
     if (r.staffId === staff.id && (r.status === 'pending' || r.status === 'approved')) {
-      for (const dd of r.dates) existingDates.add(dd);
+      for (const dd of r.dates) {
+        if (!existingByDate[dd]) existingByDate[dd] = new Set();
+        existingByDate[dd].add(r.type);
+      }
     }
   }
-  const overlap = dates.filter(dd => existingDates.has(dd));
-  if (overlap.length > 0)
-    return res.status(400).json({ error: `${overlap[0]} は既に申請済みです` });
+  for (const dd of dates) {
+    const ex = existingByDate[dd];
+    if (!ex) continue;
+    // 既に全日・お祝い休暇が入っていたら不可
+    if (ex.has('full') || ex.has('celebration'))
+      return res.status(400).json({ error: `${dd} は既に申請済みです` });
+    // 今回が全日・お祝い休暇なら、既存の半日とも衝突
+    if (type === 'full' || type === 'celebration')
+      return res.status(400).json({ error: `${dd} は既に半日休暇が申請済みのため、全日申請できません` });
+    // 半日同士: 同じ区分（午前/午前, 午後/午後）ならNG
+    if (ex.has(type))
+      return res.status(400).json({ error: `${dd} は既に同じ区分（${type === 'half_am' ? '午前' : '午後'}）で申請済みです` });
+    // 午前+午後で合計1日 → 残日数を追加消費するのでチェック
+    if ((type === 'half_am' && ex.has('half_pm')) || (type === 'half_pm' && ex.has('half_am'))) {
+      // 許可するが、合計1日分消費されることは残日数チェックで既に考慮済み
+    }
+  }
 
   const request = {
     id: `${staff.id}-${start}-${Date.now()}`,

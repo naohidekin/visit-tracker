@@ -283,10 +283,12 @@ router.post('/api/webauthn/login-verify', async (req, res) => {
     const data = loadStaff();
     const staff = data.staff.find(s => s.id === loginId);
     if (!staff) return res.status(401).json({ error: 'スタッフが見つかりません' });
+    if (staff.archived) return res.status(401).json({ error: 'このアカウントは無効化されています' });
 
     req.session.staffId = staff.id;
     req.session.staffName = staff.name;
     req.session.staffType = staff.type;
+    setCsrfCookie(res);
     auditLog(req, 'auth.webauthn_login', { type: 'auth', id: staff.id, label: staff.name });
     res.json({ success: true });
   } catch (e) {

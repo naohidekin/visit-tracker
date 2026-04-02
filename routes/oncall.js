@@ -16,7 +16,10 @@ function requireLeaveOncall(req, res, next) {
 }
 
 // オンコール累計時間から有給付与日数を再計算し、staff.jsonを更新
+// 注: この関数は lockedRoute(ONCALL_PATH, ...) 内から呼ばれるため、
+//     oncallデータの読み取りはロック下で安全。staff.jsonは別途ロックする。
 async function updateOncallLeave(staffId) {
+  // oncallデータは呼び出し元の lockedRoute で排他制御済み
   const data = loadOncall();
   const allRecords = data.records.filter(r => r.staffId === staffId);
   const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
