@@ -113,18 +113,18 @@
     /* ── ローディング ── */
     .spinner{text-align:center;padding:14px;color:var(--muted);font-size:14px;display:none}
     /* ── 自動生成ラベル ── */
-    .auto-label{font-size:14px;color:var(--muted);margin-top:3px}
+    .auto-label{font-size:12px;color:var(--muted);margin-top:3px}
     /* ── インセンティブ ── */
     .section-sub{font-size:14px;font-weight:700;color:var(--blue-dark);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #e8edf5}
     /* ── スタッフ一覧（モバイル最適化） ── */
     .staff-table{table-layout:fixed;min-width:0}
     .staff-table .col-name{width:28%}
     .staff-table .col-type{width:26px}
-    .staff-table .badge{padding:1px 4px;font-size:14px}
+    .staff-table .badge{padding:2px 5px;font-size:12px}
     .staff-table .col-btns{width:auto}
     .staff-table td{padding:6px 4px}
     .staff-table .td-btns{gap:2px;flex-wrap:nowrap}
-    .staff-table .btn-xs{padding:3px 5px;font-size:14px}
+    .staff-table .btn-xs{padding:4px 6px;font-size:12px}
     /* ── インセンティブ個別設定（モバイル最適化） ── */
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
@@ -173,7 +173,7 @@
     .sidebar-brand img{width:34px;height:34px;border-radius:8px}
     .sidebar-brand .titles{display:flex;flex-direction:column;gap:2px;min-width:0}
     .sidebar-brand h1{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .sidebar-brand .sub{font-size:14px;opacity:.55;letter-spacing:.03em}
+    .sidebar-brand .sub{font-size:11px;opacity:.55;letter-spacing:.03em}
     .sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
     .nav-group-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);padding:16px 18px 6px}
     .nav-item{
@@ -1285,21 +1285,34 @@
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebarOverlay').classList.remove('show');
 
-    // セクション別の遅延ロード
-    if (!sectionLoaded[sectionId]) {
-      sectionLoaded[sectionId] = true;
-      switch (sectionId) {
-        case 'sec-leave':
-          loadLeavePending(); break;
-        case 'sec-oncall':
-          initOncallMonth(); loadOncallSummary(); break;
-        case 'sec-standby':
-          initStandbyMonth(); loadStandbyData(); break;
-        case 'sec-attendance':
-          initAttendanceMonth(); loadAttendanceMonthly(); break;
-        case 'sec-incentive-summary':
-          initIncentiveSummaryMonth(); loadIncentiveSummary(); break;
-      }
+    // セクション別の遅延ロード（初回: 初期化+データ取得、2回目以降: データのみ再取得）
+    const isFirst = !sectionLoaded[sectionId];
+    sectionLoaded[sectionId] = true;
+    switch (sectionId) {
+      case 'dashboard':
+        loadDashboard(); break;
+      case 'sec-schedules':
+        loadAdminSchedules(); break;
+      case 'sec-staff':
+        loadStaff(); break;
+      case 'sec-notices':
+        loadAdminNotices(); break;
+      case 'sec-leave':
+        loadLeavePending(); break;
+      case 'sec-audit':
+        if (isFirst) loadAuditLog(1); break;
+      case 'sec-oncall':
+        if (isFirst) initOncallMonth();
+        loadOncallSummary(); break;
+      case 'sec-standby':
+        if (isFirst) initStandbyMonth();
+        loadStandbyData(); break;
+      case 'sec-attendance':
+        if (isFirst) initAttendanceMonth();
+        loadAttendanceMonthly(); break;
+      case 'sec-incentive-summary':
+        if (isFirst) initIncentiveSummaryMonth();
+        loadIncentiveSummary(); break;
     }
 
     // スクロール位置リセット
@@ -3427,11 +3440,16 @@
 
   async function saveStandbyRecord(date, staffId) {
     try {
-      await apiFetch('/api/admin/standby/records', {
+      const res = await apiFetch('/api/admin/standby/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date, staffId }),
       });
+      if (!res.ok) {
+        showToast('待機記録の保存に失敗しました');
+        loadStandbyData(); // サーバーの正しい状態に戻す
+        return;
+      }
       // ローカルデータも更新
       const idx = lastStandbyRecords.findIndex(r => r.date === date);
       if (!staffId) {
@@ -3924,6 +3942,20 @@
   document.getElementById('newType').addEventListener('change', autoGenerate);
   document.getElementById('newFkana').addEventListener('input', autoGenerate);
   document.getElementById('newGkana').addEventListener('input', autoGenerate);
+
+  // ── ページ読み込み時: 既存セッションの復元 ──
+  (async function checkExistingSession() {
+    try {
+      const res = await fetch('/api/admin/me');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.staffId) {
+          onLoginSuccess();
+          return;
+        }
+      }
+    } catch (e) { /* セッションなし → ログイン画面を表示 */ }
+  })();
 </script>
 <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
 </body>

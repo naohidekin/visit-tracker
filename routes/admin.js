@@ -444,8 +444,12 @@ router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_P
 // Face ID有無チェック（ログイン画面でUIを切り替える用）
 router.post('/api/admin/check', async (req, res) => {
   try {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    if (!checkRateLimit(`admin-check-ip:${ip}`, 10, 60000))
+      return res.status(429).json({ exists: false });
     const { staffId } = req.body;
-    if (!staffId) return res.json({ exists: false });
+    if (!staffId || typeof staffId !== 'string' || staffId.length > 50)
+      return res.json({ exists: false });
     const data = loadStaff();
     const staff = data.staff.find(s => s.id === staffId && !s.archived && s.is_admin);
     if (!staff) return res.json({ exists: false });
