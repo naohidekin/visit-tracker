@@ -4,12 +4,10 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const XLSX = require('xlsx');
-const otplib = require('otplib');
-const QRCode = require('qrcode');
+const { generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -24,6 +22,7 @@ const { checkRateLimit, lockedRoute, isValidDate, validateUnitValue, validateNum
 const { auditLog, loadAuditLog, verifyAuditChain } = require('../lib/audit');
 const { getSheets, sheetsRetry, createSpreadsheetForYear } = require('../lib/sheets');
 const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
+const { loadCredentials, getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
 const {
   STAFF_PATH, SPREADSHEET_ID, STANDBY_PATH, NOTICES_PATH,
   DATA_START_ROW, HEADER_ROW, MONTHS, WD, ALL_HOLIDAYS,
@@ -441,8 +440,8 @@ router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_P
   res.json({ success: true });
 }));
 
-// ─── API: 管理者認証（個別アカウント + TOTP MFA） ──────────────
-// ステップ1: ID + パスワード認証
+// ─── API: 管理者認証（個別アカウント + Face ID/パスワード） ─────
+// ステップ1: ID + パスワード認証（8文字以上必須）
 router.post('/api/admin/login', async (req, res) => {
   try {
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
@@ -466,6 +465,9 @@ router.post('/api/admin/login', async (req, res) => {
     if (!staffId || !password) {
       return res.status(400).json({ error: 'スタッフIDとパスワードを入力してください' });
     }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'パスワードは8文字以上で入力してください' });
+    }
 
     if (!checkRateLimit(`admin-login-id:${staffId}`, 5, 300000))
       return res.status(429).json({ error: 'ログイン試行回数が上限を超えました' });
@@ -485,147 +487,98 @@ router.post('/api/admin/login', async (req, res) => {
       return res.status(401).json({ error: 'IDまたはパスワードが正しくありません' });
     }
 
-    // パスワードOK → MFA判定
-    req.session.pendingAdminStaffId = staffId;
-
-    if (!staff.totp_secret) {
-      // TOTP未設定 → セットアップ必要
-      return res.json({ success: true, requireTotpSetup: true });
+    // パスワードOK → Face ID（WebAuthn）チェック
+    const creds = await loadCredentials(staffId);
+    if (creds.length > 0) {
+      // Face ID登録済み → WebAuthn認証ステップへ
+      req.session.pendingAdminStaffId = staffId;
+      return res.json({ success: true, requireWebAuthn: true });
     }
-    // TOTP設定済み → コード入力へ
-    return res.json({ success: true, requireTotp: true });
+
+    // Face ID未登録 → パスワードのみで認証完了（Face ID登録を促す）
+    req.session.isAdmin = true;
+    req.session.adminStaffId = staffId;
+    req.session.adminStaffName = staff.name;
+    // スタッフセッションも設定（WebAuthn登録APIで必要）
+    req.session.staffId = staffId;
+    req.session.staffName = staff.name;
+    req.session.staffType = staff.type;
+    setCsrfCookie(res);
+    auditLog(req, 'auth.admin_login', { type: 'auth', id: staffId, label: staff.name });
+    return res.json({ success: true, suggestWebAuthn: true });
   } catch (e) {
     console.error('管理者ログインエラー:', e);
     res.status(500).json({ error: 'サーバーエラー' });
   }
 });
 
-// ステップ2: TOTP検証
-router.post('/api/admin/login/totp', async (req, res) => {
-  try {
-    const pendingId = req.session.pendingAdminStaffId;
-    if (!pendingId) return res.status(401).json({ error: '認証セッションが無効です。最初からやり直してください' });
-
-    if (!checkRateLimit(`admin-totp:${pendingId}`, 5, 300000))
-      return res.status(429).json({ error: '試行回数が上限を超えました。しばらく待ってから再度お試しください' });
-
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: '認証コードを入力してください' });
-
-    const data = loadStaff();
-    const staff = data.staff.find(s => s.id === pendingId);
-    if (!staff || !staff.is_admin || !staff.totp_secret) {
-      return res.status(401).json({ error: '認証に失敗しました' });
-    }
-
-    // TOTPコード検証（前後30秒の余裕）
-    const isValid = otplib.verifySync({ token: code, secret: staff.totp_secret, window: 1 }).valid;
-    if (!isValid) {
-      // バックアップコードで試行
-      let backupUsed = false;
-      if (staff.totp_backup_codes && Array.isArray(staff.totp_backup_codes)) {
-        for (let i = 0; i < staff.totp_backup_codes.length; i++) {
-          const match = await bcrypt.compare(code, staff.totp_backup_codes[i]);
-          if (match) {
-            staff.totp_backup_codes.splice(i, 1);
-            saveStaff(data);
-            backupUsed = true;
-            break;
-          }
-        }
-      }
-      if (!backupUsed) {
-        auditLog(req, 'auth.admin_totp_failed', { type: 'auth', id: pendingId, label: `TOTP失敗: ${staff.name}` });
-        return res.status(401).json({ error: '認証コードが正しくありません' });
-      }
-    }
-
-    // 認証成功
-    req.session.isAdmin = true;
-    req.session.adminStaffId = pendingId;
-    req.session.adminStaffName = staff.name;
-    delete req.session.pendingAdminStaffId;
-    setCsrfCookie(res);
-    auditLog(req, 'auth.admin_login', { type: 'auth', id: pendingId, label: staff.name });
-    res.json({ success: true });
-  } catch (e) {
-    console.error('TOTP検証エラー:', e);
-    res.status(500).json({ error: 'サーバーエラー' });
-  }
-});
-
-// TOTP初期セットアップ: QRコード生成
-router.post('/api/admin/totp/setup', async (req, res) => {
+// ステップ2: WebAuthn（Face ID）認証オプション生成
+router.post('/api/admin/webauthn/login-options', async (req, res) => {
   try {
     const pendingId = req.session.pendingAdminStaffId;
     if (!pendingId) return res.status(401).json({ error: '認証セッションが無効です' });
 
-    const data = loadStaff();
-    const staff = data.staff.find(s => s.id === pendingId);
-    if (!staff || !staff.is_admin) return res.status(401).json({ error: '権限がありません' });
-    if (staff.totp_secret) return res.status(400).json({ error: '二段階認証は既に設定されています' });
+    const creds = await loadCredentials(pendingId);
+    if (creds.length === 0) return res.status(400).json({ error: 'Face IDが登録されていません' });
 
-    const secret = otplib.generateSecret();
-    const otpauthUrl = otplib.generateURI({ issuer: 'にこっとWeb管理', label: pendingId, secret, type: 'totp' });
-    const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);
-
-    // バックアップコード生成（8桁 x 8個）
-    const backupCodes = [];
-    for (let i = 0; i < 8; i++) {
-      backupCodes.push(crypto.randomInt(10000000, 99999999).toString());
-    }
-
-    // セッションに一時保存（確認完了まで永続化しない）
-    req.session.pendingTotpSecret = secret;
-    req.session.pendingBackupCodes = backupCodes;
-
-    res.json({ qrCodeUrl, secret, backupCodes });
+    const options = await generateAuthenticationOptions({
+      rpID: getWebAuthnRpId(req),
+      allowCredentials: creds.map(c => ({ id: c.id, transports: c.transports })),
+      userVerification: 'required',
+    });
+    req.session.adminWebAuthnChallenge = options.challenge;
+    res.json(options);
   } catch (e) {
-    console.error('TOTPセットアップエラー:', e);
+    console.error('管理者WebAuthnオプションエラー:', e);
     res.status(500).json({ error: 'サーバーエラー' });
   }
 });
 
-// TOTP初期セットアップ: 確認（最初のコード入力で有効化）
-router.post('/api/admin/totp/setup/confirm', async (req, res) => {
+// ステップ2: WebAuthn（Face ID）認証検証
+router.post('/api/admin/webauthn/login-verify', async (req, res) => {
   try {
     const pendingId = req.session.pendingAdminStaffId;
-    const pendingSecret = req.session.pendingTotpSecret;
-    const pendingBackup = req.session.pendingBackupCodes;
-    if (!pendingId || !pendingSecret) return res.status(401).json({ error: 'セットアップセッションが無効です' });
+    const expectedChallenge = req.session.adminWebAuthnChallenge;
+    if (!pendingId || !expectedChallenge) return res.status(401).json({ error: '認証セッションが無効です' });
 
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: '認証コードを入力してください' });
+    const creds = await loadCredentials(pendingId);
+    const credential = creds.find(c => c.id === req.body.id);
+    if (!credential) return res.status(401).json({ error: '認証情報が見つかりません' });
 
-    const isValid = otplib.verifySync({ token: code, secret: pendingSecret, window: 1 }).valid;
-    if (!isValid) return res.status(401).json({ error: '認証コードが正しくありません。アプリに表示されているコードを入力してください' });
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin: getWebAuthnOrigin(req),
+      expectedRPID: getWebAuthnRpId(req),
+      credential: {
+        id: credential.id,
+        publicKey: credential.publicKey,
+        counter: credential.counter,
+        transports: credential.transports,
+      },
+    });
 
-    // 永続化
+    if (!verification.verified) {
+      auditLog(req, 'auth.admin_webauthn_failed', { type: 'auth', id: pendingId, label: `Face ID失敗` });
+      return res.status(401).json({ error: 'Face ID認証に失敗しました' });
+    }
+
+    // 認証成功
     const data = loadStaff();
     const staff = data.staff.find(s => s.id === pendingId);
-    if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-
-    staff.totp_secret = pendingSecret;
-    // バックアップコードをハッシュ化して保存
-    const hashedCodes = [];
-    for (const bc of (pendingBackup || [])) {
-      hashedCodes.push(await bcrypt.hash(bc, 10));
-    }
-    staff.totp_backup_codes = hashedCodes;
-    saveStaff(data);
-
-    // 認証完了
     req.session.isAdmin = true;
     req.session.adminStaffId = pendingId;
-    req.session.adminStaffName = staff.name;
+    req.session.adminStaffName = staff ? staff.name : pendingId;
+    req.session.staffId = pendingId;
+    req.session.staffName = staff ? staff.name : pendingId;
+    req.session.staffType = staff ? staff.type : null;
     delete req.session.pendingAdminStaffId;
-    delete req.session.pendingTotpSecret;
-    delete req.session.pendingBackupCodes;
+    delete req.session.adminWebAuthnChallenge;
     setCsrfCookie(res);
-    auditLog(req, 'auth.admin_totp_setup', { type: 'auth', id: pendingId, label: `${staff.name}: TOTP設定完了` });
+    auditLog(req, 'auth.admin_login', { type: 'auth', id: pendingId, label: staff ? staff.name : pendingId });
     res.json({ success: true });
   } catch (e) {
-    console.error('TOTPセットアップ確認エラー:', e);
+    console.error('管理者WebAuthn検証エラー:', e);
     res.status(500).json({ error: 'サーバーエラー' });
   }
 });
@@ -645,8 +598,6 @@ router.post('/api/admin/staff/:id/grant-admin', requireAdmin, lockedRoute(STAFF_
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   if (staff.is_admin) return res.json({ success: true, message: '既に管理者です' });
   staff.is_admin = true;
-  staff.totp_secret = null;
-  staff.totp_backup_codes = null;
   saveStaff(data);
   auditLog(req, 'admin.grant_admin', { type: 'admin', id: req.params.id, label: `管理者権限付与: ${staff.name}`, by: req.session.adminStaffId });
   res.json({ success: true });
@@ -659,23 +610,9 @@ router.post('/api/admin/staff/:id/revoke-admin', requireAdmin, lockedRoute(STAFF
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   if (req.params.id === req.session.adminStaffId) return res.status(400).json({ error: '自分の管理者権限は削除できません' });
   staff.is_admin = false;
-  staff.totp_secret = null;
-  staff.totp_backup_codes = null;
   saveStaff(data);
   auditLog(req, 'admin.revoke_admin', { type: 'admin', id: req.params.id, label: `管理者権限剥奪: ${staff.name}`, by: req.session.adminStaffId });
   res.json({ success: true });
-}));
-
-// 管理者TOTP リセット（他の管理者が対象者のTOTPをリセット）
-router.post('/api/admin/totp/reset/:id', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
-  const data = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff || !staff.is_admin) return res.status(404).json({ error: '対象の管理者が見つかりません' });
-  staff.totp_secret = null;
-  staff.totp_backup_codes = null;
-  saveStaff(data);
-  auditLog(req, 'admin.totp_reset', { type: 'admin', id: req.params.id, label: `TOTPリセット: ${staff.name}`, by: req.session.adminStaffId });
-  res.json({ success: true, message: `${staff.name}の二段階認証をリセットしました` });
 }));
 
 router.post('/api/admin/logout', (req, res) => {
@@ -692,10 +629,10 @@ router.get('/api/admin/staff', requireAdmin, (req, res) => {
   const data = loadStaff();
   const includeArchived = req.query.includeArchived === 'true';
   const staff = includeArchived ? data.staff : data.staff.filter(s => !s.archived);
-  // totp_secret・totp_backup_codes は秘密情報なので除外し、設定有無のみ返す
+  // password_hash は秘密情報なので除外
   const safe = staff.map(s => {
-    const { totp_secret, totp_backup_codes, password_hash, ...rest } = s;
-    return { ...rest, totp_secret: !!totp_secret };
+    const { password_hash, ...rest } = s;
+    return rest;
   });
   res.json(safe);
 });

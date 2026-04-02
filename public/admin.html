@@ -210,42 +210,12 @@
   </div>
 </div>
 
-<!-- ログイン: ステップ2（TOTPコード入力） -->
-<div class="card" id="totpCard" style="display:none">
-  <h2>二段階認証</h2>
-  <p style="font-size:13px;color:#666;margin-bottom:12px">認証アプリに表示されている6桁のコードを入力してください。</p>
-  <div class="msg err" id="totpErr"></div>
-  <div class="field">
-    <label for="totpInput">認証コード</label>
-    <input type="text" id="totpInput" placeholder="000000" autocomplete="one-time-code" inputmode="numeric" maxlength="8" style="font-size:24px;text-align:center;letter-spacing:6px">
-  </div>
-  <button class="btn btn-blue btn-full" id="totpBtn">認証</button>
-</div>
-
-<!-- ログイン: TOTPセットアップ -->
-<div class="card" id="totpSetupCard" style="display:none;max-width:480px;margin:40px auto 0">
-  <h2>二段階認証の設定</h2>
-  <p style="font-size:13px;color:#666;margin-bottom:16px">初回ログインのため、認証アプリ（Google Authenticator等）の設定が必要です。</p>
-  <div class="msg err" id="totpSetupErr"></div>
-  <div id="totpSetupStep1">
-    <p style="font-weight:bold;margin-bottom:8px">1. QRコードをスキャン</p>
-    <div style="text-align:center;margin-bottom:12px">
-      <img id="totpQrCode" src="" alt="QR Code" style="width:200px;height:200px">
-    </div>
-    <p style="font-size:12px;color:#888;margin-bottom:8px">手動入力用シークレット:</p>
-    <div style="background:#f5f5f5;padding:8px;border-radius:4px;font-family:monospace;font-size:14px;word-break:break-all;margin-bottom:16px" id="totpSecretDisplay"></div>
-    <p style="font-weight:bold;margin-bottom:8px">2. バックアップコード（必ず保存してください）</p>
-    <div style="background:#fff8e1;border:1px solid #ffe082;padding:12px;border-radius:4px;margin-bottom:12px">
-      <p style="font-size:12px;color:#e65100;margin-bottom:8px">認証アプリが使えなくなった場合に必要です。安全な場所に保管してください。</p>
-      <div id="backupCodesDisplay" style="font-family:monospace;font-size:14px;line-height:1.8;columns:2"></div>
-    </div>
-    <button class="btn btn-blue btn-full" id="totpSetupCopyCodes" style="margin-bottom:16px">バックアップコードをコピー</button>
-    <p style="font-weight:bold;margin-bottom:8px">3. アプリに表示されているコードを入力して確認</p>
-    <div class="field">
-      <input type="text" id="totpSetupCode" placeholder="000000" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="font-size:24px;text-align:center;letter-spacing:6px">
-    </div>
-    <button class="btn btn-blue btn-full" id="totpSetupConfirmBtn">設定を完了</button>
-  </div>
+<!-- ログイン: ステップ2（Face ID認証） -->
+<div class="card" id="webauthnCard" style="display:none">
+  <h2>Face ID / 指紋認証</h2>
+  <p style="font-size:13px;color:#666;margin-bottom:16px">本人確認のため、Face IDまたは指紋認証を行ってください。</p>
+  <div class="msg err" id="webauthnErr"></div>
+  <button class="btn btn-blue btn-full" id="webauthnBtn" style="font-size:16px;padding:14px">🔐 Face ID で認証</button>
 </div>
 
 <!-- メインコンテンツ -->
@@ -1017,6 +987,7 @@
 <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:600;z-index:200;white-space:nowrap"></div>
 
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/simplewebauthn-browser.umd.min.js"></script>
 <script>
   // ── カテゴリ折りたたみ ──────────────────────────────────────
   function toggleCard(h2) {
@@ -1132,9 +1103,9 @@
   let staffList = [];
   let deleteTarget = '', resetTarget = '';
 
-  // ── 管理者ログイン（個別アカウント + TOTP MFA） ─────────────
+  // ── 管理者ログイン（個別アカウント + Face ID） ─────────────
   function showLoginStep(step) {
-    ['loginCard', 'emergencyLoginCard', 'totpCard', 'totpSetupCard'].forEach(id => {
+    ['loginCard', 'emergencyLoginCard', 'webauthnCard'].forEach(id => {
       document.getElementById(id).style.display = 'none';
     });
     if (step) document.getElementById(step).style.display = 'block';
@@ -1146,7 +1117,7 @@
     loadStaff();
   }
 
-  // ログインステップ1: ID + パスワード
+  // ログインステップ1: ID + パスワード（8文字以上）
   async function adminLogin() {
     const staffId = document.getElementById('staffIdInput').value.trim();
     const pw = document.getElementById('pwInput').value;
@@ -1155,6 +1126,11 @@
 
     if (!staffId || !pw) {
       err.textContent = 'スタッフIDとパスワードを入力してください';
+      err.style.display = 'block';
+      return;
+    }
+    if (pw.length < 8) {
+      err.textContent = 'パスワードは8文字以上で入力してください';
       err.style.display = 'block';
       return;
     }
@@ -1169,14 +1145,21 @@
       err.style.display = 'block';
       return;
     }
-    if (data.requireTotpSetup) {
-      await startTotpSetup();
-    } else if (data.requireTotp) {
-      showLoginStep('totpCard');
-      document.getElementById('totpInput').value = '';
-      document.getElementById('totpInput').focus();
+    if (data.requireWebAuthn) {
+      // Face ID認証ステップへ
+      showLoginStep('webauthnCard');
+      // 自動的にFace IDを起動
+      setTimeout(() => startWebAuthn(), 300);
     } else {
       onLoginSuccess();
+      // Face ID未登録の場合、登録を促す
+      if (data.suggestWebAuthn && typeof SimpleWebAuthnBrowser !== 'undefined') {
+        setTimeout(() => {
+          if (confirm('セキュリティ向上のため、Face ID / 指紋認証を登録しませんか？\n次回からパスワード入力後にFace IDで本人確認できます。')) {
+            registerAdminWebAuthn();
+          }
+        }, 1000);
+      }
     }
   }
 
@@ -1194,57 +1177,56 @@
     else { err.textContent = data.error || 'ログイン失敗'; err.style.display = 'block'; }
   }
 
-  // ログインステップ2: TOTPコード検証
-  async function verifyTotp() {
-    const code = document.getElementById('totpInput').value.trim();
-    const err = document.getElementById('totpErr');
+  // ログインステップ2: WebAuthn（Face ID / 指紋認証）
+  async function startWebAuthn() {
+    const err = document.getElementById('webauthnErr');
     err.style.display = 'none';
-    if (!code) { err.textContent = '認証コードを入力してください'; err.style.display = 'block'; return; }
+    try {
+      // 認証オプション取得
+      const optRes = await fetch('/api/admin/webauthn/login-options', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      });
+      const options = await optRes.json();
+      if (options.error) { err.textContent = options.error; err.style.display = 'block'; return; }
 
-    const res = await apiFetch('/api/admin/login/totp', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (data.success) { onLoginSuccess(); }
-    else { err.textContent = data.error || '認証失敗'; err.style.display = 'block'; }
+      // Face ID / 指紋認証ダイアログ起動
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: options });
+
+      // サーバーで検証
+      const verRes = await fetch('/api/admin/webauthn/login-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authResp),
+      });
+      const result = await verRes.json();
+      if (result.success) { onLoginSuccess(); }
+      else { err.textContent = result.error || '認証に失敗しました'; err.style.display = 'block'; }
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        err.textContent = 'Face ID / 指紋認証がキャンセルされました。もう一度お試しください。';
+      } else {
+        err.textContent = 'Face ID認証でエラーが発生しました: ' + e.message;
+      }
+      err.style.display = 'block';
+    }
   }
 
-  // TOTPセットアップ
-  let _pendingBackupCodes = [];
-  async function startTotpSetup() {
-    showLoginStep('totpSetupCard');
-    const err = document.getElementById('totpSetupErr');
-    err.style.display = 'none';
-
-    const res = await apiFetch('/api/admin/totp/setup', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-    });
-    const data = await res.json();
-    if (!data.qrCodeUrl) { err.textContent = data.error || 'セットアップに失敗しました'; err.style.display = 'block'; return; }
-
-    document.getElementById('totpQrCode').src = data.qrCodeUrl;
-    document.getElementById('totpSecretDisplay').textContent = data.secret;
-    _pendingBackupCodes = data.backupCodes || [];
-    const codesEl = document.getElementById('backupCodesDisplay');
-    codesEl.innerHTML = _pendingBackupCodes.map(c => esc(c)).join('<br>');
-    document.getElementById('totpSetupCode').value = '';
-    document.getElementById('totpSetupCode').focus();
-  }
-
-  async function confirmTotpSetup() {
-    const code = document.getElementById('totpSetupCode').value.trim();
-    const err = document.getElementById('totpSetupErr');
-    err.style.display = 'none';
-    if (!code) { err.textContent = 'コードを入力してください'; err.style.display = 'block'; return; }
-
-    const res = await apiFetch('/api/admin/totp/setup/confirm', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (data.success) { onLoginSuccess(); }
-    else { err.textContent = data.error || '確認に失敗しました'; err.style.display = 'block'; }
+  // Face ID登録（ログイン後、スタッフ側の既存登録APIを使用）
+  async function registerAdminWebAuthn() {
+    try {
+      const optRes = await apiFetch('/api/webauthn/register-options', { method: 'POST' });
+      const options = await optRes.json();
+      if (options.error) { alert(options.error); return; }
+      const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+      const verRes = await apiFetch('/api/webauthn/register-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(regResp),
+      });
+      const result = await verRes.json();
+      if (result.success) alert('Face IDの登録が完了しました。次回から管理者ログイン時にFace ID認証が求められます。');
+      else alert(result.error || '登録に失敗しました');
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') alert('エラー: ' + e.message);
+    }
   }
 
   // 管理者ID表示
@@ -1265,16 +1247,7 @@
   document.getElementById('emergencyLoginBtn').addEventListener('click', emergencyLogin);
   document.getElementById('emergencyLoginLink').addEventListener('click', e => { e.preventDefault(); showLoginStep('emergencyLoginCard'); document.getElementById('emergencyPwInput').focus(); });
   document.getElementById('backToNormalLogin').addEventListener('click', e => { e.preventDefault(); showLoginStep('loginCard'); });
-  document.getElementById('totpInput').addEventListener('keydown', e => { if (e.key === 'Enter') verifyTotp(); });
-  document.getElementById('totpBtn').addEventListener('click', verifyTotp);
-  document.getElementById('totpSetupCode').addEventListener('keydown', e => { if (e.key === 'Enter') confirmTotpSetup(); });
-  document.getElementById('totpSetupConfirmBtn').addEventListener('click', confirmTotpSetup);
-  document.getElementById('totpSetupCopyCodes').addEventListener('click', () => {
-    navigator.clipboard.writeText(_pendingBackupCodes.join('\n')).then(() => {
-      document.getElementById('totpSetupCopyCodes').textContent = 'コピーしました';
-      setTimeout(() => { document.getElementById('totpSetupCopyCodes').textContent = 'バックアップコードをコピー'; }, 2000);
-    });
-  });
+  document.getElementById('webauthnBtn').addEventListener('click', startWebAuthn);
 
   async function adminLogout() {
     await apiFetch('/api/admin/logout', { method: 'POST' });
@@ -1326,7 +1299,7 @@
       : '';
     const adminBadge = s.is_admin ? '<span style="background:#e53935;color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px">管理者</span>' : '';
     const adminBtn = s.is_admin
-      ? `<button class="btn-xs btn-danger revoke-admin-btn" data-id="${esc(s.id)}" title="管理者権限剥奪">管理者解除</button>${s.totp_secret ? `<button class="btn-xs btn-reset reset-totp-btn" data-id="${esc(s.id)}" title="二段階認証リセット">MFAリセット</button>` : ''}`
+      ? `<button class="btn-xs btn-danger revoke-admin-btn" data-id="${esc(s.id)}" title="管理者権限剥奪">管理者解除</button>`
       : `<button class="btn-xs btn-green grant-admin-btn" data-id="${esc(s.id)}" title="管理者権限付与">管理者付与</button>`;
     const emailIcon = s.email ? `<span title="${esc(s.email)}" style="font-size:11px;cursor:help">✉️</span>` : `<span style="font-size:10px;color:#ccc" title="メール未登録">✉️</span>`;
     return `
@@ -3470,13 +3443,6 @@
       const res = await apiFetch(`/api/admin/staff/${id}/revoke-admin`, { method: 'POST' });
       const data = await res.json();
       if (data.success) { loadStaff(); } else { alert(data.error); }
-    }
-    if (e.target.closest('.reset-totp-btn')) {
-      const id = e.target.closest('.reset-totp-btn').dataset.id;
-      if (!confirm('このスタッフの二段階認証をリセットしますか？\n次回ログイン時に再設定が必要になります。')) return;
-      const res = await apiFetch(`/api/admin/totp/reset/${id}`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) { alert(data.message || 'リセットしました'); loadStaff(); } else { alert(data.error); }
     }
   });
 
