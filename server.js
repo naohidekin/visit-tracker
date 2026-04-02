@@ -89,7 +89,15 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  setHeaders(res, filePath) {
+    // HTMLファイルはキャッシュしない（常に最新を配信）
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 
 // ─── CSRF保護（double-submit cookie方式） ──────────────────────
 app.use((req, res, next) => {
