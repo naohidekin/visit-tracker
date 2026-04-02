@@ -980,6 +980,9 @@
       <button class="m-cancel" id="resetCancelBtn">キャンセル</button>
       <button style="flex:1;padding:11px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:#e8a020;color:#fff" id="resetConfirmBtn">リセットする</button>
     </div>
+    <div class="modal-btns" id="resetCloseBtns" style="display:none">
+      <button class="m-cancel" id="resetCloseBtn" style="flex:1">閉じる</button>
+    </div>
   </div>
 </div>
 
@@ -1546,6 +1549,7 @@
   }
   function closeResetModal() {
     document.getElementById('resetModal').classList.remove('show');
+    document.getElementById('resetCloseBtns').style.display = 'none';
     resetTarget = '';
   }
   async function confirmReset() {
@@ -1554,9 +1558,10 @@
     });
     const data = await res.json();
     if (data.success) {
-      document.getElementById('resetBtns').style.display   = 'none';
-      document.getElementById('resetResult').textContent   = `✅ リセット完了。初期PW：${data.initial_pw}`;
-      document.getElementById('resetResult').style.display = 'block';
+      document.getElementById('resetBtns').style.display      = 'none';
+      document.getElementById('resetCloseBtns').style.display = 'flex';
+      document.getElementById('resetResult').textContent      = `✅ リセット完了。初期PW：${data.initial_pw}`;
+      document.getElementById('resetResult').style.display    = 'block';
     } else {
       showToast('エラー: ' + (data.error || 'リセット失敗'));
       closeResetModal();
@@ -3475,6 +3480,7 @@
   // Reset modal
   document.getElementById('resetCancelBtn').addEventListener('click', closeResetModal);
   document.getElementById('resetConfirmBtn').addEventListener('click', confirmReset);
+  document.getElementById('resetCloseBtn').addEventListener('click', closeResetModal);
 
   // Leave tabs (event delegation)
   document.querySelectorAll('.leave-tab').forEach(function(tab) {
