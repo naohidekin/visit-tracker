@@ -3449,6 +3449,14 @@
   }
 
   async function toggleRainyDay(date, cb) {
+    // 楽観的更新: API呼び出し前に lastRainyDays を即座に更新
+    // （renderStandbyTable が途中で呼ばれても正しい状態を保つ）
+    const wasRainy = lastRainyDays.includes(date);
+    if (wasRainy) {
+      lastRainyDays.splice(lastRainyDays.indexOf(date), 1);
+    } else {
+      lastRainyDays.push(date);
+    }
     try {
       const res = await apiFetch('/api/admin/rainy/toggle', {
         method: 'POST',
@@ -3456,25 +3464,30 @@
         body: JSON.stringify({ date }),
       });
       if (!res.ok) {
-        if (cb) cb.checked = !cb.checked;
+        // 失敗時: lastRainyDays を元に戻す
+        if (wasRainy) { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
+        else { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
+        const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
+        if (freshCb) freshCb.checked = wasRainy;
         showToast('保存に失敗しました');
         return;
       }
       const data = await res.json();
-      // lastRainyDays を更新（CSV出力・集計用）
-      if (data.rainy) {
-        if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
-      } else {
-        const idx = lastRainyDays.indexOf(date);
-        if (idx >= 0) lastRainyDays.splice(idx, 1);
-      }
-      // チェックボックスの状態を API の結果に合わせる
-      if (cb) cb.checked = data.rainy;
+      // サーバー結果と同期
+      if (data.rainy && !lastRainyDays.includes(date)) lastRainyDays.push(date);
+      if (!data.rainy) { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
+      // DOM要素は再構築されている可能性があるため、常に最新の参照を取得
+      const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
+      if (freshCb) freshCb.checked = data.rainy;
       // 雨の日集計を更新
       const month = document.getElementById('standbyMonth').value;
       loadRainySummary(month);
     } catch (e) {
-      if (cb) cb.checked = !cb.checked;
+      // エラー時: lastRainyDays を元に戻す
+      if (wasRainy) { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
+      else { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
+      const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
+      if (freshCb) freshCb.checked = wasRainy;
       showToast('エラーが発生しました');
     }
   }
