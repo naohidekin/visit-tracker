@@ -322,10 +322,12 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
       }
       usedDays = Math.round(usedDays * 10) / 10;
       pendingDays = Math.round(pendingDays * 10) / 10;
-      const granted     = s.leave_granted || 0;
-      const carriedOver = s.leave_carried_over || 0;
-      const manualAdj   = s.leave_manual_adjustment || 0;
-      const balance     = Math.round((granted + carriedOver + manualAdj - usedDays) * 10) / 10;
+      const granted      = s.leave_granted || 0;
+      const carriedOver  = s.leave_carried_over || 0;
+      const manualAdj    = s.leave_manual_adjustment || 0;
+      const oncallLeave  = s.oncall_leave_granted || 0;
+      // calcLeaveBalance と同じ計算式を使用（oncall_leave_granted を含む）
+      const balance      = Math.round((granted + carriedOver + manualAdj + oncallLeave - usedDays) * 10) / 10;
       return {
         id: s.id,
         name: s.name,
@@ -335,6 +337,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         granted,
         carried_over: carriedOver,
         manual_adjustment: manualAdj,
+        oncall_leave: oncallLeave,
         used: usedDays,
         pending: pendingDays,
         balance,

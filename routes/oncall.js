@@ -94,7 +94,7 @@ router.post('/api/oncall/records', requireStaff, requireLeaveOncall, lockedRoute
   res.json({ ok: true });
 }));
 
-router.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, (req, res) => {
+router.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, async (req, res) => {
   const data = loadOncall();
   const idx = data.records.findIndex(r => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'レコードが見つかりません' });
@@ -103,6 +103,8 @@ router.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, 
   const removed = data.records[idx];
   data.records.splice(idx, 1);
   saveOncall(data);
+  // 削除後も代休日数を再計算（登録時と同じ処理）
+  await updateOncallLeave(req.session.staffId);
   auditLog(req, 'oncall.delete', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${removed.date}` });
   res.json({ ok: true });
 }));

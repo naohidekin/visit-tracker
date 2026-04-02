@@ -225,7 +225,7 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const threshold        = ilineAR * working_days;
       const over_units       = Math.max(0, total_units - threshold);
       const incentive_amount = Math.floor(over_units) * 500;
-      res.json({ type: 'rehab', year: y, month: m, days,
+      res.json({ type: staff.type === 'nurse' ? 'nurse' : 'rehab', staffType: staff.type, year: y, month: m, days,
         stats: { total_units, working_days,
                  incentive_line: ilineAR, incentive_triggered: avg > ilineAR,
                  over_units: Math.floor(over_units), incentive_amount,
@@ -289,7 +289,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
             total_iryo: Math.round(total_iryo * 10) / 10,
             over: Math.round(overHours * 10) / 10, amount
           });
-        } else if (staff.type === 'PT') {
+        } else if (staff.type !== 'office' && staff.col) {
+          // リハビリ職共通（PT/OT/ST）: 単一列構造
           const resp = await sheetsRetry(() => api.spreadsheets.values.get({
             spreadsheetId: sid,
             range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
@@ -309,7 +310,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           const amount = Math.floor(overUnits) * 500;
           total_amount += amount;
           results.push({
-            id: staff.id, name: staff.name, type: 'PT',
+            id: staff.id, name: staff.name, type: staff.type,
             work_hours: staff.work_hours ?? null,
             incentive_line: rawLine, effective_line: effectiveLine,
             working_days, threshold: Math.round(threshold * 100) / 100,
