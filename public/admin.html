@@ -3450,30 +3450,32 @@
 
   async function toggleRainyDay(date, cb) {
     try {
-      showToast('送信中: ' + date);
       const res = await apiFetch('/api/admin/rainy/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date }),
       });
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        showToast('失敗: ' + res.status + ' ' + errText.substring(0, 80));
         if (cb) cb.checked = !cb.checked;
+        showToast('保存に失敗しました');
         return;
       }
       const data = await res.json();
-      showToast('結果: rainy=' + data.rainy + ' date=' + date);
+      // lastRainyDays を更新（CSV出力・集計用）
       if (data.rainy) {
         if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
       } else {
         const idx = lastRainyDays.indexOf(date);
         if (idx >= 0) lastRainyDays.splice(idx, 1);
       }
-      renderStandbyTable();
+      // チェックボックスの状態を API の結果に合わせる
+      if (cb) cb.checked = data.rainy;
+      // 雨の日集計を更新
+      const month = document.getElementById('standbyMonth').value;
+      loadRainySummary(month);
     } catch (e) {
-      showToast('エラー: ' + e.message);
       if (cb) cb.checked = !cb.checked;
+      showToast('エラーが発生しました');
     }
   }
 
