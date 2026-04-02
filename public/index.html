@@ -360,9 +360,10 @@
 </div>
 
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/common.js"></script>
 <script src="/vendor/simplewebauthn-browser.umd.min.js"></script>
 <script>
-  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  initCommonUI();
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
 
@@ -863,34 +864,8 @@
   }
   checkAlertBanner();
 
-  function toggleMenu() {
-    const btn = document.getElementById('hamburgerBtn');
-    const overlay = document.getElementById('menuOverlay');
-    btn.classList.toggle('open');
-    overlay.classList.toggle('open');
-  }
-  function closeMenu() {
-    document.getElementById('hamburgerBtn').classList.remove('open');
-    document.getElementById('menuOverlay').classList.remove('open');
-  }
-
-  async function logout() {
-    await apiFetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
-  }
-
-  async function updateMenuBadge() {
-    try {
-      const r = await fetch('/api/notices/unread-count');
-      const { count } = await r.json();
-      const b = document.getElementById('menuBadge');
-      if (count > 0) { b.textContent = count; b.style.display = 'flex'; }
-      else b.style.display = 'none';
-    } catch {}
-  }
-
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  init().then(() => updateMenuBadge());
+  init();
 
   // ── FaceID 登録プロンプト ──
   async function checkFaceIdRegistration() {
@@ -948,10 +923,6 @@
   }
 
   // ── イベントリスナー登録 ──────────────────────────────────────
-  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
-  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
   document.getElementById('kaigoBtn').addEventListener('click', () => togglePicker('kaigo'));
   document.getElementById('iryoBtn').addEventListener('click', () => togglePicker('iryo'));
   document.getElementById('rehabBtn').addEventListener('click', () => togglePicker('rehab'));

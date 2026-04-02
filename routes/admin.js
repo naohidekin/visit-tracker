@@ -503,6 +503,8 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
   const allSeqs = data.staff.map(s => s.seq || 0);
   const nextSeq = allSeqs.length > 0 ? Math.max(...allSeqs) + 1 : 1;
 
+  const operations = []; // 実行レポート用
+
   try {
     const api = await getSheets();
 
@@ -511,6 +513,7 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
     const allSids   = [...new Set([SPREADSHEET_ID, ...Object.values(registry)])];
 
     let newEntry;
+    let sheetErrors = [];
     if (type === 'nurse') {
       // C(index 2) + 看護師人数 × 2列 = 新看護師の介護列
       const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
@@ -533,7 +536,6 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
 
-      const sheetErrors = [];
       for (const ssId of allSids) {
         try {
         const ssYear = yearBySsId[ssId] || new Date().getFullYear();
@@ -723,9 +725,11 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
                 values: [[`=${kaigoCol}${tRow}+${iryoCol}${tRow}`]] },
             ]}});
         }
+        operations.push({ action: 'spreadsheet_updated', spreadsheetId: ssId, year: ssYear, columns: { kaigo: kaigoCol, iryo: iryoCol }, sheets: vm });
         } catch (sheetErr) {
           console.error(`⚠️ スプレッドシート ${ssId} への列追加に失敗:`, sheetErr.message);
           sheetErrors.push(ssId);
+          operations.push({ action: 'spreadsheet_error', spreadsheetId: ssId, error: sheetErr.message });
         }
       }
       for (const s of data.staff)
@@ -739,6 +743,7 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
         oncall: oncall || '無',
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
+      operations.push({ action: 'staff_record_created', staffId: loginId, name, type: 'nurse', columns: { kaigo: kaigoCol, iryo: iryoCol } });
 
     } else if (type === 'office') {
       // 事務職 — スプレッドシートに列を追加しない（有給管理のみ）
@@ -749,6 +754,7 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
         hire_date: hire_date || null,
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
+      operations.push({ action: 'staff_record_created', staffId: loginId, name, type: 'office', columns: null, note: 'スプレッドシート列なし（事務職）' });
 
     } else {
       // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
@@ -763,9 +769,10 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
       const SOLID        = { style: 'SOLID',        color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
 
-      const sheetErrors = [];
+      const rehabYearBySsId = Object.fromEntries(Object.entries(registry).map(([y, id]) => [id, parseInt(y)]));
       for (const ssId of allSids) {
         try {
+        const ssYear = rehabYearBySsId[ssId] || new Date().getFullYear();
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
@@ -797,9 +804,11 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
             ];
           }) },
         });
+        operations.push({ action: 'spreadsheet_updated', spreadsheetId: ssId, year: ssYear, columns: { col: newCol }, sheets: vm });
         } catch (sheetErr) {
           console.error(`⚠️ スプレッドシート ${ssId} への列追加に失敗:`, sheetErr.message);
           sheetErrors.push(ssId);
+          operations.push({ action: 'spreadsheet_error', spreadsheetId: ssId, error: sheetErr.message });
         }
       }
       newEntry = { id: loginId, name,
@@ -809,12 +818,14 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
         hire_date: hire_date || null,
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
+      operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: { col: newCol } });
     }
 
     data.staff.push(newEntry);
     saveStaff(data);
+    operations.push({ action: 'staff_json_saved' });
     auditLog(req, 'staff.create', { type: 'staff', id: loginId, label: name }, { type, loginId });
-    const result = { success: true, staff: data.staff };
+    const result = { success: true, staff: data.staff, operations };
     if (sheetErrors.length > 0) {
       result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。管理者にお知らせください。`;
       console.error('⚠️ スタッフ追加: 一部スプレッドシート反映失敗:', sheetErrors);
@@ -1063,12 +1074,39 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
     if (!req.file) return res.status(400).json({ error: 'ファイルが必要です' });
     const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
     const results = [];
+    const warnings = [];
+
+    // Header name aliases for fuzzy column matching
+    const TIME_ALIASES = ['提供時間', '提供時間（分）', '提供時間(分)', 'サービス提供時間', 'サービス提供時間（分）', 'サービス提供時間(分)'];
+    const INSURANCE_ALIASES = ['保険適用', '保険種別', '保険区分', '適用保険'];
 
     // Load registered (non-archived) staff for filtering
     const staffData = JSON.parse(fs.readFileSync(STAFF_PATH, 'utf8'));
-    const registeredNames = staffData.staff
-      .filter(s => !s.archived)
-      .map(s => s.name.replace(/\s+/g, ''));
+    const activeStaff = staffData.staff.filter(s => !s.archived);
+    const registeredNames = activeStaff.map(s => s.name.replace(/\s+/g, ''));
+
+    // Normalize a name for fuzzy matching: remove all spaces/full-width spaces, full-width alphanumeric → half-width
+    function normalizeName(name) {
+      return String(name || '')
+        .replace(/[\s\u3000]+/g, '')
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c =>
+          String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .trim();
+    }
+
+    // Try to match a staff name: exact first, then fuzzy
+    function matchStaffName(rawName) {
+      const normalized = normalizeName(rawName);
+      if (registeredNames.includes(normalized)) {
+        return { matched: true, name: rawName, fuzzy: false };
+      }
+      for (const s of activeStaff) {
+        if (normalizeName(s.name) === normalized) {
+          return { matched: true, name: s.name, fuzzy: true, original: rawName };
+        }
+      }
+      return { matched: false, name: rawName, fuzzy: false };
+    }
 
     for (const sheetName of wb.SheetNames) {
       const ws = wb.Sheets[sheetName];
@@ -1091,23 +1129,55 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
 
       const staffName = nameQual.replace(/[（(](看護師|PT|OT|ST)[）)]/, '').trim();
 
-      // Only include registered (full-time) staff
-      const normalized = staffName.replace(/\s+/g, '');
-      if (!registeredNames.includes(normalized)) continue;
+      // Staff name matching with fuzzy fallback
+      const nameMatch = matchStaffName(staffName);
+      if (!nameMatch.matched) {
+        warnings.push(`シート「${sheetName}」: スタッフ「${staffName}」が登録スタッフに見つかりません（スキップ）`);
+        continue;
+      }
+      if (nameMatch.fuzzy) {
+        warnings.push(`シート「${sheetName}」: スタッフ名「${nameMatch.original}」→「${nameMatch.name}」にファジーマッチしました`);
+      }
+      const resolvedName = nameMatch.name;
       const qualification = qualMatch[1];
       const isNurse = qualification === '看護師';
 
       // Header row at index 5, data starts at index 6
       const headerRow = rows[5];
       if (!headerRow) continue;
-      // Find column indices
+      // Find column indices with alias support
       let colTime = -1, colInsurance = -1;
+      let colTimeAlias = null, colInsuranceAlias = null;
       for (let c = 0; c < headerRow.length; c++) {
-        const h = String(headerRow[c] || '');
-        if (h === '提供時間' && colTime < 0) colTime = c;
-        if (h === '保険適用') colInsurance = c;
+        const h = String(headerRow[c] || '').trim();
+        if (colTime < 0) {
+          const timeIdx = TIME_ALIASES.indexOf(h);
+          if (timeIdx >= 0) {
+            colTime = c;
+            if (timeIdx > 0) colTimeAlias = h;
+          }
+        }
+        if (colInsurance < 0) {
+          const insIdx = INSURANCE_ALIASES.indexOf(h);
+          if (insIdx >= 0) {
+            colInsurance = c;
+            if (insIdx > 0) colInsuranceAlias = h;
+          }
+        }
       }
-      if (colTime < 0 || colInsurance < 0) continue;
+      if (colTimeAlias) {
+        warnings.push(`シート「${sheetName}」: ヘッダー「${colTimeAlias}」を「提供時間」として認識しました`);
+      }
+      if (colInsuranceAlias) {
+        warnings.push(`シート「${sheetName}」: ヘッダー「${colInsuranceAlias}」を「保険適用」として認識しました`);
+      }
+      if (colTime < 0 || colInsurance < 0) {
+        const missing = [];
+        if (colTime < 0) missing.push('提供時間');
+        if (colInsurance < 0) missing.push('保険適用');
+        warnings.push(`シート「${sheetName}」: 必要なヘッダー列（${missing.join(', ')}）が見つかりません（スキップ）`);
+        continue;
+      }
 
       let totalMinutes = 0;      // for nurses
       let totalUnits = 0;        // for rehab
@@ -1121,7 +1191,13 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
         const firstCell = String(row[0] || '');
         if (firstCell === '合計' || firstCell === '小計') continue;
         const rawMin = parseInt(row[colTime], 10);
-        if (isNaN(rawMin) || rawMin <= 0) continue;
+        if (isNaN(rawMin) || rawMin <= 0) {
+          const cellVal = row[colTime];
+          if (cellVal !== null && cellVal !== undefined && String(cellVal).trim() !== '') {
+            warnings.push(`シート「${sheetName}」行${r + 1}: 提供時間「${String(cellVal).slice(0, 20)}」を数値として解析できません（スキップ）`);
+          }
+          continue;
+        }
         const insurance = String(row[colInsurance] || '');
         visitCount++;
 
@@ -1148,7 +1224,7 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
 
       const entry = {
         sheetName,
-        staffName,
+        staffName: resolvedName,
         qualification,
         isNurse,
         visitCount,
@@ -1181,7 +1257,7 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
     };
     saveExcelResults(allResults);
 
-    res.json({ success: true, results, savedYearMonth: ym });
+    res.json({ success: true, results, savedYearMonth: ym, warnings });
   } catch (e) {
     console.error('Excel analyze error:', e);
     res.status(500).json({ error: 'Excel解析に失敗しました。ファイル形式を確認してください' });

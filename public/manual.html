@@ -214,24 +214,9 @@
   </div>
   <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/common.js"></script>
 <script>
-  function toggleMenu() {
-    document.getElementById('hamburgerBtn').classList.toggle('open');
-    document.getElementById('menuOverlay').classList.toggle('open');
-  }
-  function closeMenu() {
-    document.getElementById('hamburgerBtn').classList.remove('open');
-    document.getElementById('menuOverlay').classList.remove('open');
-  }
-  async function logout() {
-    await apiFetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
-  }
-  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
-  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
-  (async()=>{try{const r=await fetch('/api/notices/unread-count');const{count}=await r.json();const b=document.getElementById('menuBadge');if(count>0){b.textContent=count;b.style.display='flex';}}catch{}})();
+  initCommonUI();
   (async()=>{try{const r=await fetch('/api/me');if(!r.ok){location.href='/login';return;}const d=await r.json();const el=document.getElementById('headerUserName');if(el)el.textContent=`👤 ${d.name}（${d.type==='nurse'?'看護師':d.type}）`;if(d.leave_oncall_enabled){const drawer=document.getElementById('menuDrawer');const historyLink=drawer.querySelector('a[href="/history"]');if(historyLink){const leaveLink=document.createElement('a');leaveLink.href='/leave';leaveLink.textContent='有給管理';historyLink.after(leaveLink);if(d.oncall_eligible){const oncallLink=document.createElement('a');oncallLink.href='/oncall';oncallLink.textContent='オンコール';leaveLink.after(oncallLink);}}}  }catch{}})();
 </script>
 </div><!-- /page-wrapper -->

@@ -213,8 +213,9 @@
 <div class="toast" id="toast"></div>
 
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/common.js"></script>
 <script>
-  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  initCommonUI();
   const WD = ['日','月','火','水','木','金','土'];
   let allRecords = [];
 
@@ -273,7 +274,7 @@
     document.getElementById('formCard').style.display = '';
     document.getElementById('historyCard').style.display = '';
 
-    await Promise.all([loadData(), updateMenuBadge()]);
+    await loadData();
   }
 
   async function loadData() {
@@ -445,41 +446,7 @@
     document.getElementById('gaugeNext').textContent = `あと ${remaining}hで+1日`;
   }
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
-  }
-
-  async function updateMenuBadge() {
-    try {
-      const res = await fetch('/api/notices/unread-count');
-      const { count } = await res.json();
-      const badge = document.getElementById('menuBadge');
-      if (count > 0) { badge.textContent = count; badge.style.display = 'flex'; }
-      else { badge.style.display = 'none'; }
-    } catch {}
-  }
-
-  function toggleMenu() {
-    document.getElementById('hamburgerBtn').classList.toggle('open');
-    document.getElementById('menuOverlay').classList.toggle('open');
-  }
-  function closeMenu() {
-    document.getElementById('hamburgerBtn').classList.remove('open');
-    document.getElementById('menuOverlay').classList.remove('open');
-  }
-  async function logout() {
-    await apiFetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
-  }
-
   // イベントリスナー
-  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
-  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
   document.getElementById('monthSelect').addEventListener('change', loadData);
   document.getElementById('inputDate').addEventListener('change', onDateChange);
   document.getElementById('timeBtn').addEventListener('click', () => togglePicker('time'));

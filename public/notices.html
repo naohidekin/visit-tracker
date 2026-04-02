@@ -101,7 +101,10 @@
 </div>
 
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/common.js"></script>
 <script>
+  initCommonUI();
+
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
     if (!me.id) { location.href = '/login'; return; }
@@ -127,7 +130,6 @@
     }
 
     await loadNotices();
-    await updateMenuBadge();
   }
 
   async function loadNotices() {
@@ -181,22 +183,8 @@
       const dot = el.querySelector('.unread-dot');
       if (dot) { dot.className = 'read-dot'; }
       el.dataset.read = 'true';
-      await updateMenuBadge();
+      await updateUnreadBadge();
     }
-  }
-
-  async function updateMenuBadge() {
-    try {
-      const res = await fetch('/api/notices/unread-count');
-      const { count } = await res.json();
-      const badge = document.getElementById('menuBadge');
-      if (count > 0) {
-        badge.textContent = count;
-        badge.style.display = 'flex';
-      } else {
-        badge.style.display = 'none';
-      }
-    } catch {}
   }
 
   function formatDate(dateStr) {
@@ -204,29 +192,6 @@
     const d = new Date(dateStr);
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
-
-  function esc(s) {
-    const d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-  }
-
-  function toggleMenu() {
-    document.getElementById('hamburgerBtn').classList.toggle('open');
-    document.getElementById('menuOverlay').classList.toggle('open');
-  }
-  function closeMenu() {
-    document.getElementById('hamburgerBtn').classList.remove('open');
-    document.getElementById('menuOverlay').classList.remove('open');
-  }
-  async function logout() {
-    await apiFetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
-  }
-  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
-  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
 
   init();
 </script>

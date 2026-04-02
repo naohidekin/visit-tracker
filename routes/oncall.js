@@ -144,7 +144,7 @@ router.get('/api/admin/oncall/summary', requireAdmin, (req, res) => {
   const staffData = loadStaff();
   const oncallData = loadOncall();
   const summary = staffData.staff
-    .filter(s => !s.archived)
+    .filter(s => !s.archived && s.oncall_eligible)
     .map(s => {
       const records = oncallData.records.filter(r => r.staffId === s.id && r.date.startsWith(month));
       return {

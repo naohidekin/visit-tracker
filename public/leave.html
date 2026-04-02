@@ -220,6 +220,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/common.js"></script>
 <script>
   let selectedType = 'full';
   let currentBalance = 0;
@@ -266,7 +267,7 @@
     document.getElementById('startDate').value = tomorrowStr;
 
     document.getElementById('spinner').style.display = 'none';
-    await Promise.all([loadBalance(), loadRequests(), updateMenuBadge()]);
+    await Promise.all([loadBalance(), loadRequests()]);
     document.getElementById('balanceCard').style.display = '';
     document.getElementById('infoCard').style.display = '';
     document.getElementById('formCard').style.display = '';
@@ -471,47 +472,7 @@
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
-  function esc(s) {
-    const d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-  }
-
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
-  }
-
-  async function updateMenuBadge() {
-    try {
-      const res = await fetch('/api/notices/unread-count');
-      const { count } = await res.json();
-      const badge = document.getElementById('menuBadge');
-      if (count > 0) { badge.textContent = count; badge.style.display = 'flex'; }
-      else { badge.style.display = 'none'; }
-    } catch {}
-  }
-
-  function toggleMenu() {
-    document.getElementById('hamburgerBtn').classList.toggle('open');
-    document.getElementById('menuOverlay').classList.toggle('open');
-  }
-  function closeMenu() {
-    document.getElementById('hamburgerBtn').classList.remove('open');
-    document.getElementById('menuOverlay').classList.remove('open');
-  }
-  async function logout() {
-    await apiFetch('/api/logout', { method: 'POST' });
-    location.href = '/login';
-  }
-
-  // ── イベントリスナー登録 ──────────────────────────────────
-  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
-  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
-  document.getElementById('menuDrawer').addEventListener('click', function(e) { e.stopPropagation(); });
-  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
+  initCommonUI();
 
   // 種別ボタン（event delegation on parent .type-selector）
   document.querySelector('.type-selector').addEventListener('click', function(e) {

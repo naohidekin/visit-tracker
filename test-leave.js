@@ -2,101 +2,21 @@
  * 有給休暇計算ロジックのユニットテスト
  * 実行: node test-leave.js
  *
- * server.js 内の純粋関数をコピーしてテスト。
- * server.js を変更したらこちらも同期すること。
+ * lib/ モジュールから直接インポートしてテスト。
  */
 'use strict';
 const assert = require('assert');
 
-// ── server.js からコピーした関数群 ──────────────────────────────
-
-const LEAVE_GRANT_TABLE = [
-  { months: 6,  days: 10 },
-  { months: 18, days: 12 },
-  { months: 30, days: 14 },
-  { months: 42, days: 16 },
-  { months: 54, days: 18 },
-  { months: 66, days: 20 },
-];
-
-function addMonthsToDate(base, months) {
-  const d = new Date(base);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-
-function hasReachedGrantDate(hire, now, months) {
-  const grantDate = addMonthsToDate(hire, months);
-  return now >= grantDate;
-}
-
-function toDateStr(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// テスト用に「今日」を注入可能にしたバージョン
-function calcLeaveGrantDays(hireDate, todayStr) {
-  if (!hireDate) return 0;
-  const hire = new Date(hireDate);
-  const now  = new Date(todayStr);
-  let granted = 0;
-  for (const t of LEAVE_GRANT_TABLE) {
-    if (hasReachedGrantDate(hire, now, t.months)) granted = t.days;
-  }
-  return granted;
-}
-
-function calcNextGrant(hireDate, todayStr) {
-  if (!hireDate) return null;
-  const hire = new Date(hireDate);
-  const now  = new Date(todayStr);
-
-  const celebrationExpiry = addMonthsToDate(hire, 6);
-  const celebrationActive = now < celebrationExpiry;
-
-  for (const t of LEAVE_GRANT_TABLE) {
-    if (!hasReachedGrantDate(hire, now, t.months)) {
-      const nextDate = addMonthsToDate(hire, t.months);
-      const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
-      return {
-        next_grant_date: toDateStr(nextDate),
-        next_grant_days: t.days,
-        days_until_next: daysUntil,
-        celebration_expiry: toDateStr(celebrationExpiry),
-        celebration_active: celebrationActive,
-        celebration_days_left: celebrationActive ? Math.ceil((celebrationExpiry - now) / (24 * 60 * 60 * 1000)) : 0,
-      };
-    }
-  }
-  const lastEntry = LEAVE_GRANT_TABLE[LEAVE_GRANT_TABLE.length - 1];
-  let nextMonths = lastEntry.months + 12;
-  while (hasReachedGrantDate(hire, now, nextMonths)) {
-    nextMonths += 12;
-  }
-  const nextDate = addMonthsToDate(hire, nextMonths);
-  const daysUntil = Math.ceil((nextDate - now) / (24 * 60 * 60 * 1000));
-  return {
-    next_grant_date: toDateStr(nextDate),
-    next_grant_days: lastEntry.days,
-    days_until_next: daysUntil,
-    celebration_expiry: toDateStr(celebrationExpiry),
-    celebration_active: false,
-    celebration_days_left: 0,
-  };
-}
-
-function calcLeaveBalance(staff, approvedRequests) {
-  let usedDays = 0;
-  for (const r of approvedRequests) {
-    const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-    usedDays += r.dates.length * perDate;
-  }
-  const granted = staff.leave_granted || 0;
-  const carriedOver = staff.leave_carried_over || 0;
-  const manualAdj = staff.leave_manual_adjustment || 0;
-  const oncallLeave = staff.oncall_leave_granted || 0;
-  return granted + carriedOver + manualAdj + oncallLeave - usedDays;
-}
+// ── lib/ モジュールからインポート ──────────────────────────────────
+const {
+  addMonthsToDate,
+  hasReachedGrantDate,
+  calcLeaveGrantDays,
+  calcNextGrant,
+  calcLeaveBalance,
+} = require('./lib/leave-calc');
+const { toDateStr } = require('./lib/helpers');
+const { LEAVE_GRANT_TABLE } = require('./lib/constants');
 
 // ── テストケース ────────────────────────────────────────────────
 
