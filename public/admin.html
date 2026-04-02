@@ -3450,6 +3450,7 @@
 
   async function toggleRainyDay(date, cb) {
     try {
+      showToast('送信中: ' + date);
       const res = await apiFetch('/api/admin/rainy/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3457,11 +3458,12 @@
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        showToast('雨の日更新失敗: ' + res.status + ' ' + errText.substring(0, 50));
+        showToast('失敗: ' + res.status + ' ' + errText.substring(0, 80));
         if (cb) cb.checked = !cb.checked;
         return;
       }
       const data = await res.json();
+      showToast('結果: rainy=' + data.rainy + ' date=' + date);
       if (data.rainy) {
         if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
       } else {
@@ -3470,7 +3472,7 @@
       }
       renderStandbyTable();
     } catch (e) {
-      showToast('雨の日エラー: ' + e.message);
+      showToast('エラー: ' + e.message);
       if (cb) cb.checked = !cb.checked;
     }
   }
