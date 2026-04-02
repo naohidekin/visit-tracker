@@ -18,7 +18,7 @@ const { loadNotices, saveNotices, loadAttendance, saveAttendance } = require('./
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
 const { ensureDataDir } = require('./lib/data');
-const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields } = require('./lib/startup');
+const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, publishReleaseNotes } = require('./lib/startup');
 const { createSpreadsheetForYear } = require('./lib/sheets');
 const { getAllStaffRecordStatus } = require('./lib/sheets');
 
@@ -211,6 +211,7 @@ async function main() {
   cleanExpiredTokens();
   await syncNewStaffFromSource();
   syncLeaveFieldsFromSource();
+  publishReleaseNotes();
 
   // 毎年12/31 23:00に翌年スプレッドシートを自動作成
   cron.schedule('0 23 31 12 *', async () => {
