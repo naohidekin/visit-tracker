@@ -4,11 +4,11 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadLeave, loadStandby } = require('../lib/data');
+const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, lockedRoute, isValidDate } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { getSheets, sheetsRetry, getSpreadsheetIdForYear } = require('../lib/sheets');
+const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD, ALL_HOLIDAYS } = require('../lib/constants');
 
 // ヘルパー: JST今日の日付

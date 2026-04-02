@@ -4,9 +4,9 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, saveStaff, loadOncall, saveOncall, withFileLock } = require('../lib/data');
+const { loadStaff, saveStaff, loadOncall, saveOncall } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, validateNum } = require('../lib/helpers');
+const { lockedRoute, validateNum, withFileLock } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { STAFF_PATH, ONCALL_PATH } = require('../lib/constants');
 
