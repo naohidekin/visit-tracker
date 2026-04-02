@@ -3455,7 +3455,12 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date }),
       });
-      if (!res.ok) { showToast('雨の日の更新に失敗しました'); if (cb) cb.checked = !cb.checked; return; }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        showToast('雨の日更新失敗: ' + res.status + ' ' + errText.substring(0, 50));
+        if (cb) cb.checked = !cb.checked;
+        return;
+      }
       const data = await res.json();
       if (data.rainy) {
         if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
@@ -3465,7 +3470,7 @@
       }
       renderStandbyTable();
     } catch (e) {
-      showToast('雨の日の更新に失敗しました');
+      showToast('雨の日エラー: ' + e.message);
       if (cb) cb.checked = !cb.checked;
     }
   }
