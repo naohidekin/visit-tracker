@@ -3449,13 +3449,14 @@
   }
 
   async function toggleRainyDay(date, cb) {
-    // 楽観的更新: API呼び出し前に lastRainyDays を即座に更新
-    // （renderStandbyTable が途中で呼ばれても正しい状態を保つ）
-    const wasRainy = lastRainyDays.includes(date);
-    if (wasRainy) {
-      lastRainyDays.splice(lastRainyDays.indexOf(date), 1);
+    // ブラウザが既にチェック状態を変更済み → DOMは触らない
+    // lastRainyDays を即座に更新（renderStandbyTable 対策）
+    const nowChecked = cb ? cb.checked : !lastRainyDays.includes(date);
+    if (nowChecked) {
+      if (!lastRainyDays.includes(date)) lastRainyDays.push(date);
     } else {
-      lastRainyDays.push(date);
+      const i = lastRainyDays.indexOf(date);
+      if (i >= 0) lastRainyDays.splice(i, 1);
     }
     try {
       const res = await apiFetch('/api/admin/rainy/toggle', {
@@ -3464,30 +3465,20 @@
         body: JSON.stringify({ date }),
       });
       if (!res.ok) {
-        // 失敗時: lastRainyDays を元に戻す
-        if (wasRainy) { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
-        else { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
-        const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
-        if (freshCb) freshCb.checked = wasRainy;
+        // 失敗時: チェック状態とlastRainyDaysを元に戻す
+        if (nowChecked) { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
+        else { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
+        const f = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
+        if (f) f.checked = !nowChecked;
         showToast('保存に失敗しました');
-        return;
       }
-      const data = await res.json();
-      // サーバー結果と同期
-      if (data.rainy && !lastRainyDays.includes(date)) lastRainyDays.push(date);
-      if (!data.rainy) { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
-      // DOM要素は再構築されている可能性があるため、常に最新の参照を取得
-      const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
-      if (freshCb) freshCb.checked = data.rainy;
-      // 雨の日集計を更新
-      const month = document.getElementById('standbyMonth').value;
-      loadRainySummary(month);
+      // 成功時: ブラウザのチェック状態をそのまま維持（DOMを触らない）
     } catch (e) {
-      // エラー時: lastRainyDays を元に戻す
-      if (wasRainy) { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
-      else { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
-      const freshCb = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
-      if (freshCb) freshCb.checked = wasRainy;
+      // エラー時: 元に戻す
+      if (nowChecked) { const i = lastRainyDays.indexOf(date); if (i >= 0) lastRainyDays.splice(i, 1); }
+      else { if (!lastRainyDays.includes(date)) lastRainyDays.push(date); }
+      const f = document.querySelector('[data-action="rainy-toggle"][data-date="' + date + '"]');
+      if (f) f.checked = !nowChecked;
       showToast('エラーが発生しました');
     }
   }
