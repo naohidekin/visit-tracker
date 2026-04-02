@@ -1,5 +1,6 @@
-// TODO: CSRF保護の追加（csurfミドルウェア等）
-// TODO: スケール時はJSONファイルI/OをSQLiteに移行（同時アクセス競合対策）
+// CSRF保護: double-submit cookie 方式で実装済み（setCsrfCookie / verifyCsrf）
+// データ整合性: write-file-atomic + withFileLock / lockedRoute で排他制御済み
+// TODO: スケール時はJSONファイルI/OをSQLiteに移行（複数インスタンス対応）
 require('dotenv').config();
 const express    = require('express');
 const { google } = require('googleapis');

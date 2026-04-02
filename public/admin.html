@@ -1437,7 +1437,7 @@
         const createdAt = new Date(s.createdAt).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${s.staffName}</strong></td>
+          <td><strong>${esc(s.staffName)}</strong></td>
           <td style="white-space:nowrap">${fmtDateJP(s.date)}</td>
           <td>${staffTypeBadge(s.jobType)}</td>
           <td style="font-size:12px">${valText}</td>
@@ -2149,7 +2149,7 @@
             </select>
             <button class="btn-save" data-action="save-workhours" data-id="${esc(s.id)}">保存</button>
           </div>
-          <div id="eff_${s.id}" style="font-size:11px;padding:2px 0 0 0;${isDiff ? 'color:#cf222e;font-weight:600' : 'color:#1a7f37'}">実効ライン: ${effLine} ${unitLabel}</div>
+          <div id="eff_${esc(s.id)}" style="font-size:11px;padding:2px 0 0 0;${isDiff ? 'color:#cf222e;font-weight:600' : 'color:#1a7f37'}">実効ライン: ${effLine} ${unitLabel}</div>
         </div>`;
       container.appendChild(row);
     }

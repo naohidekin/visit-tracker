@@ -132,8 +132,20 @@ visit-tracker/
 - 日付フォーマット: `YYYY-MM-DD`（内部）、`M月D日` or `YYYY年M月`（UI表示）
 - テスト: `npm test` が通ることを確認してからコミット
 
+## 実装済みセキュリティ対策
+
+- **CSRF対策**: double-submit cookie 方式（setCsrfCookie / verifyCsrf）+ フロント側 apiFetch ラッパー
+- **XSS対策**: インラインイベントハンドラ全廃 → addEventListener / イベント委譲。innerHTML内ユーザーデータは esc() でエスケープ
+- **セキュリティヘッダー**: helmet（CSP, X-Frame-Options, X-Content-Type-Options 等）
+- **データ書き込み保護**: write-file-atomic による原子的書き込み + withFileLock / lockedRoute による排他制御
+- **ブルートフォース対策**: ログインAPI に IP単位の試行回数制限
+- **セッション管理**: スタッフアーカイブ時に既存セッションを即時無効化
+- **外部依存排除**: Chart.js / WebAuthn 等を vendor/ にローカル配信
+- **機密データ分離**: staff.json 等のデータファイルを .gitignore で管理外に。本番は DATA_DIR=/data で分離
+- **再発防止**: `npm run security-check` で禁止パターン（inline handler, 外部CDN, eval等）を自動検出
+
 ## 既知の課題・TODO
 
-- CSRF対策が未実装
-- JSONファイルの同時書き込み対策（将来的にSQLite移行を検討）
+- 管理者認証が共有パスワード方式（個別アカウント化・MFA導入を検討）
+- JSONファイルベースの設計（複数インスタンス運用時はSQLite移行が必要）
 - Sheets APIのレート制限対応
