@@ -18,7 +18,7 @@ const { loadNotices, saveNotices, loadAttendance, saveAttendance } = require('./
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
 const { ensureDataDir } = require('./lib/data');
-const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, publishReleaseNotes } = require('./lib/startup');
+const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, ensureAdminFields, ensureFirstAdmin, publishReleaseNotes } = require('./lib/startup');
 const { createSpreadsheetForYear } = require('./lib/sheets');
 const { getAllStaffRecordStatus } = require('./lib/sheets');
 
@@ -104,7 +104,8 @@ app.use((req, res, next) => {
   next();
 });
 const CSRF_EXEMPT = new Set([
-  '/api/login', '/api/admin/login',
+  '/api/login', '/api/admin/login', '/api/admin/login/totp',
+  '/api/admin/totp/setup', '/api/admin/totp/setup/confirm',
   '/api/forgot-password', '/api/reset-password',
   '/api/webauthn/login-options', '/api/webauthn/login-verify',
   '/api/webauthn/register-options',
@@ -207,6 +208,8 @@ async function main() {
   await ensureDataDir();
   await ensurePasswordsHashed();
   ensureLeaveFields();
+  ensureAdminFields();
+  ensureFirstAdmin();
   initMail();
   cleanExpiredTokens();
   await syncNewStaffFromSource();
