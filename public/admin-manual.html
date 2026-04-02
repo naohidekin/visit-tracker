@@ -62,7 +62,7 @@
   </div>
   <div class="header-btns">
     <a href="/admin" class="header-btn">← 管理画面</a>
-    <button class="header-btn" onclick="adminLogout()">ログアウト</button>
+    <button class="header-btn" id="adminLogoutBtn">ログアウト</button>
   </div>
 </header>
 
@@ -70,7 +70,7 @@
 
   <!-- ログイン・ログアウト -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>🔐 ログイン・ログアウト</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -97,7 +97,7 @@
 
   <!-- スタッフ管理 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>👥 スタッフ管理</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -171,7 +171,7 @@
 
   <!-- お知らせ管理 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📢 お知らせ管理</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -205,7 +205,7 @@
 
   <!-- 未確定の予定管理 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📋 未確定の予定管理</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -228,7 +228,7 @@
 
   <!-- スタッフ月次実績 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📊 スタッフ月次実績</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -265,7 +265,7 @@
 
   <!-- iBow Excel集計 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📈 iBow Excel集計</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -316,7 +316,7 @@
 
   <!-- 有給休暇管理 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>🏖️ 有給休暇管理</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -380,7 +380,7 @@
 
   <!-- オンコール管理 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📞 オンコール管理</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -412,7 +412,7 @@
 
   <!-- インセンティブ設定 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>💰 インセンティブ設定</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -445,7 +445,7 @@
 
   <!-- スタッフ追加 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>➕ スタッフ追加</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -496,7 +496,7 @@
 
   <!-- 翌年スプレッドシート作成 -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>📅 翌年スプレッドシート作成</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -533,7 +533,7 @@
 
   <!-- トラブルシューティング・FAQ -->
   <div class="card">
-    <div class="card-header" onclick="toggleAccordion(this)">
+    <div class="card-header">
       <h2>🔧 トラブルシューティング・FAQ</h2>
       <span class="acc-icon">▼</span>
     </div>
@@ -595,6 +595,7 @@
 
 <div class="copyright">&copy; 2026 株式会社Yuw connect All rights reserved.</div>
 
+<script src="/vendor/api-fetch.js"></script>
 <script>
 // セッションチェック
 (async function checkSession(){
@@ -626,10 +627,17 @@ function toggleAccordion(headerEl){
 }
 
 // ログアウト
-function adminLogout(){
-  document.cookie = 'admin_session=; Max-Age=0; path=/';
+async function adminLogout(){
+  await apiFetch('/api/logout', { method: 'POST' });
   location.href = '/admin';
 }
+
+// イベントリスナー
+document.getElementById('adminLogoutBtn').addEventListener('click', adminLogout);
+document.addEventListener('click', e => {
+  const header = e.target.closest('.card-header');
+  if (header) toggleAccordion(header);
+});
 </script>
 </body>
 </html>

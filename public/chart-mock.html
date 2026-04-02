@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>月次グラフ モック | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <script src="/vendor/chart.umd.js"></script>
+  <script src="/vendor/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue:#2E75B6;--blue-dark:#1F497D;
+      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --kaigo:#1e40af;--kaigo-bg:#dbeafe;--iryo:#9a3412;--iryo-bg:#fef3c7;
+      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)
+    }
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:8px}
+    .header-brand{display:flex;align-items:stretch;gap:10px}
+    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.5);flex-shrink:0}
+    .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
+    .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
+    .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+    .header-user-name{font-size:11px;font-weight:600;opacity:.85;margin-top:1px}
+    .page-wrapper{width:100%;min-height:100vh}
+    @media(min-width:480px){
+      body{background:#c8d8e8;display:flex;justify-content:center;align-items:flex-start}
+      .page-wrapper{max-width:390px;background:var(--bg);box-shadow:0 0 48px rgba(0,0,0,.18);min-height:100vh}
+    }
+    .container{padding:16px;max-width:480px;margin:0 auto}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
+    .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:12px}
+    .section-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+    .tab-switch{display:flex;gap:4px;margin-bottom:16px;background:var(--bg);border-radius:8px;padding:3px}
+    .tab-btn{flex:1;padding:8px 0;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:var(--muted);font-family:inherit;transition:all .2s}
+    .tab-btn.active{background:var(--white);color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+    .chart-container{position:relative;width:100%;height:220px}
+    /* 統合実績カード */
+    .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:14px}
+    .result-goal-line{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:16px}
+    .result-big-total{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:6px}
+    .result-big-label{font-size:13px;font-weight:600;color:var(--muted)}
+    .result-card.incentive .result-big-label{color:#A32D2D}
+    .result-big-num{font-size:36px;font-weight:800;color:var(--text)}
+    .result-card.incentive .result-big-num{color:#E24B4A}
+    .result-incentive-msg{font-size:15px;font-weight:700;color:#E24B4A;text-align:center;margin-bottom:4px}
+    .result-sub-grid{display:grid;gap:8px;margin-top:14px}
+    .result-sub-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .result-sub-box{background:#fff;border-radius:10px;padding:10px 8px;text-align:center}
+    .result-sub-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .result-sub-val{font-size:18px;font-weight:800;color:var(--text)}
+    .result-sub-unit{font-size:12px;color:var(--muted);margin-left:2px}
+    .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+<header>
+  <div class="header-brand">
+    <div class="header-accent"></div>
+    <div class="header-brand-text">
+      <span class="header-app-name">にこっと Web App</span>
+      <span class="header-page-name">月次実績</span>
+      <span class="header-user-name">👤 生方雪絵（看護師）</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- 月選択（モック） -->
+  <div class="card">
+    <div class="card-title">📅 月を選択</div>
+    <select style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;font-family:inherit;color:var(--text);background:var(--white)" disabled>
+      <option>2026年3月（当月）</option>
+    </select>
+  </div>
+
+  <!-- 統合実績カード -->
+  <div class="result-card incentive">
+    <p class="result-goal-line">インセンティブ目安：70.0時間</p>
+    <p class="result-incentive-msg">インセンティブが発生しています💰</p>
+    <div class="result-big-total">
+      <span class="result-big-label">合計時間</span>
+      <span class="result-big-num">78.5</span>
+      <span class="result-big-label">時間</span>
+    </div>
+    <div class="result-sub-grid cols-3">
+      <div class="result-sub-box">
+        <div class="result-sub-label">介護</div>
+        <div class="result-sub-val">52.0<span class="result-sub-unit">時間</span></div>
+      </div>
+      <div class="result-sub-box">
+        <div class="result-sub-label">医療</div>
+        <div class="result-sub-val">26.5<span class="result-sub-unit">時間</span></div>
+      </div>
+      <div class="result-sub-box">
+        <div class="result-sub-label">稼働日数</div>
+        <div class="result-sub-val">20<span class="result-sub-unit">日</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 看護師グラフ -->
+  <div class="card" id="nurseChartCard">
+    <div class="section-title">📊 日別訪問時間</div>
+    <div class="chart-container">
+      <canvas id="nurseChart"></canvas>
+    </div>
+  </div>
+
+  <!-- タブでリハビリ版切替 -->
+  <div class="card" id="rehabChartCard" style="display:none">
+    <div class="section-title">📊 日別訪問単位数</div>
+    <div class="chart-container">
+      <canvas id="rehabChart"></canvas>
+    </div>
+  </div>
+
+  <!-- 表示切替 -->
+  <div class="card" style="padding:12px 14px">
+    <div class="tab-switch">
+      <button class="tab-btn active" id="tabNurse">看護師</button>
+      <button class="tab-btn" id="tabRehab">リハスタッフ</button>
+    </div>
+  </div>
+
+  <p class="copyright">&copy; 2026 にこっと訪問看護ステーション</p>
+</div>
+</div>
+
+<script>
+// ── モックデータ生成 ─────────────────────
+function generateNurseMockData() {
+  const days = 31;
+  const labels = [];
+  const kaigo = [];
+  const iryo = [];
+  const bgColors = [];
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(2026, 2, d); // March 2026
+    const dow = date.getDay();
+    labels.push(`${d}`);
+
+    if (dow === 0) { // 日曜
+      kaigo.push(0);
+      iryo.push(0);
+      bgColors.push('rgba(192, 57, 43, 0.08)');
+    } else if (dow === 6) { // 土曜
+      kaigo.push(0);
+      iryo.push(0);
+      bgColors.push('rgba(30, 64, 175, 0.08)');
+    } else if (d > 20) { // 未来日（データなし）
+      kaigo.push(0);
+      iryo.push(0);
+      bgColors.push('transparent');
+    } else {
+      const k = [2.0, 2.5, 3.0, 3.5, 1.5, 2.0, 3.0, 2.5, 3.5, 2.0, 3.0, 2.5, 2.0, 3.5, 3.0, 2.5, 2.0, 3.0, 2.5, 3.5][d-1] || 2.5;
+      const i = [1.0, 1.5, 0.5, 1.0, 2.0, 1.5, 1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 2.0, 1.0, 0.5, 1.5, 1.0, 0.5, 1.5, 1.0][d-1] || 1.0;
+      kaigo.push(k);
+      iryo.push(i);
+      bgColors.push('transparent');
+    }
+  }
+  return { labels, kaigo, iryo, bgColors };
+}
+
+function generateRehabMockData() {
+  const days = 31;
+  const labels = [];
+  const units = [];
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(2026, 2, d);
+    const dow = date.getDay();
+    labels.push(`${d}`);
+
+    if (dow === 0 || dow === 6) {
+      units.push(0);
+    } else if (d > 20) {
+      units.push(0);
+    } else {
+      units.push([18, 22, 24, 16, 20, 19, 23, 21, 25, 17, 22, 20, 18, 24, 21, 19, 23, 20, 22, 18][d-1] || 20);
+    }
+  }
+  return { labels, units };
+}
+
+// ── 看護師チャート ─────────────────────
+const nurseData = generateNurseMockData();
+const nurseCtx = document.getElementById('nurseChart').getContext('2d');
+
+new Chart(nurseCtx, {
+  type: 'bar',
+  data: {
+    labels: nurseData.labels,
+    datasets: [
+      {
+        label: '介護',
+        data: nurseData.kaigo,
+        backgroundColor: 'rgba(30, 64, 175, 0.7)',
+        borderRadius: { topLeft: 0, topRight: 0 },
+        barPercentage: 0.7,
+        categoryPercentage: 0.85,
+        order: 2
+      },
+      {
+        label: '医療',
+        data: nurseData.iryo,
+        backgroundColor: 'rgba(154, 52, 18, 0.65)',
+        borderRadius: { topLeft: 3, topRight: 3 },
+        barPercentage: 0.7,
+        categoryPercentage: 0.85,
+        order: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          boxWidth: 12,
+          boxHeight: 12,
+          padding: 12,
+          font: { size: 11, weight: '600' }
+        }
+      },
+      annotation: {
+        annotations: {
+          incentiveLine: {
+            type: 'line',
+            yMin: 3.5,
+            yMax: 3.5,
+            borderColor: '#E24B4A',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            label: {
+              display: true,
+              content: '目安 3.5h',
+              position: 'start',
+              backgroundColor: 'rgba(226, 75, 74, 0.85)',
+              color: '#fff',
+              font: { size: 10, weight: '700' },
+              padding: { top: 2, bottom: 2, left: 6, right: 6 },
+              borderRadius: 4
+            }
+          }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          title: (items) => `${items[0].label}日`,
+          label: (item) => `${item.dataset.label}: ${item.raw}時間`
+        }
+      }
+    },
+    scales: {
+      x: {
+        stacked: true,
+        grid: { display: false },
+        ticks: {
+          font: { size: 9 },
+          maxRotation: 0,
+          callback: function(val, idx) {
+            return (idx + 1) % 5 === 1 ? this.getLabelForValue(val) : '';
+          }
+        }
+      },
+      y: {
+        stacked: true,
+        beginAtZero: true,
+        max: 6,
+        ticks: {
+          stepSize: 1,
+          font: { size: 10 },
+          callback: v => v + 'h'
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.06)'
+        }
+      }
+    }
+  }
+});
+
+// ── リハビリチャート（遅延初期化）─────────────────────
+const rehabData = generateRehabMockData();
+let rehabChartInstance = null;
+
+function initRehabChart() {
+  if (rehabChartInstance) return;
+  const rehabCtx = document.getElementById('rehabChart').getContext('2d');
+  rehabChartInstance = new Chart(rehabCtx, {
+  type: 'bar',
+  data: {
+    labels: rehabData.labels,
+    datasets: [{
+      label: '単位数',
+      data: rehabData.units,
+      backgroundColor: rehabData.units.map((v, i) => {
+        const date = new Date(2026, 2, i + 1);
+        return v === 0 ? 'rgba(0,0,0,0.03)' : 'rgba(16, 185, 129, 0.7)';
+      }),
+      borderRadius: 3,
+      barPercentage: 0.7,
+      categoryPercentage: 0.85
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          boxWidth: 12,
+          boxHeight: 12,
+          padding: 12,
+          font: { size: 11, weight: '600' }
+        }
+      },
+      annotation: {
+        annotations: {
+          incentiveLine: {
+            type: 'line',
+            yMin: 20,
+            yMax: 20,
+            borderColor: '#E24B4A',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            label: {
+              display: true,
+              content: '目安 20単位',
+              position: 'start',
+              backgroundColor: 'rgba(226, 75, 74, 0.85)',
+              color: '#fff',
+              font: { size: 10, weight: '700' },
+              padding: { top: 2, bottom: 2, left: 6, right: 6 },
+              borderRadius: 4
+            }
+          }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          title: (items) => `${items[0].label}日`,
+          label: (item) => `${item.raw}単位`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          font: { size: 9 },
+          maxRotation: 0,
+          callback: function(val, idx) {
+            return (idx + 1) % 5 === 1 ? this.getLabelForValue(val) : '';
+          }
+        }
+      },
+      y: {
+        beginAtZero: true,
+        max: 30,
+        ticks: {
+          stepSize: 5,
+          font: { size: 10 },
+          callback: v => v + ''
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.06)'
+        }
+      }
+    }
+  }
+});
+}
+
+// ── タブ切替 ─────────────────────
+function showNurse() {
+  document.getElementById('nurseChartCard').style.display = 'block';
+  document.getElementById('rehabChartCard').style.display = 'none';
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+}
+function showRehab() {
+  document.getElementById('nurseChartCard').style.display = 'none';
+  document.getElementById('rehabChartCard').style.display = 'block';
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===1));
+  initRehabChart();
+}
+document.getElementById('tabNurse').addEventListener('click', showNurse);
+document.getElementById('tabRehab').addEventListener('click', showRehab);
+</script>
+</body>
+</html>

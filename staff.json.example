@@ -1,0 +1,25 @@
+{
+  "incentive_defaults": {
+    "nurse": 3.5,
+    "rehab": 20
+  },
+  "staff": [
+    {
+      "id": "sample01",
+      "name": "サンプル看護師",
+      "furigana_family": "さんぷる",
+      "furigana_given": "かんごし",
+      "type": "nurse",
+      "kaigo_col": "C",
+      "iryo_col": "D",
+      "seq": 1,
+      "initial_pw": "0000",
+      "password_hash": "",
+      "hire_date": null,
+      "leave_granted": 0,
+      "leave_grant_date": null,
+      "leave_carried_over": 0,
+      "leave_manual_adjustment": 0
+    }
+  ]
+}

@@ -196,18 +196,18 @@
       <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
-  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+  <button class="hamburger" id="hamburgerBtn" aria-label="メニュー">
     <span></span><span></span><span></span>
   </button>
-  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+  <div class="menu-overlay" id="menuOverlay">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span class="menu-unread-badge" id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
-      <button class="menu-logout" onclick="logout()">ログアウト</button>
+      <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
     </div>
     </div>
   </div>
@@ -253,7 +253,7 @@
       <div class="nurse-col kaigo">
         <div class="nurse-col-label"><span class="badge-kaigo">介護</span></div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="kaigoBtn" onclick="togglePicker('kaigo')">
+          <button type="button" class="picker-btn" id="kaigoBtn">
             <span id="kaigoDisplay" class="val-empty">空白</span>
             <span class="chevron">▼</span>
           </button>
@@ -263,7 +263,7 @@
       <div class="nurse-col iryo">
         <div class="nurse-col-label"><span class="badge-iryo">医療</span></div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="iryoBtn" onclick="togglePicker('iryo')">
+          <button type="button" class="picker-btn" id="iryoBtn">
             <span id="iryoDisplay" class="val-empty">空白</span>
             <span class="chevron">▼</span>
           </button>
@@ -287,7 +287,6 @@
     <div class="card-title">🏃 訪問単位数</div>
     <div class="picker-wrap" style="margin-bottom:14px">
       <button type="button" class="picker-btn" id="rehabBtn"
-              onclick="togglePicker('rehab')"
               style="font-size:20px;color:var(--blue-dark)">
         <span id="rehabDisplay" class="val-empty" style="font-size:14px;font-weight:400">例：360分の場合、36単位と入力</span>
         <span class="chevron">▼</span>
@@ -301,7 +300,7 @@
   </div>
 
   <div style="padding:0 0 16px">
-    <button class="submit-btn" id="submitBtn" onclick="handleSubmit()">記録する</button>
+    <button class="submit-btn" id="submitBtn">記録する</button>
   </div>
 
 </div>
@@ -330,7 +329,7 @@
   </div>
 
   <div style="padding:0 0 16px">
-    <button class="continue-btn" onclick="continueInput()">続けて入力する</button>
+    <button class="continue-btn" id="continueBtn">続けて入力する</button>
   </div>
 </div>
 
@@ -340,8 +339,8 @@
     <h2>⚠️ 上書き確認</h2>
     <p id="confirmMsg"></p>
     <div class="modal-btns">
-      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
-      <button class="btn-ok" onclick="doSubmit()">上書きする</button>
+      <button class="btn-cancel" id="modalCancelBtn">キャンセル</button>
+      <button class="btn-ok" id="modalOkBtn">上書きする</button>
     </div>
   </div>
 </div>
@@ -354,14 +353,16 @@
       次回からパスワードなしで<br>ログインできるようになります
     </p>
     <div class="modal-btns" style="flex-direction:column;gap:8px">
-      <button class="btn-ok" id="regFaceIdBtn" onclick="registerFaceId()" style="background:var(--blue);color:#fff;border-radius:10px;padding:14px;font-size:16px">設定する</button>
-      <button class="btn-cancel" onclick="dismissFaceIdPrompt()" style="background:none;border:none;color:var(--muted);font-size:14px;padding:12px;cursor:pointer">あとで</button>
+      <button class="btn-ok" id="regFaceIdBtn" style="background:var(--blue);color:#fff;border-radius:10px;padding:14px;font-size:16px">設定する</button>
+      <button class="btn-cancel" id="dismissFaceIdBtn" style="background:none;border:none;color:var(--muted);font-size:14px;padding:12px;cursor:pointer">あとで</button>
     </div>
   </div>
 </div>
 
-<script src="https://unpkg.com/@simplewebauthn/browser@13/dist/bundle/index.umd.min.js"></script>
+<script src="/vendor/api-fetch.js"></script>
+<script src="/vendor/simplewebauthn-browser.umd.min.js"></script>
 <script>
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
 
@@ -384,14 +385,14 @@
     const empty = document.createElement('div');
     empty.className = 'picker-item empty-opt' + (pv[name] === null ? ' selected' : '');
     empty.textContent = '空白';
-    empty.onclick = () => selectVal(name, null);
+    empty.addEventListener('click', () => selectVal(name, null));
     list.appendChild(empty);
 
     for (const opt of opts) {
       const item = document.createElement('div');
       item.className = 'picker-item' + (pv[name] === opt ? ' selected' : '');
       item.textContent = name === 'rehab' ? `${opt}　単位` : `${opt.toFixed(1)}　時間`;
-      item.onclick = () => selectVal(name, opt);
+      item.addEventListener('click', () => selectVal(name, opt));
       list.appendChild(item);
     }
 
@@ -610,7 +611,7 @@
       ? { date, kaigo: pv.kaigo, iryo: pv.iryo }
       : { date, value: pv.rehab };
 
-    const res  = await fetch('/api/schedules', {
+    const res  = await apiFetch('/api/schedules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -660,7 +661,7 @@
       ? { date, kaigo: pv.kaigo, iryo: pv.iryo }
       : { date, value: pv.rehab };
 
-    const res  = await fetch('/api/record', {
+    const res  = await apiFetch('/api/record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -807,17 +808,25 @@
           <div class="schedule-item-date">${formatDateJP(s.date)}</div>
           <div class="schedule-item-values">${valText}</div>
           <div class="schedule-item-btns">
-            <button class="sched-btn sched-confirm" onclick="confirmSchedule('${s.id}')"
+            <button class="sched-btn sched-confirm" data-action="confirm-schedule" data-id="${esc(s.id)}"
               ${canConfirm ? '' : 'disabled title="翌日以降はまだ確定できません"'}>確定</button>
-            <button class="sched-btn sched-delete" onclick="deleteSchedule('${s.id}')">削除</button>
+            <button class="sched-btn sched-delete" data-action="delete-schedule" data-id="${esc(s.id)}">削除</button>
           </div>
         </div>`;
     }).join('');
     card.style.display = 'block';
   }
 
+  // ── #pendingSchedulesList イベント委譲 ──────────────────────────
+  document.getElementById('pendingSchedulesList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'confirm-schedule') confirmSchedule(btn.dataset.id);
+    if (btn.dataset.action === 'delete-schedule')  deleteSchedule(btn.dataset.id);
+  });
+
   async function confirmSchedule(id) {
-    const res  = await fetch(`/api/schedules/${id}/confirm`, { method: 'POST' });
+    const res  = await apiFetch(`/api/schedules/${id}/confirm`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       alert('確定しました');
@@ -829,7 +838,7 @@
 
   async function deleteSchedule(id) {
     if (!confirm('この予定を削除しますか？')) return;
-    const res  = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+    const res  = await apiFetch(`/api/schedules/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) { await loadPendingSchedules(); }
     else alert('エラー: ' + (data.error || '削除失敗'));
@@ -866,7 +875,7 @@
   }
 
   async function logout() {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/logout', { method: 'POST' });
     location.href = '/login';
   }
 
@@ -908,11 +917,11 @@
     const btn = document.getElementById('regFaceIdBtn');
     btn.disabled = true; btn.textContent = '設定中...';
     try {
-      const optResp = await fetch('/api/webauthn/register-options', { method: 'POST' });
+      const optResp = await apiFetch('/api/webauthn/register-options', { method: 'POST' });
       if (!optResp.ok) throw new Error('オプション取得に失敗');
       const options = await optResp.json();
       const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
-      const verifyResp = await fetch('/api/webauthn/register-verify', {
+      const verifyResp = await apiFetch('/api/webauthn/register-verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(regResp),
@@ -937,6 +946,21 @@
     localStorage.setItem('faceid_prompt_dismissed', 'true');
     document.getElementById('faceIdPrompt').classList.remove('show');
   }
+
+  // ── イベントリスナー登録 ──────────────────────────────────────
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
+  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
+  document.getElementById('kaigoBtn').addEventListener('click', () => togglePicker('kaigo'));
+  document.getElementById('iryoBtn').addEventListener('click', () => togglePicker('iryo'));
+  document.getElementById('rehabBtn').addEventListener('click', () => togglePicker('rehab'));
+  document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+  document.getElementById('continueBtn').addEventListener('click', continueInput);
+  document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+  document.getElementById('modalOkBtn').addEventListener('click', doSubmit);
+  document.getElementById('regFaceIdBtn').addEventListener('click', registerFaceId);
+  document.getElementById('dismissFaceIdBtn').addEventListener('click', dismissFaceIdPrompt);
 </script>
 <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
 </div><!-- /page-wrapper -->

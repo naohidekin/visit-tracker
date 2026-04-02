@@ -1,3 +1,17 @@
 node_modules/
 .env
 *.json.bak
+
+# データファイル（パスワードハッシュ・個人情報を含む）
+staff.json
+leave-requests.json
+oncall-records.json
+notices.json
+schedules.json
+standby-records.json
+attendance.json
+audit-log.json
+password-reset-tokens.json
+webauthn-credentials.json
+excel-results.json
+spreadsheet-registry.json

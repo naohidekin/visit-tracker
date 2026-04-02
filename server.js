@@ -12,6 +12,8 @@ const cron       = require('node-cron');
 const multer     = require('multer');
 const XLSX       = require('xlsx');
 const nodemailer = require('nodemailer');
+const helmet     = require('helmet');
+const writeFileAtomicSync = require('write-file-atomic').sync;
 const { generateRegistrationOptions, verifyRegistrationResponse,
         generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 const { isoBase64URL } = require('@simplewebauthn/server/helpers');
@@ -25,6 +27,23 @@ const PORT = process.env.PORT || 3000;
 const isValidDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());
 const isValidYearMonth = (y, m) => Number.isInteger(+y) && +y >= 2020 && +y <= 2099 && Number.isInteger(+m) && +m >= 1 && +m <= 12;
 const sanitizeStr = (s, maxLen = 200) => typeof s === 'string' ? s.trim().slice(0, maxLen) : '';
+// 訪問単位数のバリデーション（空・null許容、数値は0〜9999の範囲）
+function validateUnitValue(v) {
+  if (v === '' || v === null || v === undefined) return { valid: true, value: '' };
+  const n = Number(v);
+  if (isNaN(n) || !isFinite(n)) return { valid: false };
+  if (n < 0 || n > 9999) return { valid: false };
+  return { valid: true, value: n };
+}
+// 汎用数値バリデーション（null許容オプション付き）
+function validateNum(v, { min = -Infinity, max = Infinity, allowNull = false, allowEmpty = false } = {}) {
+  if (v === null || v === undefined) return allowNull ? { valid: true, value: null } : { valid: false };
+  if (v === '') return allowEmpty ? { valid: true, value: null } : { valid: false };
+  const n = Number(v);
+  if (!Number.isFinite(n)) return { valid: false };
+  if (n < min || n > max) return { valid: false };
+  return { valid: true, value: n };
+}
 
 // SESSION_SECRET未設定時はフォールバックを使わず起動拒否（ローカル開発時は SESSION_SECRET=dev 等を.envに設定）
 if (!process.env.SESSION_SECRET) {
@@ -33,6 +52,29 @@ if (!process.env.SESSION_SECRET) {
 }
 
 app.set('trust proxy', 1);
+
+// ─── セキュリティヘッダー ──────────────────────────────────────────
+const isProd = process.env.NODE_ENV === 'production';
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'"],   // TODO: Phase4でインラインスクリプト外部化後に 'unsafe-inline' 除去
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      imgSrc:     ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      fontSrc:    ["'self'"],
+      objectSrc:  ["'none'"],
+      baseUri:    ["'self'"],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
+
 app.use(express.json());
 app.use(csession({
   name:    'visit_sess',
@@ -41,7 +83,63 @@ app.use(csession({
   httpOnly: true,
   sameSite: 'strict',
 }));
+// ─── 静的HTMLファイルの認証ガード ─────────────────────────────────
+const STAFF_ONLY_HTML = new Set([
+  '/index.html', '/history.html', '/change-password.html',
+  '/leave.html', '/oncall.html', '/notices.html', '/manual.html',
+]);
+const ADMIN_ONLY_HTML = new Set(['/admin.html', '/admin-manual.html']);
+app.use((req, res, next) => {
+  const p = req.path.toLowerCase();
+  if (STAFF_ONLY_HTML.has(p)) {
+    if (!req.session.staffId) return res.redirect('/login');
+  } else if (ADMIN_ONLY_HTML.has(p)) {
+    if (!req.session.isAdmin) return res.redirect('/admin');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+// ─── CSRF保護（double-submit cookie方式） ─────────────────────────
+// cookie-parserが無いので req.cookies を簡易パース（CSRF検証の前に配置）
+app.use((req, res, next) => {
+  if (!req.cookies) {
+    req.cookies = {};
+    const cookieHeader = req.headers.cookie || '';
+    cookieHeader.split(';').forEach(c => {
+      const [k, ...v] = c.trim().split('=');
+      if (k) req.cookies[k] = v.join('=');
+    });
+  }
+  next();
+});
+const CSRF_EXEMPT = new Set([
+  '/api/login', '/api/admin/login',
+  '/api/forgot-password', '/api/reset-password',
+  '/api/webauthn/login-options', '/api/webauthn/login-verify',
+  '/api/webauthn/register-options',
+]);
+// ログイン成功時にCSRFトークンcookieを発行するヘルパー
+function setCsrfCookie(res) {
+  const token = crypto.randomBytes(32).toString('hex');
+  res.cookie('csrf_token', token, {
+    httpOnly: false, sameSite: 'strict', path: '/',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+  return token;
+}
+// CSRF検証ミドルウェア
+app.use((req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (CSRF_EXEMPT.has(req.path)) return next();
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers['x-csrf-token'];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: 'CSRF検証に失敗しました' });
+  }
+  next();
+});
 
 // ─── 定数 ──────────────────────────────────────────────────────
 const SPREADSHEET_ID  = process.env.SPREADSHEET_ID;
@@ -66,18 +164,46 @@ const HEADER_ROW      = 4;
 const DATA_START_ROW  = 5;
 const WD              = ['日','月','火','水','木','金','土'];
 
+// ─── セッション無効化ブラックリスト（アーカイブ時に追加） ────────
+const _invalidatedStaffIds = new Set();
+
+// ─── ファイルロック（read-modify-write 直列化） ─────────────────
+const _fileLocks = new Map();
+async function withFileLock(filePath, fn) {
+  if (!_fileLocks.has(filePath)) _fileLocks.set(filePath, Promise.resolve());
+  const prev = _fileLocks.get(filePath);
+  let release;
+  const next = new Promise(resolve => { release = resolve; });
+  _fileLocks.set(filePath, next);
+  await prev;
+  try { return await fn(); }
+  finally { release(); }
+}
+
+// ファイルロック付きルートハンドラ生成
+function lockedRoute(filePath, handler) {
+  return async (req, res, next) => {
+    try {
+      await withFileLock(filePath, () => handler(req, res, next));
+    } catch (err) {
+      console.error('Route error:', err);
+      if (!res.headersSent) res.status(500).json({ error: '内部エラーが発生しました' });
+    }
+  };
+}
+
 // ─── スプレッドシートレジストリ（年 → ID） ─────────────────────
 function loadRegistry() {
   if (!fs.existsSync(REGISTRY_PATH)) {
     const year = String(new Date().getFullYear());
     const reg  = { [year]: SPREADSHEET_ID };
-    fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
+    writeFileAtomicSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
     return reg;
   }
   return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
 }
 function saveRegistry(reg) {
-  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
+  writeFileAtomicSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
 }
 function getSpreadsheetIdForYear(year) {
   const reg = loadRegistry();
@@ -165,7 +291,7 @@ function loadStaff() {
   return JSON.parse(fs.readFileSync(STAFF_PATH, 'utf8'));
 }
 function saveStaff(data) {
-  fs.writeFileSync(STAFF_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(STAFF_PATH, JSON.stringify(data, null, 2));
 }
 
 function loadSchedules() {
@@ -173,7 +299,7 @@ function loadSchedules() {
   return JSON.parse(fs.readFileSync(SCHEDULES_PATH, 'utf8'));
 }
 function saveSchedules(data) {
-  fs.writeFileSync(SCHEDULES_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(SCHEDULES_PATH, JSON.stringify(data, null, 2));
 }
 function loadNotices() {
   if (!fs.existsSync(NOTICES_PATH)) return { notices: [], readStatus: {} };
@@ -182,21 +308,21 @@ function loadNotices() {
   return data;
 }
 function saveNotices(data) {
-  fs.writeFileSync(NOTICES_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(NOTICES_PATH, JSON.stringify(data, null, 2));
 }
 function loadLeave() {
   if (!fs.existsSync(LEAVE_PATH)) return { requests: [] };
   return JSON.parse(fs.readFileSync(LEAVE_PATH, 'utf8'));
 }
 function saveLeave(data) {
-  fs.writeFileSync(LEAVE_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(LEAVE_PATH, JSON.stringify(data, null, 2));
 }
 function loadOncall() {
   if (!fs.existsSync(ONCALL_PATH)) return { records: [] };
   return JSON.parse(fs.readFileSync(ONCALL_PATH, 'utf8'));
 }
 function saveOncall(data) {
-  fs.writeFileSync(ONCALL_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(ONCALL_PATH, JSON.stringify(data, null, 2));
 }
 function loadStandby() {
   if (!fs.existsSync(STANDBY_PATH)) return { records: [], customHolidays: [], rainyDays: [] };
@@ -207,7 +333,7 @@ function loadStandby() {
   return data;
 }
 function saveStandby(data) {
-  fs.writeFileSync(STANDBY_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(STANDBY_PATH, JSON.stringify(data, null, 2));
 }
 function loadAttendance() {
   if (!fs.existsSync(ATTENDANCE_PATH)) return { records: {}, reminders_sent: {} };
@@ -217,7 +343,7 @@ function loadAttendance() {
   return data;
 }
 function saveAttendance(data) {
-  fs.writeFileSync(ATTENDANCE_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(ATTENDANCE_PATH, JSON.stringify(data, null, 2));
 }
 
 // ─── 監査ログ（改ざん検知チェーン付き） ─────────────────────────
@@ -240,12 +366,12 @@ function appendAuditLog(entry) {
     const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
     const archiveName = `audit-log-${now.toISOString().slice(0, 7)}.json`;
     const archivePath = path.join(DATA_DIR, archiveName);
-    fs.writeFileSync(archivePath, JSON.stringify(log.slice(0, -1000), null, 2));
+    writeFileAtomicSync(archivePath, JSON.stringify(log.slice(0, -1000), null, 2));
     const remaining = log.slice(-1000);
-    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(remaining, null, 2));
+    writeFileAtomicSync(AUDIT_LOG_PATH, JSON.stringify(remaining, null, 2));
     console.log(`📋 監査ログローテーション: ${archiveName} にアーカイブ`);
   } else {
-    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify(log, null, 2));
+    writeFileAtomicSync(AUDIT_LOG_PATH, JSON.stringify(log, null, 2));
   }
 }
 
@@ -383,7 +509,8 @@ function calcLeaveBalance(staff) {
   const carriedOver = staff.leave_carried_over || 0;
   const manualAdj = staff.leave_manual_adjustment || 0;
   const oncallLeave = staff.oncall_leave_granted || 0;
-  return granted + carriedOver + manualAdj + oncallLeave - usedDays;
+  // 0.5日単位の浮動小数点誤差を防止（小数第1位で丸め）
+  return Math.round((granted + carriedOver + manualAdj + oncallLeave - usedDays) * 10) / 10;
 }
 
 function loadExcelResults() {
@@ -391,7 +518,7 @@ function loadExcelResults() {
   return JSON.parse(fs.readFileSync(EXCEL_RESULTS_PATH, 'utf8'));
 }
 function saveExcelResults(data) {
-  fs.writeFileSync(EXCEL_RESULTS_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(EXCEL_RESULTS_PATH, JSON.stringify(data, null, 2));
 }
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -538,6 +665,19 @@ function ensureLeaveFields() {
 // ─── 認証ミドルウェア ───────────────────────────────────────────
 function requireStaff(req, res, next) {
   if (!req.session.staffId) return res.status(401).json({ error: 'ログインが必要です' });
+  // ブラックリスト（アーカイブ時に即追加）で高速判定
+  if (_invalidatedStaffIds.has(req.session.staffId)) {
+    req.session = null;
+    return res.status(401).json({ error: 'このアカウントは無効化されています' });
+  }
+  // 念のためファイルからも確認（ブラックリスト漏れ・サーバー再起動後対策）
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === req.session.staffId);
+  if (!staff || staff.archived) {
+    _invalidatedStaffIds.add(req.session.staffId);
+    req.session = null;
+    return res.status(401).json({ error: 'このアカウントは無効化されています' });
+  }
   next();
 }
 function requireAdmin(req, res, next) {
@@ -553,7 +693,7 @@ function loadWebAuthnData() {
   catch { return { credentials: [] }; }
 }
 function saveWebAuthnData(data) {
-  fs.writeFileSync(WEBAUTHN_FILE, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(WEBAUTHN_FILE, JSON.stringify(data, null, 2));
 }
 
 async function loadCredentials(staffId) {
@@ -569,31 +709,37 @@ async function loadCredentials(staffId) {
 }
 
 async function saveCredential(staffId, credential) {
-  const data = loadWebAuthnData();
-  data.credentials.push({
-    staffId,
-    credentialID: credential.id,
-    publicKey: isoBase64URL.fromBuffer(credential.publicKey),
-    counter: credential.counter,
-    transports: credential.transports || [],
-    registeredAt: new Date().toISOString(),
+  await withFileLock(WEBAUTHN_FILE, async () => {
+    const data = loadWebAuthnData();
+    data.credentials.push({
+      staffId,
+      credentialID: credential.id,
+      publicKey: isoBase64URL.fromBuffer(credential.publicKey),
+      counter: credential.counter,
+      transports: credential.transports || [],
+      registeredAt: new Date().toISOString(),
+    });
+    saveWebAuthnData(data);
   });
-  saveWebAuthnData(data);
 }
 
 async function updateCredentialCounter(credentialID, newCounter) {
-  const data = loadWebAuthnData();
-  const cred = data.credentials.find(c => c.credentialID === credentialID);
-  if (cred) {
-    cred.counter = newCounter;
-    saveWebAuthnData(data);
-  }
+  await withFileLock(WEBAUTHN_FILE, async () => {
+    const data = loadWebAuthnData();
+    const cred = data.credentials.find(c => c.credentialID === credentialID);
+    if (cred) {
+      cred.counter = newCounter;
+      saveWebAuthnData(data);
+    }
+  });
 }
 
 async function deleteCredentials(staffId) {
-  const data = loadWebAuthnData();
-  data.credentials = data.credentials.filter(c => c.staffId !== staffId);
-  saveWebAuthnData(data);
+  await withFileLock(WEBAUTHN_FILE, async () => {
+    const data = loadWebAuthnData();
+    data.credentials = data.credentials.filter(c => c.staffId !== staffId);
+    saveWebAuthnData(data);
+  });
 }
 
 async function hasCredentials(staffId) {
@@ -609,7 +755,7 @@ function loadResetTokens() {
   catch { return { tokens: [] }; }
 }
 function saveResetTokens(data) {
-  fs.writeFileSync(RESET_TOKENS_PATH, JSON.stringify(data, null, 2));
+  writeFileAtomicSync(RESET_TOKENS_PATH, JSON.stringify(data, null, 2));
 }
 function generateResetToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -634,6 +780,14 @@ function checkRateLimit(key, maxPerWindow = 3, windowMs = 60000) {
   entry.count++;
   return true;
 }
+
+// レート制限Mapの定期クリーンアップ（10分間隔）
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of resetRateLimit) {
+    if (now > entry.resetAt) resetRateLimit.delete(key);
+  }
+}, 600000);
 
 // ─── メール送信設定 ───────────────────────────────────────────
 function createMailTransport() {
@@ -784,7 +938,7 @@ app.get('/api/reset-password/verify', (req, res) => {
   res.json({ valid: true });
 });
 
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/reset-password', lockedRoute(STAFF_PATH, async (req, res) => {
   const { token, newPassword, confirmPassword } = req.body;
   if (!token || !newPassword) return res.status(400).json({ error: 'パラメータが不足しています' });
   if (newPassword !== confirmPassword) return res.status(400).json({ error: 'パスワードが一致しません' });
@@ -810,7 +964,7 @@ app.post('/api/reset-password', async (req, res) => {
 
   auditLog(req, 'auth.self_reset_password', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
-});
+}));
 
 // ─── API: スタッフ認証 ──────────────────────────────────────────
 app.post('/api/login', async (req, res) => {
@@ -818,10 +972,19 @@ app.post('/api/login', async (req, res) => {
   if (!loginId || !password)
     return res.status(400).json({ error: 'IDとパスワードを入力してください' });
 
+  // ブルートフォース対策: IP単位10回/分、ID単位5回/5分
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (!checkRateLimit(`login-ip:${ip}`, 10, 60000))
+    return res.status(429).json({ error: 'ログイン試行回数が上限を超えました。しばらく待ってから再度お試しください' });
+  if (!checkRateLimit(`login-id:${loginId}`, 5, 300000))
+    return res.status(429).json({ error: 'ログイン試行回数が上限を超えました。しばらく待ってから再度お試しください' });
+
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === loginId);
   if (!staff)
     return res.status(401).json({ error: 'IDまたはパスワードが正しくありません' });
+  if (staff.archived)
+    return res.status(401).json({ error: 'このアカウントは無効化されています' });
 
   const ok = await bcrypt.compare(password, staff.password_hash);
   if (!ok) {
@@ -832,6 +995,7 @@ app.post('/api/login', async (req, res) => {
   req.session.staffId   = staff.id;
   req.session.staffName = staff.name;
   req.session.staffType = staff.type;
+  setCsrfCookie(res);
   auditLog(req, 'auth.login', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
 });
@@ -926,7 +1090,7 @@ app.post('/api/webauthn/register-verify', requireStaff, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('WebAuthn register-verify error:', e.message);
-    res.status(400).json({ error: e.message });
+    res.status(400).json({ error: '生体認証の登録に失敗しました' });
   }
 });
 
@@ -1000,7 +1164,7 @@ app.post('/api/webauthn/login-verify', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('WebAuthn login-verify error:', e.message);
-    res.status(400).json({ error: e.message });
+    res.status(400).json({ error: '生体認証によるログインに失敗しました' });
   }
 });
 
@@ -1016,7 +1180,7 @@ app.post('/api/webauthn/delete', requireStaff, async (req, res) => {
 });
 
 // ─── API: パスワード変更 ────────────────────────────────────────
-app.post('/api/change-password', requireStaff, async (req, res) => {
+app.post('/api/change-password', requireStaff, lockedRoute(STAFF_PATH, async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'パラメータが不足しています' });
@@ -1036,7 +1200,7 @@ app.post('/api/change-password', requireStaff, async (req, res) => {
   saveStaff(data);
   auditLog(req, 'auth.change_password', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
-});
+}));
 
 // ─── API: 記録の取得（上書きチェック用） ────────────────────────
 app.get('/api/record', requireStaff, async (req, res) => {
@@ -1070,7 +1234,8 @@ app.get('/api/record', requireStaff, async (req, res) => {
       res.json({ value: resp.data.values?.[0]?.[0] ?? null });
     }
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('❌ record GET error:', e.message);
+    res.status(500).json({ error: '記録の取得に失敗しました' });
   }
 });
 
@@ -1106,8 +1271,10 @@ app.post('/api/record', requireStaff, async (req, res) => {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const { kaigo, iryo } = req.body;
-      const kVal = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
-      const iVal = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
+      const kv = validateUnitValue(kaigo);
+      const iv = validateUnitValue(iryo);
+      if (!kv.valid || !iv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
+      const kVal = kv.value, iVal = iv.value;
       await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
         spreadsheetId: sid,
         requestBody: {
@@ -1122,7 +1289,9 @@ app.post('/api/record', requireStaff, async (req, res) => {
       res.json({ success: true, kaigo: kVal, iryo: iVal });
     } else {
       const { value } = req.body;
-      const val = (value !== '' && value !== null && value !== undefined) ? Number(value) : '';
+      const vv = validateUnitValue(value);
+      if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
+      const val = vv.value;
       await sheetsRetry(() => api.spreadsheets.values.update({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
@@ -1133,9 +1302,8 @@ app.post('/api/record', requireStaff, async (req, res) => {
       res.json({ success: true, value: val });
     }
   } catch (e) {
-    const detail = e.response?.data?.error?.message || e.message;
     console.error('❌ record POST error:', JSON.stringify(e.response?.data ?? e.message));
-    res.status(500).json({ error: detail });
+    res.status(500).json({ error: '記録の保存に失敗しました' });
   }
 });
 
@@ -1145,7 +1313,7 @@ app.get('/api/schedules', requireStaff, (req, res) => {
   res.json(data.schedules.filter(s => s.staffId === req.session.staffId));
 });
 
-app.post('/api/schedules', requireStaff, (req, res) => {
+app.post('/api/schedules', requireStaff, lockedRoute(SCHEDULES_PATH, (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
   if (date <= getTodayJST()) return res.status(400).json({ error: '予定登録は翌日以降の日付のみ可能です' });
@@ -1182,9 +1350,9 @@ app.post('/api/schedules', requireStaff, (req, res) => {
   saveSchedules(data);
   auditLog(req, 'schedule.create', { type: 'schedule', id: entry.id, label: `${req.session.staffName} ${date}` });
   res.json({ success: true, schedule: entry });
-});
+}));
 
-app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
+app.post('/api/schedules/:id/confirm', requireStaff, lockedRoute(SCHEDULES_PATH, async (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -1231,12 +1399,12 @@ app.post('/api/schedules/:id/confirm', requireStaff, async (req, res) => {
     auditLog(req, 'record.confirm_schedule', { type: 'schedule', id: req.params.id, label: `${schedule.staffName || req.session.staffName} ${schedule.date}` });
     res.json({ success: true });
   } catch (e) {
-    const detail = e.response?.data?.error?.message || e.message;
-    res.status(500).json({ error: detail });
+    console.error('❌ schedule confirm error:', e.message);
+    res.status(500).json({ error: '予定の確定に失敗しました' });
   }
-});
+}));
 
-app.delete('/api/schedules/:id', requireStaff, (req, res) => {
+app.delete('/api/schedules/:id', requireStaff, lockedRoute(SCHEDULES_PATH, (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -1245,13 +1413,13 @@ app.delete('/api/schedules/:id', requireStaff, (req, res) => {
   saveSchedules(data);
   auditLog(req, 'schedule.delete', { type: 'schedule', id: req.params.id, label: `${req.session.staffName} ${removed.date}` });
   res.json({ success: true });
-});
+}));
 
 app.get('/api/admin/schedules', requireAdmin, (_req, res) => {
   res.json(loadSchedules().schedules);
 });
 
-app.delete('/api/admin/schedules/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/schedules/:id', requireAdmin, lockedRoute(SCHEDULES_PATH, (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -1260,7 +1428,7 @@ app.delete('/api/admin/schedules/:id', requireAdmin, (req, res) => {
   saveSchedules(data);
   auditLog(req, 'schedule.admin_delete', { type: 'schedule', id: req.params.id, label: `${removed.staffName} ${removed.date}` });
   res.json({ success: true });
-});
+}));
 
 // ─── API: 月別実績 ──────────────────────────────────────────────
 app.get('/api/monthly-stats', requireStaff, async (req, res) => {
@@ -1325,7 +1493,8 @@ app.get('/api/monthly-stats', requireStaff, async (req, res) => {
                  work_hours: staff.work_hours ?? null });
     }
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('❌ monthly-stats error:', e.message);
+    res.status(500).json({ error: '月次統計の取得に失敗しました' });
   }
 });
 
@@ -1438,7 +1607,7 @@ app.get('/api/monthly-detail', requireStaff, async (req, res) => {
     }
   } catch (e) {
     console.error('monthly-detail error:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: '月次明細の取得に失敗しました' });
   }
 });
 
@@ -1580,7 +1749,7 @@ app.get('/api/incentive-estimate', requireStaff, async (req, res) => {
     }
   } catch (e) {
     console.error('incentive-estimate error:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'インセンティブ見込の取得に失敗しました' });
   }
 });
 
@@ -1662,7 +1831,8 @@ app.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
                  work_hours: staff.work_hours ?? null } });
     }
   } catch (e) {
-    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+    console.error('❌ admin monthly-detail error:', e.message);
+    res.status(500).json({ error: '月次明細の取得に失敗しました' });
   }
 });
 
@@ -1756,7 +1926,8 @@ app.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
 
     res.json({ year: y, month: m, staff: results, total_amount });
   } catch (e) {
-    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+    console.error('❌ admin incentive-summary error:', e.message);
+    res.status(500).json({ error: 'インセンティブ集計の取得に失敗しました' });
   }
 });
 
@@ -1779,8 +1950,10 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const { kaigo, iryo } = req.body;
-      const kVal = (kaigo !== null && kaigo !== undefined) ? Number(kaigo) : '';
-      const iVal = (iryo  !== null && iryo  !== undefined) ? Number(iryo)  : '';
+      const kv = validateUnitValue(kaigo);
+      const iv = validateUnitValue(iryo);
+      if (!kv.valid || !iv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
+      const kVal = kv.value, iVal = iv.value;
       await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
         spreadsheetId: sid,
         requestBody: {
@@ -1793,7 +1966,9 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
       }));
     } else {
       const { value } = req.body;
-      const val = (value !== null && value !== undefined) ? Number(value) : '';
+      const vv = validateUnitValue(value);
+      if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
+      const val = vv.value;
       await sheetsRetry(() => api.spreadsheets.values.update({
         spreadsheetId: sid,
         range: `${month}月!${staff.col}${row}`,
@@ -1804,7 +1979,8 @@ app.post('/api/admin/record', requireAdmin, async (req, res) => {
     auditLog(req, 'record.admin_edit', { type: 'visit_record', id: staffId, label: `${staff.name} ${date}` }, { date, ...req.body });
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+    console.error('❌ admin record POST error:', e.message);
+    res.status(500).json({ error: '記録の保存に失敗しました' });
   }
 });
 
@@ -1822,42 +1998,54 @@ app.get('/api/admin/incentive', requireAdmin, (_req, res) => {
   });
 });
 
-app.post('/api/admin/incentive/defaults', requireAdmin, (req, res) => {
+app.post('/api/admin/incentive/defaults', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const { nurse, rehab } = req.body;
-  if (nurse == null || rehab == null) return res.status(400).json({ error: 'パラメータ不足' });
+  const nv = validateNum(nurse, { min: 0, max: 100 });
+  const rv = validateNum(rehab, { min: 0, max: 100 });
+  if (!nv.valid || !rv.valid) return res.status(400).json({ error: 'インセンティブラインは0〜100の数値で入力してください' });
   const data = loadStaff();
-  data.incentive_defaults = { nurse: Number(nurse), rehab: Number(rehab) };
+  data.incentive_defaults = { nurse: nv.value, rehab: rv.value };
   saveStaff(data);
-  auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: Number(nurse), rehab: Number(rehab) });
+  auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: nv.value, rehab: rv.value });
   res.json({ success: true });
-});
+}));
 
-app.post('/api/admin/staff/:id/incentive', requireAdmin, (req, res) => {
+app.post('/api/admin/staff/:id/incentive', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const { line } = req.body;
-  staff.incentive_line = (line != null) ? Number(line) : null;
+  const lv = validateNum(line, { min: 0, max: 100, allowNull: true });
+  if (!lv.valid) return res.status(400).json({ error: 'インセンティブラインは0〜100の数値で入力してください' });
+  staff.incentive_line = lv.value;
   saveStaff(data);
   auditLog(req, 'incentive.staff_update', { type: 'incentive', id: staff.id, label: staff.name }, { line: staff.incentive_line });
   res.json({ success: true });
-});
+}));
 
-app.post('/api/admin/staff/:id/work-hours', requireAdmin, (req, res) => {
+app.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const { work_hours } = req.body;
-  staff.work_hours = (work_hours != null && work_hours !== '') ? Number(work_hours) : null;
+  const wv = validateNum(work_hours, { min: 0, max: 24, allowNull: true, allowEmpty: true });
+  if (!wv.valid) return res.status(400).json({ error: '勤務時間は0〜24の数値で入力してください' });
+  staff.work_hours = wv.value;
   saveStaff(data);
   auditLog(req, 'staff.work_hours_update', { type: 'staff', id: staff.id, label: staff.name }, { work_hours: staff.work_hours });
   res.json({ success: true });
-});
+}));
 
 // ─── API: 管理者認証 ────────────────────────────────────────────
 app.post('/api/admin/login', (req, res) => {
+  // ブルートフォース対策: IP単位5回/5分
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (!checkRateLimit(`admin-login-ip:${ip}`, 5, 300000))
+    return res.status(429).json({ error: 'ログイン試行回数が上限を超えました。しばらく待ってから再度お試しください' });
+
   if (req.body.password === process.env.ADMIN_PASSWORD) {
     req.session.isAdmin = true;
+    setCsrfCookie(res);
     auditLog(req, 'auth.admin_login', { type: 'auth', label: '管理者' });
     res.json({ success: true });
   } else {
@@ -1879,20 +2067,29 @@ app.get('/api/admin/staff', requireAdmin, (req, res) => {
   res.json(staff);
 });
 
-app.patch('/api/admin/staff/:id/archive', requireAdmin, (req, res) => {
+app.patch('/api/admin/staff/:id/archive', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   staff.archived = !staff.archived;
   saveStaff(data);
+  // アーカイブ時は即座にセッションを無効化、復帰時はブラックリストから除去
+  if (staff.archived) {
+    _invalidatedStaffIds.add(staff.id);
+  } else {
+    _invalidatedStaffIds.delete(staff.id);
+  }
   auditLog(req, 'staff.archive_toggle', { type: 'staff', id: staff.id, label: staff.name }, { archived: staff.archived });
   res.json({ success: true, archived: staff.archived, staff: data.staff });
-});
+}));
 
-app.post('/api/admin/staff', requireAdmin, async (req, res) => {
+app.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
   const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall, email } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
+  const VALID_STAFF_TYPES = ['nurse', 'PT', 'OT', 'ST', 'office'];
+  if (!VALID_STAFF_TYPES.includes(type))
+    return res.status(400).json({ error: `スタッフ種別が不正です（${VALID_STAFF_TYPES.join('/')}）` });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
 
@@ -1900,7 +2097,9 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
   if (data.staff.find(s => s.id === loginId))
     return res.status(400).json({ error: 'そのログインIDは既に使用されています' });
 
-  const nextSeq = Math.max(0, ...data.staff.map(s => s.seq || 0)) + 1;
+  // seq重複防止: 既存の最大seq + 1（削除済みスタッフのseqも考慮）
+  const allSeqs = data.staff.map(s => s.seq || 0);
+  const nextSeq = allSeqs.length > 0 ? Math.max(...allSeqs) + 1 : 1;
 
   try {
     const api = await getSheets();
@@ -1932,7 +2131,9 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       const familyName   = furigana_family ? name.split(/[\s　]/)[0] : name.split(/[\s　]/)[0];
 
+      const sheetErrors = [];
       for (const ssId of allSids) {
+        try {
         const ssYear = yearBySsId[ssId] || new Date().getFullYear();
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
@@ -2120,6 +2321,10 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
                 values: [[`=${kaigoCol}${tRow}+${iryoCol}${tRow}`]] },
             ]}});
         }
+        } catch (sheetErr) {
+          console.error(`⚠️ スプレッドシート ${ssId} への列追加に失敗:`, sheetErr.message);
+          sheetErrors.push(ssId);
+        }
       }
       for (const s of data.staff)
         if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
@@ -2156,7 +2361,9 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
       const SOLID        = { style: 'SOLID',        color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
 
+      const sheetErrors = [];
       for (const ssId of allSids) {
+        try {
         const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
         const sm = {};
         for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
@@ -2188,6 +2395,10 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
             ];
           }) },
         });
+        } catch (sheetErr) {
+          console.error(`⚠️ スプレッドシート ${ssId} への列追加に失敗:`, sheetErr.message);
+          sheetErrors.push(ssId);
+        }
       }
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
@@ -2201,14 +2412,19 @@ app.post('/api/admin/staff', requireAdmin, async (req, res) => {
     data.staff.push(newEntry);
     saveStaff(data);
     auditLog(req, 'staff.create', { type: 'staff', id: loginId, label: name }, { type, loginId });
-    res.json({ success: true, staff: data.staff });
+    const result = { success: true, staff: data.staff };
+    if (sheetErrors.length > 0) {
+      result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。管理者にお知らせください。`;
+      console.error('⚠️ スタッフ追加: 一部スプレッドシート反映失敗:', sheetErrors);
+    }
+    res.json(result);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error('❌ スタッフ追加エラー:', e);
+    res.status(500).json({ error: 'スタッフの追加に失敗しました' });
   }
-});
+}));
 
-app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
+app.patch('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const { name, furigana_family, furigana_given, email } = req.body;
   if (!name) return res.status(400).json({ error: '氏名は必須です' });
   if (email !== undefined && email !== null && email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -2223,9 +2439,9 @@ app.patch('/api/admin/staff/:id', requireAdmin, (req, res) => {
   saveStaff(data);
   auditLog(req, 'staff.update', { type: 'staff', id: staff.id, label: name });
   res.json({ success: true, staff: data.staff });
-});
+}));
 
-app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
   const data = loadStaff();
   const idx  = data.staff.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -2236,92 +2452,99 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
     const registry = loadRegistry();
     const allSids  = [...new Set([SPREADSHEET_ID, ...Object.values(registry)])];
 
+    const sheetErrors = [];
     if (removed.type === 'nurse') {
       const delStart = colToIdx(removed.kaigo_col);
-      // 削除前の太線位置（最終看護師iryo列）
       const activeNursesBeforeDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
       const oldDividerIdx = activeNursesBeforeDel.length > 0
         ? Math.max(...activeNursesBeforeDel.map(s => colToIdx(s.iryo_col))) : null;
 
-      // 全スプレッドシートから介護・医療の2列を削除
       for (const ssId of allSids) {
-        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
-        const sm = {};
-        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
-        const vm = MONTHS.filter(m => sm[m] !== undefined);
-        await api.spreadsheets.batchUpdate({
-          spreadsheetId: ssId,
-          requestBody: { requests: vm.map(m => ({
-            deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
-              startIndex: delStart, endIndex: delStart + 2 } },
-          })) },
-        });
+        try {
+          const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+          const sm = {};
+          for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+          const vm = MONTHS.filter(m => sm[m] !== undefined);
+          await api.spreadsheets.batchUpdate({
+            spreadsheetId: ssId,
+            requestBody: { requests: vm.map(m => ({
+              deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+                startIndex: delStart, endIndex: delStart + 2 } },
+            })) },
+          });
+        } catch (sheetErr) {
+          console.error(`⚠️ スプレッドシート ${ssId} の列削除に失敗:`, sheetErr.message);
+          sheetErrors.push(ssId);
+        }
       }
-      // 削除列より後ろの看護師の列を -2 シフト
       for (const s of data.staff) {
         if (s.type === 'nurse' && colToIdx(s.kaigo_col) > delStart) {
           s.kaigo_col = idxToCol(colToIdx(s.kaigo_col) - 2);
           s.iryo_col  = idxToCol(colToIdx(s.iryo_col)  - 2);
         }
       }
-      // 全リハビリの列を -2 シフト（リハビリは常に看護師の後ろ）
       for (const s of data.staff) {
         if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
       }
-      // 削除後の太線位置を計算して更新
       const activeNursesAfterDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
       const newDividerIdx = activeNursesAfterDel.length > 0
         ? Math.max(...activeNursesAfterDel.map(s => colToIdx(s.iryo_col))) : null;
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       for (const ssId of allSids) {
-        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
-        const sm = {};
-        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
-        const vm = MONTHS.filter(m => sm[m] !== undefined);
-        const borderReqs = vm.flatMap(m => {
-          const sid = sm[m];
-          return [
-            // 旧太線を解除（列削除後の新インデックスで）
-            ...(oldDividerIdx !== null ? [
-              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                  startColumnIndex: oldDividerIdx - 2, endColumnIndex: oldDividerIdx - 1 },
-                  right: SOLID } },
-              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                  startColumnIndex: oldDividerIdx - 1, endColumnIndex: oldDividerIdx },
-                  left: SOLID } },
-            ] : []),
-            // 新太線を設定
-            ...(newDividerIdx !== null ? [
-              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                  startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
-                  right: SOLID_MEDIUM } },
-              { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
-                  startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
-                  left: SOLID_MEDIUM } },
-            ] : []),
-          ];
-        });
-        if (borderReqs.length > 0)
-          await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: borderReqs } });
+        try {
+          const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+          const sm = {};
+          for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+          const vm = MONTHS.filter(m => sm[m] !== undefined);
+          const borderReqs = vm.flatMap(m => {
+            const sid = sm[m];
+            return [
+              ...(oldDividerIdx !== null ? [
+                { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                    startColumnIndex: oldDividerIdx - 2, endColumnIndex: oldDividerIdx - 1 },
+                    right: SOLID } },
+                { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                    startColumnIndex: oldDividerIdx - 1, endColumnIndex: oldDividerIdx },
+                    left: SOLID } },
+              ] : []),
+              ...(newDividerIdx !== null ? [
+                { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                    startColumnIndex: newDividerIdx, endColumnIndex: newDividerIdx + 1 },
+                    right: SOLID_MEDIUM } },
+                { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
+                    startColumnIndex: newDividerIdx + 1, endColumnIndex: newDividerIdx + 2 },
+                    left: SOLID_MEDIUM } },
+              ] : []),
+            ];
+          });
+          if (borderReqs.length > 0)
+            await api.spreadsheets.batchUpdate({ spreadsheetId: ssId, requestBody: { requests: borderReqs } });
+        } catch (sheetErr) {
+          console.error(`⚠️ スプレッドシート ${ssId} の太線更新に失敗:`, sheetErr.message);
+          if (!sheetErrors.includes(ssId)) sheetErrors.push(ssId);
+        }
       }
-    } else {
+    } else if (removed.col) {
       const delIdx = colToIdx(removed.col);
-      // 全スプレッドシートから1列を削除
       for (const ssId of allSids) {
-        const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
-        const sm = {};
-        for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
-        const vm = MONTHS.filter(m => sm[m] !== undefined);
-        await api.spreadsheets.batchUpdate({
-          spreadsheetId: ssId,
-          requestBody: { requests: vm.map(m => ({
-            deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
-              startIndex: delIdx, endIndex: delIdx + 1 } },
-          })) },
-        });
+        try {
+          const ss = await api.spreadsheets.get({ spreadsheetId: ssId });
+          const sm = {};
+          for (const s of ss.data.sheets) sm[s.properties.title] = s.properties.sheetId;
+          const vm = MONTHS.filter(m => sm[m] !== undefined);
+          await api.spreadsheets.batchUpdate({
+            spreadsheetId: ssId,
+            requestBody: { requests: vm.map(m => ({
+              deleteDimension: { range: { sheetId: sm[m], dimension: 'COLUMNS',
+                startIndex: delIdx, endIndex: delIdx + 1 } },
+            })) },
+          });
+        } catch (sheetErr) {
+          console.error(`⚠️ スプレッドシート ${ssId} の列削除に失敗:`, sheetErr.message);
+          sheetErrors.push(ssId);
+        }
       }
-      // 削除列より後ろのリハビリの列を -1 シフト
       for (const s of data.staff) {
         if (s.type !== 'nurse' && colToIdx(s.col) > delIdx) {
           s.col = idxToCol(colToIdx(s.col) - 1);
@@ -2331,14 +2554,19 @@ app.delete('/api/admin/staff/:id', requireAdmin, async (req, res) => {
 
     saveStaff(data);
     auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
-    res.json({ success: true, removed, staff: data.staff });
+    const result = { success: true, removed, staff: data.staff };
+    if (sheetErrors.length > 0) {
+      result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。手動確認が必要です。`;
+      console.error('⚠️ スタッフ削除: 一部スプレッドシート反映失敗:', sheetErrors);
+    }
+    res.json(result);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error('❌ スタッフ削除エラー:', e);
+    res.status(500).json({ error: 'スタッフの削除に失敗しました' });
   }
-});
+}));
 
-app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) => {
+app.post('/api/admin/staff/:id/reset-password', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -2348,11 +2576,11 @@ app.post('/api/admin/staff/:id/reset-password', requireAdmin, async (req, res) =
   saveStaff(data);
   auditLog(req, 'staff.reset_password', { type: 'staff', id: staff.id, label: staff.name });
   res.json({ success: true, initial_pw: newPw });
-});
+}));
 
 // ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
 // 正規エントリ(moribe10/sahara11)の列を確定し、重複エントリを削除する
-app.post('/api/admin/fix-staff-columns', requireAdmin, (req, res) => {
+app.post('/api/admin/fix-staff-columns', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   try {
     const data = loadStaff();
     const changes = [];
@@ -2392,10 +2620,10 @@ app.post('/api/admin/fix-staff-columns', requireAdmin, (req, res) => {
     saveStaff(data);
     res.json({ success: true, changes, staff: data.staff });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error('❌ staff sync error:', e);
+    res.status(500).json({ error: 'スタッフ同期に失敗しました' });
   }
-});
+}));
 
 // ─── API: 翌年スプレッドシート作成 ─────────────────────────────
 app.post('/api/admin/create-next-year-sheet', requireAdmin, async (_req, res) => {
@@ -2414,7 +2642,8 @@ app.post('/api/admin/create-next-year-sheet', requireAdmin, async (_req, res) =>
         url: `https://docs.google.com/spreadsheets/d/${existingId}`,
       });
     }
-    res.status(500).json({ error: e.response?.data?.error?.message || e.message });
+    console.error('❌ create-next-year-sheet error:', e.message);
+    res.status(500).json({ error: '翌年スプレッドシートの作成に失敗しました' });
   }
 });
 
@@ -2554,7 +2783,7 @@ app.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (req, 
     res.json({ success: true, results, savedYearMonth: ym });
   } catch (e) {
     console.error('Excel analyze error:', e);
-    res.status(500).json({ error: 'Excel解析に失敗しました: ' + e.message });
+    res.status(500).json({ error: 'Excel解析に失敗しました。ファイル形式を確認してください' });
   }
 });
 
@@ -2596,6 +2825,7 @@ app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
     const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
     usedDays += r.dates.length * perDate;
   }
+  usedDays = Math.round(usedDays * 10) / 10;
   const granted     = staff.leave_granted || 0;
   const carriedOver = staff.leave_carried_over || 0;
   const manualAdj   = staff.leave_manual_adjustment || 0;
@@ -2623,7 +2853,7 @@ app.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
         }
       }
     }
-    celebrationUsed = Math.min(celebrationUsed, celebrationDays);
+    celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
   }
 
   res.json({
@@ -2650,7 +2880,7 @@ app.get('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
   res.json({ requests: mine });
 });
 
-app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
+app.post('/api/leave/requests', requireStaff, requireLeaveOncall, lockedRoute(LEAVE_PATH, (req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
@@ -2741,9 +2971,9 @@ app.post('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => 
   saveLeave(leaveData);
   auditLog(req, 'leave.request', { type: 'leave', id: request.id, label: `${staff.name} ${start}` }, { type, dates });
   res.json({ ok: true, request });
-});
+}));
 
-app.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, (req, res) => {
+app.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, lockedRoute(LEAVE_PATH, (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -2757,7 +2987,7 @@ app.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, (re
   saveLeave(leaveData);
   auditLog(req, 'leave.cancel', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
   res.json({ ok: true });
-});
+}));
 
 // ─── API: オンコール（スタッフ向け） ─────────────────────────────
 app.get('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
@@ -2770,30 +3000,43 @@ app.get('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
 });
 
 // オンコール累計時間から有給付与日数を再計算し、staff.jsonを更新
-function updateOncallLeave(staffId) {
+async function updateOncallLeave(staffId) {
   const data = loadOncall();
   const allRecords = data.records.filter(r => r.staffId === staffId);
   const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
   const days = Math.floor(totalMinutes / 900); // 900分 = 15時間
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === staffId);
-  if (staff && staff.oncall_leave_granted !== days) {
-    staff.oncall_leave_granted = days;
-    saveStaff(staffData);
-  }
+  await withFileLock(STAFF_PATH, async () => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === staffId);
+    if (staff && staff.oncall_leave_granted !== days) {
+      staff.oncall_leave_granted = days;
+      saveStaff(staffData);
+    }
+  });
   return { totalMinutes, days };
 }
 
-app.post('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
+app.post('/api/oncall/records', requireStaff, requireLeaveOncall, lockedRoute(ONCALL_PATH, async (req, res) => {
   const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
-  const c = Number(count) || 0;
+  const cv = validateNum(count, { min: 0, max: 100 });
+  const tcv = validateNum(transportCount, { min: 0, max: 100 });
+  if (!cv.valid || !tcv.valid)
+    return res.status(400).json({ error: '回数は0〜100の数値で入力してください' });
+  const c = cv.value || 0;
+  const tc = tcv.value || 0;
   // totalHours（フロントエンド）→ totalMinutes に変換。totalMinutes直接指定も後方互換で対応
-  const tm = totalHours != null ? Math.round(Number(totalHours) * 60) : (Number(totalMinutes) || 0);
-  const tc = Number(transportCount) || 0;
-  if (c < 0 || tm < 0 || tc < 0)
-    return res.status(400).json({ error: '値は0以上で入力してください' });
+  let tm;
+  if (totalHours != null) {
+    const thv = validateNum(totalHours, { min: 0, max: 1440 });
+    if (!thv.valid) return res.status(400).json({ error: '時間の値が不正です' });
+    tm = Math.round(thv.value * 60);
+  } else {
+    const tmv = validateNum(totalMinutes, { min: 0, max: 86400 });
+    if (!tmv.valid) return res.status(400).json({ error: '分数の値が不正です' });
+    tm = tmv.value || 0;
+  }
 
   const data = loadOncall();
   const existing = data.records.find(r => r.staffId === req.session.staffId && r.date === date);
@@ -2819,13 +3062,13 @@ app.post('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => 
   saveOncall(data);
 
   // オンコール有給を自動再計算
-  updateOncallLeave(req.session.staffId);
+  await updateOncallLeave(req.session.staffId);
 
   auditLog(req, 'oncall.upsert', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${date}` }, { date, count: c, totalMinutes: tm, transportCount: tc });
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/oncall/records/:id', requireStaff, (req, res) => {
+app.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, (req, res) => {
   const data = loadOncall();
   const idx = data.records.findIndex(r => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'レコードが見つかりません' });
@@ -2836,7 +3079,7 @@ app.delete('/api/oncall/records/:id', requireStaff, (req, res) => {
   saveOncall(data);
   auditLog(req, 'oncall.delete', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${removed.date}` });
   res.json({ ok: true });
-});
+}));
 
 app.get('/api/oncall/monthly-summary', requireStaff, requireLeaveOncall, (req, res) => {
   const month = req.query.month;
@@ -2900,7 +3143,7 @@ app.get('/api/admin/oncall/records', requireAdmin, (req, res) => {
   res.json({ records });
 });
 
-app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, (req, res) => {
+app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -2908,7 +3151,7 @@ app.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, (req, res) => {
   saveStaff(staffData);
   auditLog(req, 'oncall.eligible_update', { type: 'staff', id: staff.id, label: staff.name }, { oncall_eligible: staff.oncall_eligible });
   res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
-});
+}));
 
 // ─── API: 待機管理（管理者向け） ──────────────────────────────
 
@@ -2942,7 +3185,7 @@ app.get('/api/admin/standby/records', requireAdmin, (req, res) => {
 });
 
 // 待機者登録/更新
-app.post('/api/admin/standby/records', requireAdmin, (req, res) => {
+app.post('/api/admin/standby/records', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
   const { date, staffId } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
   const data = loadStandby();
@@ -2961,10 +3204,10 @@ app.post('/api/admin/standby/records', requireAdmin, (req, res) => {
   saveStandby(data);
   auditLog(req, 'standby.upsert', { type: 'standby', id: date }, { date, staffId: staffId || '(削除)' });
   res.json({ ok: true });
-});
+}));
 
 // 待機記録削除
-app.delete('/api/admin/standby/records/:date', requireAdmin, (req, res) => {
+app.delete('/api/admin/standby/records/:date', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
   const data = loadStandby();
   const idx = data.records.findIndex(r => r.date === req.params.date);
   if (idx < 0) return res.status(404).json({ error: '記録が見つかりません' });
@@ -2972,7 +3215,7 @@ app.delete('/api/admin/standby/records/:date', requireAdmin, (req, res) => {
   saveStandby(data);
   auditLog(req, 'standby.delete', { type: 'standby', id: req.params.date }, {});
   res.json({ ok: true });
-});
+}));
 
 // 待機集計（16日〜15日締め）
 app.get('/api/admin/standby/summary', requireAdmin, (req, res) => {
@@ -3014,7 +3257,7 @@ app.get('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
 });
 
 // カスタム祝日設定
-app.post('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
+app.post('/api/admin/standby/custom-holidays', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
   const { dates } = req.body;
   if (!Array.isArray(dates)) return res.status(400).json({ error: 'dates は配列で指定してください' });
   const data = loadStandby();
@@ -3022,11 +3265,11 @@ app.post('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
   saveStandby(data);
   auditLog(req, 'standby.custom_holidays', { type: 'standby', id: 'custom-holidays' }, { count: dates.length });
   res.json({ ok: true, customHolidays: data.customHolidays });
-});
+}));
 
 // ─── API: 雨の日管理（管理者向け） ──────────────────────────────
 
-app.post('/api/admin/rainy/toggle', requireAdmin, (req, res) => {
+app.post('/api/admin/rainy/toggle', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
   const data = loadStandby();
@@ -3041,7 +3284,7 @@ app.post('/api/admin/rainy/toggle', requireAdmin, (req, res) => {
   const isRainy = data.rainyDays.includes(date);
   auditLog(req, 'rainy.toggle', { type: 'rainy', id: date }, { rainy: isRainy });
   res.json({ ok: true, rainy: isRainy });
-});
+}));
 
 // 雨の日集計（16日〜15日締め、出勤判定付き）
 app.get('/api/admin/rainy/summary', requireAdmin, async (req, res) => {
@@ -3095,7 +3338,7 @@ app.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
   res.json({ requests });
 });
 
-app.post('/api/admin/leave/requests/:id/approve', requireAdmin, (req, res) => {
+app.post('/api/admin/leave/requests/:id/approve', requireAdmin, lockedRoute(LEAVE_PATH, async (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -3124,15 +3367,15 @@ app.post('/api/admin/leave/requests/:id/approve', requireAdmin, (req, res) => {
     ? request.dates[0]
     : `${request.dates[0]}〜${request.dates[request.dates.length - 1]}`;
   const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-  createStaffNotice(request.staffId,
+  await createStaffNotice(request.staffId,
     '有給申請が承認されました',
     `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
   );
 
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/admin/leave/requests/:id/reject', requireAdmin, (req, res) => {
+app.post('/api/admin/leave/requests/:id/reject', requireAdmin, lockedRoute(LEAVE_PATH, async (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -3150,13 +3393,13 @@ app.post('/api/admin/leave/requests/:id/reject', requireAdmin, (req, res) => {
     ? request.dates[0]
     : `${request.dates[0]}〜${request.dates[request.dates.length - 1]}`;
   const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-  createStaffNotice(request.staffId,
+  await createStaffNotice(request.staffId,
     '有給申請が却下されました',
     `${dateStr}（${typeLabel}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
   );
 
   res.json({ ok: true });
-});
+}));
 
 app.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
   const staffData = loadStaff();
@@ -3180,10 +3423,12 @@ app.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
         pendingDays += r.dates.length * per;
       }
+      usedDays = Math.round(usedDays * 10) / 10;
+      pendingDays = Math.round(pendingDays * 10) / 10;
       const granted     = s.leave_granted || 0;
       const carriedOver = s.leave_carried_over || 0;
       const manualAdj   = s.leave_manual_adjustment || 0;
-      const balance     = granted + carriedOver + manualAdj - usedDays;
+      const balance     = Math.round((granted + carriedOver + manualAdj - usedDays) * 10) / 10;
       return {
         id: s.id,
         name: s.name,
@@ -3202,23 +3447,39 @@ app.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
   res.json({ summary });
 });
 
-app.post('/api/admin/staff/:id/leave-balance', requireAdmin, (req, res) => {
+app.post('/api/admin/staff/:id/leave-balance', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
   const { granted, carried_over, manual_adjustment, grant_date } = req.body;
-  if (granted !== undefined)          staff.leave_granted = Number(granted);
-  if (carried_over !== undefined)     staff.leave_carried_over = Number(carried_over);
-  if (manual_adjustment !== undefined) staff.leave_manual_adjustment = Number(manual_adjustment);
-  if (grant_date !== undefined)       staff.leave_grant_date = grant_date;
+  if (granted !== undefined) {
+    const v = validateNum(granted, { min: 0, max: 365 });
+    if (!v.valid) return res.status(400).json({ error: '付与日数が不正です（0〜365）' });
+    staff.leave_granted = v.value;
+  }
+  if (carried_over !== undefined) {
+    const v = validateNum(carried_over, { min: 0, max: 365 });
+    if (!v.valid) return res.status(400).json({ error: '繰越日数が不正です（0〜365）' });
+    staff.leave_carried_over = v.value;
+  }
+  if (manual_adjustment !== undefined) {
+    const v = validateNum(manual_adjustment, { min: -365, max: 365 });
+    if (!v.valid) return res.status(400).json({ error: '手動調整値が不正です（-365〜365）' });
+    staff.leave_manual_adjustment = v.value;
+  }
+  if (grant_date !== undefined) {
+    if (grant_date !== null && grant_date !== '' && !isValidDate(grant_date))
+      return res.status(400).json({ error: '付与日の形式が不正です' });
+    staff.leave_grant_date = grant_date || null;
+  }
 
   saveStaff(staffData);
   auditLog(req, 'leave.balance_update', { type: 'leave', id: staff.id, label: staff.name }, { granted, carried_over, manual_adjustment, grant_date });
   res.json({ ok: true, balance: calcLeaveBalance(staff) });
-});
+}));
 
-app.post('/api/admin/staff/:id/hire-date', requireAdmin, (req, res) => {
+app.post('/api/admin/staff/:id/hire-date', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -3237,24 +3498,26 @@ app.post('/api/admin/staff/:id/hire-date', requireAdmin, (req, res) => {
   saveStaff(staffData);
   auditLog(req, 'staff.hire_date_update', { type: 'staff', id: staff.id, label: staff.name }, { hire_date, auto_apply });
   res.json({ ok: true, auto_grant_days: calcLeaveGrantDays(hire_date) });
-});
+}));
 
 // ─── 有給通知ヘルパー（個人宛お知らせ） ──────────────────────────
-function createStaffNotice(staffId, title, body) {
-  const data = loadNotices();
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const notice = {
-    id: 'leave-' + Date.now(),
-    date: now.toISOString().slice(0, 10),
-    title,
-    body,
-    source: 'system',
-    targetStaffId: staffId,
-    createdAt: now.toISOString()
-  };
-  data.notices.push(notice);
-  saveNotices(data);
-  return notice;
+async function createStaffNotice(staffId, title, body) {
+  return await withFileLock(NOTICES_PATH, async () => {
+    const data = loadNotices();
+    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const notice = {
+      id: 'leave-' + Date.now(),
+      date: now.toISOString().slice(0, 10),
+      title,
+      body,
+      source: 'system',
+      targetStaffId: staffId,
+      createdAt: now.toISOString()
+    };
+    data.notices.push(notice);
+    saveNotices(data);
+    return notice;
+  });
 }
 
 // ─── API: お知らせ（スタッフ向け） ─────────────────────────────
@@ -3279,7 +3542,7 @@ app.get('/api/notices/unread-count', requireStaff, (req, res) => {
   res.json({ count });
 });
 
-app.post('/api/notices/:id/read', requireStaff, (req, res) => {
+app.post('/api/notices/:id/read', requireStaff, lockedRoute(NOTICES_PATH, (req, res) => {
   const data = loadNotices();
   const staffId = req.session.staffId;
   if (!data.readStatus[staffId]) data.readStatus[staffId] = [];
@@ -3288,7 +3551,7 @@ app.post('/api/notices/:id/read', requireStaff, (req, res) => {
     saveNotices(data);
   }
   res.json({ ok: true });
-});
+}));
 
 // ─── API: お知らせ（管理者向け） ──────────────────────────────
 app.get('/api/admin/notices', requireAdmin, (_req, res) => {
@@ -3297,7 +3560,7 @@ app.get('/api/admin/notices', requireAdmin, (_req, res) => {
   res.json({ notices: sorted });
 });
 
-app.post('/api/admin/notices', requireAdmin, (req, res) => {
+app.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
   const { title, body, source } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
   const data = loadNotices();
@@ -3315,9 +3578,9 @@ app.post('/api/admin/notices', requireAdmin, (req, res) => {
   saveNotices(data);
   auditLog(req, 'notice.create', { type: 'notice', id: notice.id, label: title });
   res.json({ ok: true, notice });
-});
+}));
 
-app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
+app.patch('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
   const data = loadNotices();
   const notice = data.notices.find(n => n.id === req.params.id);
   if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
@@ -3326,9 +3589,9 @@ app.patch('/api/admin/notices/:id', requireAdmin, (req, res) => {
   saveNotices(data);
   auditLog(req, 'notice.update', { type: 'notice', id: notice.id, label: notice.title });
   res.json({ ok: true, notice });
-});
+}));
 
-app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
   const data = loadNotices();
   const idx = data.notices.findIndex(n => n.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });
@@ -3341,7 +3604,7 @@ app.delete('/api/admin/notices/:id', requireAdmin, (req, res) => {
   saveNotices(data);
   auditLog(req, 'notice.delete', { type: 'notice', id: req.params.id, label: removedNotice.title });
   res.json({ ok: true });
-});
+}));
 
 // ─── API: 監査ログ（管理者向け） ──────────────────────────────
 app.get('/api/admin/audit-log', requireAdmin, (req, res) => {
@@ -3640,10 +3903,11 @@ function createSystemNotice(title, body) {
 async function ensureDataDir() {
   if (DATA_DIR === __dirname) return;
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  // staff.json が DATA_DIR になければ git リポジトリのものをコピー
+  // staff.json が DATA_DIR になければ ソースからコピー（なければ空テンプレート作成）
   if (!fs.existsSync(STAFF_PATH)) {
     const src = path.join(__dirname, 'staff.json');
     if (fs.existsSync(src)) fs.copyFileSync(src, STAFF_PATH);
+    else writeFileAtomicSync(STAFF_PATH, JSON.stringify({ incentive_defaults: { nurse: 3.5, rehab: 20 }, staff: [] }, null, 2));
   }
   // spreadsheet-registry.json も同様
   if (!fs.existsSync(REGISTRY_PATH)) {
@@ -3654,29 +3918,29 @@ async function ensureDataDir() {
   if (!fs.existsSync(SCHEDULES_PATH)) {
     const src = path.join(__dirname, 'schedules.json');
     if (fs.existsSync(src)) fs.copyFileSync(src, SCHEDULES_PATH);
-    else fs.writeFileSync(SCHEDULES_PATH, JSON.stringify({ schedules: [] }, null, 2));
+    else writeFileAtomicSync(SCHEDULES_PATH, JSON.stringify({ schedules: [] }, null, 2));
   }
   // notices.json も同様
   if (!fs.existsSync(NOTICES_PATH)) {
     const src = path.join(__dirname, 'notices.json');
     if (fs.existsSync(src)) fs.copyFileSync(src, NOTICES_PATH);
-    else fs.writeFileSync(NOTICES_PATH, JSON.stringify({ notices: [], readStatus: {} }, null, 2));
+    else writeFileAtomicSync(NOTICES_PATH, JSON.stringify({ notices: [], readStatus: {} }, null, 2));
   }
   // leave-requests.json も同様
   if (!fs.existsSync(LEAVE_PATH)) {
-    fs.writeFileSync(LEAVE_PATH, JSON.stringify({ requests: [] }, null, 2));
+    writeFileAtomicSync(LEAVE_PATH, JSON.stringify({ requests: [] }, null, 2));
   }
   // oncall-records.json も同様
   if (!fs.existsSync(ONCALL_PATH)) {
-    fs.writeFileSync(ONCALL_PATH, JSON.stringify({ records: [] }, null, 2));
+    writeFileAtomicSync(ONCALL_PATH, JSON.stringify({ records: [] }, null, 2));
   }
   // audit-log.json
   if (!fs.existsSync(AUDIT_LOG_PATH)) {
-    fs.writeFileSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
+    writeFileAtomicSync(AUDIT_LOG_PATH, JSON.stringify([], null, 2));
   }
   // attendance.json
   if (!fs.existsSync(ATTENDANCE_PATH)) {
-    fs.writeFileSync(ATTENDANCE_PATH, JSON.stringify({ records: {}, reminders_sent: {} }, null, 2));
+    writeFileAtomicSync(ATTENDANCE_PATH, JSON.stringify({ records: {}, reminders_sent: {} }, null, 2));
   }
 }
 
@@ -3738,7 +4002,7 @@ async function main() {
         );
         if (alreadySent) continue;
 
-        createStaffNotice(s.id,
+        await createStaffNotice(s.id,
           `${dateLabel}の記録が未入力です`,
           `本日の訪問記録がまだ入力されていません。\n忘れずに入力をお願いします。`
         );

@@ -110,18 +110,18 @@
       <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
-  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+  <button class="hamburger" id="hamburgerBtn" aria-label="メニュー">
     <span></span><span></span><span></span>
   </button>
-  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+  <div class="menu-overlay" id="menuOverlay">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
-      <button class="menu-logout" onclick="logout()">ログアウト</button>
+      <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
     </div>
     </div>
   </div>
@@ -131,7 +131,7 @@
   <div class="spinner" id="spinner">読み込み中...</div>
 
   <div class="month-selector" id="monthSelector" style="display:none">
-    <select id="monthSelect" onchange="loadData()"></select>
+    <select id="monthSelect"></select>
   </div>
 
   <div class="summary-card" id="summaryCard" style="display:none">
@@ -175,13 +175,13 @@
   <div class="card" id="formCard" style="display:none">
     <div class="card-title">オンコール入力</div>
     <div style="margin-bottom:8px">
-      <input type="date" class="form-input" id="inputDate" style="padding:8px 12px;font-size:14px" onchange="onDateChange()">
+      <input type="date" class="form-input" id="inputDate" style="padding:8px 12px;font-size:14px">
     </div>
     <div class="picker-grid">
       <div>
         <div class="picker-col-label">合計時間</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="timeBtn" style="padding:10px 12px;font-size:16px" onclick="togglePicker('time')">
+          <button type="button" class="picker-btn" id="timeBtn" style="padding:10px 12px;font-size:16px">
             <span><span id="timeDisplay" class="val-empty">0.0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">時間</span></span>
             <span class="chevron">▼</span>
           </button>
@@ -191,7 +191,7 @@
       <div>
         <div class="picker-col-label">交通費</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn" id="transportBtn" style="padding:10px 12px;font-size:16px" onclick="togglePicker('transport')">
+          <button type="button" class="picker-btn" id="transportBtn" style="padding:10px 12px;font-size:16px">
             <span><span id="transportDisplay" class="val-empty">0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">件</span></span>
             <span class="chevron">▼</span>
           </button>
@@ -199,7 +199,7 @@
         </div>
       </div>
     </div>
-    <button class="btn-submit" id="submitBtn" onclick="submitRecord()" style="margin-top:10px;padding:12px">登録する</button>
+    <button class="btn-submit" id="submitBtn" style="margin-top:10px;padding:12px">登録する</button>
   </div>
 
   <div class="card" id="historyCard" style="display:none">
@@ -212,7 +212,9 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/vendor/api-fetch.js"></script>
 <script>
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   const WD = ['日','月','火','水','木','金','土'];
   let allRecords = [];
 
@@ -312,8 +314,8 @@
             <div class="record-detail">${hours}時間 / 交通費${r.transportCount}件</div>
           </div>
           <div class="record-actions">
-            <button class="btn-edit" onclick="editRecord('${r.date}')">編集</button>
-            <button class="btn-delete" onclick="deleteRecord('${r.id}')">削除</button>
+            <button class="btn-edit" data-action="edit-record" data-date="${esc(r.date)}">編集</button>
+            <button class="btn-delete" data-action="delete-record" data-id="${esc(r.id)}">削除</button>
           </div>
         </div>`;
     }).join('');
@@ -383,6 +385,14 @@
     document.getElementById('transportDisplay').textContent = pv.transport;
   }
 
+  // ── #recordsList イベント委譲 ───────────────────────────────────
+  document.getElementById('recordsList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'edit-record')   editRecord(btn.dataset.date);
+    if (btn.dataset.action === 'delete-record') deleteRecord(btn.dataset.id);
+  });
+
   function editRecord(date) {
     document.getElementById('inputDate').value = date;
     onDateChange();
@@ -392,7 +402,7 @@
   async function deleteRecord(id) {
     if (!confirm('このレコードを削除しますか？')) return;
     try {
-      const res = await fetch('/api/oncall/records/' + id, { method: 'DELETE' });
+      const res = await apiFetch('/api/oncall/records/' + id, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) { showToast(data.error || 'エラー'); return; }
       showToast('削除しました');
@@ -410,7 +420,7 @@
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
     try {
-      const res = await fetch('/api/oncall/records', {
+      const res = await apiFetch('/api/oncall/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date, count: 0, totalHours: pv.time, transportCount: pv.transport }),
@@ -461,9 +471,20 @@
     document.getElementById('menuOverlay').classList.remove('open');
   }
   async function logout() {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/logout', { method: 'POST' });
     location.href = '/login';
   }
+
+  // イベントリスナー
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
+  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
+  document.getElementById('monthSelect').addEventListener('change', loadData);
+  document.getElementById('inputDate').addEventListener('change', onDateChange);
+  document.getElementById('timeBtn').addEventListener('click', () => togglePicker('time'));
+  document.getElementById('transportBtn').addEventListener('click', () => togglePicker('transport'));
+  document.getElementById('submitBtn').addEventListener('click', submitRecord);
 
   // ピッカー外クリックで閉じる
   document.addEventListener('click', (e) => {

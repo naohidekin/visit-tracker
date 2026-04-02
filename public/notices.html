@@ -76,18 +76,18 @@
       <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
-  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+  <button class="hamburger" id="hamburgerBtn" aria-label="メニュー">
     <span></span><span></span><span></span>
   </button>
-  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+  <div class="menu-overlay" id="menuOverlay">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
-      <button class="menu-logout" onclick="logout()">ログアウト</button>
+      <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
     </div>
     </div>
   </div>
@@ -100,6 +100,7 @@
 </div>
 </div>
 
+<script src="/vendor/api-fetch.js"></script>
 <script>
   async function init() {
     const me = await fetch('/api/me').then(r => r.json());
@@ -144,7 +145,7 @@
     }
 
     list.innerHTML = notices.map(n => `
-      <div class="notice-card ${n.isRead ? '' : 'unread'}" data-id="${n.id}" onclick="toggleNotice(this, '${n.id}', ${n.isRead})">
+      <div class="notice-card ${n.isRead ? '' : 'unread'}" data-id="${esc(n.id)}" data-read="${n.isRead ? 'true' : 'false'}">
         <div class="notice-header">
           ${n.isRead ? '<div class="read-dot"></div>' : '<div class="unread-dot"></div>'}
           <div style="flex:1;min-width:0">
@@ -158,7 +159,15 @@
     `).join('');
   }
 
-  async function toggleNotice(el, id, wasRead) {
+  // ── #noticesList イベント委譲 ───────────────────────────────────
+  document.getElementById('noticesList').addEventListener('click', e => {
+    const card = e.target.closest('.notice-card');
+    if (card) toggleNotice(card);
+  });
+
+  async function toggleNotice(el) {
+    const id = el.dataset.id;
+    const wasRead = el.dataset.read === 'true';
     const isExpanding = !el.classList.contains('expanded');
     // collapse all others
     document.querySelectorAll('.notice-card.expanded').forEach(c => {
@@ -167,12 +176,11 @@
     el.classList.toggle('expanded');
 
     if (isExpanding && !wasRead) {
-      await fetch(`/api/notices/${id}/read`, { method: 'POST' });
+      await apiFetch(`/api/notices/${id}/read`, { method: 'POST' });
       el.classList.remove('unread');
       const dot = el.querySelector('.unread-dot');
       if (dot) { dot.className = 'read-dot'; }
-      // update data so re-toggle doesn't re-send
-      el.setAttribute('onclick', `toggleNotice(this, '${id}', true)`);
+      el.dataset.read = 'true';
       await updateMenuBadge();
     }
   }
@@ -212,9 +220,13 @@
     document.getElementById('menuOverlay').classList.remove('open');
   }
   async function logout() {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/logout', { method: 'POST' });
     location.href = '/login';
   }
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
+  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
 
   init();
 </script>

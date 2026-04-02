@@ -87,18 +87,18 @@
         <span class="header-user-name" id="headerUserName"></span>
       </div>
     </div>
-    <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+    <button class="hamburger" id="hamburgerBtn" aria-label="メニュー">
       <span></span><span></span><span></span>
     </button>
-    <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+    <div class="menu-overlay" id="menuOverlay">
       <div class="menu-overlay-inner">
-      <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
+      <div class="menu-drawer" id="menuDrawer">
         <a href="/">入力画面</a>
         <a href="/history">月次実績</a>
         <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
         <a href="/change-password">PW変更</a>
         <a href="/manual">使い方</a>
-        <button class="menu-logout" onclick="logout()">ログアウト</button>
+        <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
       </div>
       </div>
     </div>
@@ -213,6 +213,7 @@
 
   </div>
   <p class="copyright">© 2026 株式会社Yuw connect All rights reserved.</p>
+<script src="/vendor/api-fetch.js"></script>
 <script>
   function toggleMenu() {
     document.getElementById('hamburgerBtn').classList.toggle('open');
@@ -223,9 +224,13 @@
     document.getElementById('menuOverlay').classList.remove('open');
   }
   async function logout() {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/logout', { method: 'POST' });
     location.href = '/login';
   }
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuDrawer').addEventListener('click', e => e.stopPropagation());
+  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
   (async()=>{try{const r=await fetch('/api/notices/unread-count');const{count}=await r.json();const b=document.getElementById('menuBadge');if(count>0){b.textContent=count;b.style.display='flex';}}catch{}})();
   (async()=>{try{const r=await fetch('/api/me');if(!r.ok){location.href='/login';return;}const d=await r.json();const el=document.getElementById('headerUserName');if(el)el.textContent=`👤 ${d.name}（${d.type==='nurse'?'看護師':d.type}）`;if(d.leave_oncall_enabled){const drawer=document.getElementById('menuDrawer');const historyLink=drawer.querySelector('a[href="/history"]');if(historyLink){const leaveLink=document.createElement('a');leaveLink.href='/leave';leaveLink.textContent='有給管理';historyLink.after(leaveLink);if(d.oncall_eligible){const oncallLink=document.createElement('a');oncallLink.href='/oncall';oncallLink.textContent='オンコール';leaveLink.after(oncallLink);}}}  }catch{}})();
 </script>

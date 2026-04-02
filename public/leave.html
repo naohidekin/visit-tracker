@@ -125,18 +125,18 @@
       <span class="header-user-name" id="headerUserName"></span>
     </div>
   </div>
-  <button class="hamburger" id="hamburgerBtn" onclick="toggleMenu()" aria-label="メニュー">
+  <button class="hamburger" id="hamburgerBtn" aria-label="メニュー">
     <span></span><span></span><span></span>
   </button>
-  <div class="menu-overlay" id="menuOverlay" onclick="closeMenu()">
+  <div class="menu-overlay" id="menuOverlay">
     <div class="menu-overlay-inner">
-    <div class="menu-drawer" id="menuDrawer" onclick="event.stopPropagation()">
+    <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
       <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
-      <button class="menu-logout" onclick="logout()">ログアウト</button>
+      <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
     </div>
     </div>
   </div>
@@ -188,9 +188,9 @@
     <div class="form-group">
       <label class="form-label">種別</label>
       <div class="type-selector">
-        <button class="type-btn active" data-type="full" onclick="selectType(this)">全日</button>
-        <button class="type-btn" data-type="half_am" onclick="selectType(this)">午前半休</button>
-        <button class="type-btn" data-type="half_pm" onclick="selectType(this)">午後半休</button>
+        <button class="type-btn active" data-type="full">全日</button>
+        <button class="type-btn" data-type="half_am">午前半休</button>
+        <button class="type-btn" data-type="half_pm">午後半休</button>
       </div>
     </div>
     <div class="form-group">
@@ -205,7 +205,7 @@
       <label class="form-label">理由（任意）</label>
       <input type="text" class="form-input" id="reason" placeholder="例: 私用、通院 等">
     </div>
-    <button class="btn-submit" id="submitBtn" onclick="submitRequest()">申請する</button>
+    <button class="btn-submit" id="submitBtn">申請する</button>
   </div>
 
   <!-- 申請履歴 -->
@@ -219,6 +219,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/vendor/api-fetch.js"></script>
 <script>
   let selectedType = 'full';
   let currentBalance = 0;
@@ -385,7 +386,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="status-badge status-${r.status}">${statusLabel}</span>
-              ${canCancel ? `<button class="btn-cancel" onclick="cancelRequest('${r.id}')">取消</button>` : ''}
+              ${canCancel ? `<button class="btn-cancel" data-action="cancel-request" data-id="${esc(r.id)}">取消</button>` : ''}
             </div>
           </div>
           ${r.reason ? `<div class="request-reason">理由: ${esc(r.reason)}</div>` : ''}
@@ -421,7 +422,7 @@
       const body = { type: selectedType, startDate, reason };
       if (selectedType === 'full' && endDate) body.endDate = endDate;
 
-      const res = await fetch('/api/leave/requests', {
+      const res = await apiFetch('/api/leave/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -439,10 +440,16 @@
     }
   }
 
+  // ── #requestsList イベント委譲 ──────────────────────────────────
+  document.getElementById('requestsList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action="cancel-request"]');
+    if (btn) cancelRequest(btn.dataset.id);
+  });
+
   async function cancelRequest(id) {
     if (!confirm('この申請を取り消しますか？')) return;
     try {
-      const res = await fetch(`/api/leave/requests/${id}/cancel`, { method: 'POST' });
+      const res = await apiFetch(`/api/leave/requests/${id}/cancel`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) { showToast(data.error || 'エラーが発生しました'); return; }
       showToast('取り消しました');
@@ -496,9 +503,23 @@
     document.getElementById('menuOverlay').classList.remove('open');
   }
   async function logout() {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/logout', { method: 'POST' });
     location.href = '/login';
   }
+
+  // ── イベントリスナー登録 ──────────────────────────────────
+  document.getElementById('hamburgerBtn').addEventListener('click', toggleMenu);
+  document.getElementById('menuOverlay').addEventListener('click', closeMenu);
+  document.getElementById('menuDrawer').addEventListener('click', function(e) { e.stopPropagation(); });
+  document.getElementById('menuLogoutBtn').addEventListener('click', logout);
+
+  // 種別ボタン（event delegation on parent .type-selector）
+  document.querySelector('.type-selector').addEventListener('click', function(e) {
+    const btn = e.target.closest('.type-btn');
+    if (btn) selectType(btn);
+  });
+
+  document.getElementById('submitBtn').addEventListener('click', submitRequest);
 
   init();
 </script>
