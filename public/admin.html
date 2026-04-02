@@ -3473,7 +3473,7 @@
   // ── イベントリスナー登録 ────────────────────────────────────────
   // Header/Auth
   document.getElementById('logoutBtn').addEventListener('click', adminLogout);
-  document.getElementById('loginBtn').addEventListener('click', adminLogin);
+  // loginBtn は新ログインJS内で登録済み（passwordLogin）
 
   // 管理者権限管理ボタン（スタッフ一覧に統合）
   document.addEventListener('click', async function(e) {
