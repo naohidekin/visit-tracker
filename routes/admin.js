@@ -1729,7 +1729,7 @@ router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
   }
 
   const staffData = loadStaff();
-  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
+  const activeStaff = staffData.staff.filter(s => !s.archived);
   const attendanceData = loadAttendance();
   const leaveData = loadLeave();
 
