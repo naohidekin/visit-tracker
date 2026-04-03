@@ -259,7 +259,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
   const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
-  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
+  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office' && s.type !== 'admin');
 
   try {
     const api = await getSheets();
@@ -712,7 +712,7 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
   const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall, email } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
-  const VALID_STAFF_TYPES = ['nurse', 'PT', 'OT', 'ST', 'office'];
+  const VALID_STAFF_TYPES = ['nurse', 'PT', 'OT', 'ST', 'office', 'admin'];
   if (!VALID_STAFF_TYPES.includes(type))
     return res.status(400).json({ error: `スタッフ種別が不正です（${VALID_STAFF_TYPES.join('/')}）` });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -968,16 +968,16 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
         password_hash: await bcrypt.hash(initialPw, 10) };
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type: 'nurse', columns: { kaigo: kaigoCol, iryo: iryoCol } });
 
-    } else if (type === 'office') {
-      // 事務職 — スプレッドシートに列を追加しない（有給管理のみ）
+    } else if (type === 'office' || type === 'admin') {
+      // 事務職・管理者 — スプレッドシートに列を追加しない
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
-        type: 'office',
+        type,
         seq: nextSeq, initial_pw: initialPw,
         hire_date: hire_date || null,
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
-      operations.push({ action: 'staff_record_created', staffId: loginId, name, type: 'office', columns: null, note: 'スプレッドシート列なし（事務職）' });
+      operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: null, note: 'スプレッドシート列なし' });
 
     } else {
       // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
@@ -1729,7 +1729,7 @@ router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
   }
 
   const staffData = loadStaff();
-  const activeStaff = staffData.staff.filter(s => !s.archived);
+  const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'admin');
   const attendanceData = loadAttendance();
   const leaveData = loadLeave();
 
