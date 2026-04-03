@@ -7,28 +7,28 @@
   <link rel="icon" href="/logo.png">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;--err:#c0392b;--radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)}
-    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:120px;padding-left:20px;padding-right:20px;padding-bottom:20px}
+    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;--err:#c0392b;--radius:16px;--shadow:0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.08)}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:120px;padding-left:20px;padding-right:20px;padding-bottom:20px;-webkit-font-smoothing:antialiased}
     .logo{text-align:center;margin-bottom:16px}
     .logo-wrap{width:150px;height:170px;background:#fff;border-radius:28px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto 6px}
     .logo-icon{width:128px;height:128px;border-radius:0;display:block;margin:0;object-fit:contain}
     .logo h1{font-size:18px;font-weight:700;color:var(--blue-dark)}
     .logo p{font-size:12px;color:var(--muted);margin-top:4px}
-    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 24px;width:100%;max-width:360px}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 24px;width:100%;max-width:360px;border:1px solid rgba(0,0,0,.04)}
     .field{margin-bottom:18px}
     label{display:block;font-size:13px;font-weight:600;color:var(--blue-dark);margin-bottom:6px}
-    input{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;background:var(--white);color:var(--text)}
-    input:focus{border-color:var(--blue)}
-    .btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
-    .btn:active{background:var(--blue-dark)}
+    input{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s, box-shadow .2s;background:var(--white);color:var(--text)}
+    input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,.12)}
+    .btn{width:100%;padding:14px;background:linear-gradient(135deg, #2E75B6 0%, #3a8ad4 100%);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:transform .1s, box-shadow .15s;box-shadow:0 3px 12px rgba(46,117,182,.3)}
+    .btn:active{transform:scale(0.98)}
     .forgot{text-align:center;margin-top:16px}
     .forgot a{font-size:13px;color:var(--blue);text-decoration:none;cursor:pointer}
     .forgot a:hover{text-decoration:underline}
     #errMsg{display:none;background:#fee;color:var(--err);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;text-align:center}
     /* 問い合わせモーダル */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
     .modal-overlay.show{display:flex}
-    .modal{background:#fff;border-radius:var(--radius);padding:24px 20px;width:100%;max-width:320px;text-align:center}
+    .modal{background:#fff;border-radius:18px;padding:24px 20px;width:100%;max-width:320px;text-align:center}
     .modal h2{font-size:15px;font-weight:700;color:var(--blue-dark);margin-bottom:10px}
     .modal p{font-size:14px;color:var(--text);line-height:1.7}
     .modal a{color:var(--blue);font-weight:700;font-size:16px}

@@ -15,33 +15,35 @@
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
       --blue:#2E75B6;--blue-dark:#1F497D;
-      --bg:#f0f4f8;--white:#fff;--border:#d0d7e3;--text:#1a2233;--muted:#6b7a99;
+      --bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;
       --kaigo:#1e40af;--kaigo-bg:#dbeafe;--iryo:#9a3412;--iryo-bg:#fef3c7;
       --ok:#0a7c42;--ok-bg:#e6f7ef;--warn:#b45309;
-      --radius:14px;--shadow:0 2px 16px rgba(0,0,0,.10)
+      --radius:16px;--shadow:0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.08)
     }
-    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text);-webkit-font-smoothing:antialiased}
 
     /* ── ヘッダー ── */
-    header{background:var(--blue);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .header-brand{display:flex;align-items:stretch;gap:10px}
-    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.5);flex-shrink:0}
+    header{background:linear-gradient(135deg, #1F497D 0%, #2E75B6 50%, #4A90C4 100%);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 12px rgba(31,73,125,.25)}
+    .header-brand{display:flex;align-items:stretch;gap:12px}
+    .header-accent{width:3px;border-radius:3px;background:rgba(255,255,255,0.4);flex-shrink:0}
     .header-brand-text{display:flex;flex-direction:column;justify-content:center;gap:3px}
-    .header-app-name{font-size:10px;font-weight:500;opacity:.65;letter-spacing:.05em}
-    .header-page-name{font-size:17px;font-weight:800;letter-spacing:.02em;line-height:1.1}
-    .header-user-name{font-size:11px;font-weight:600;opacity:.85;margin-top:1px}
+    .header-app-name{font-size:10px;font-weight:500;opacity:.6;letter-spacing:.08em;text-transform:uppercase}
+    .header-page-name{font-size:18px;font-weight:800;letter-spacing:.02em;line-height:1.1;text-shadow:0 1px 2px rgba(0,0,0,.15)}
+    .header-user-name{font-size:11px;font-weight:600;opacity:.8;margin-top:2px}
     /* ── ハンバーガーメニュー ── */
-    .hamburger{background:none;border:none;cursor:pointer;padding:6px;display:flex;flex-direction:column;gap:5px;flex-shrink:0}
+    .hamburger{background:rgba(255,255,255,.1);border:none;cursor:pointer;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:5px;flex-shrink:0;transition:background .15s}
+    .hamburger:active{background:rgba(255,255,255,.2)}
     .hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .25s}
     .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
     .hamburger.open span:nth-child(2){opacity:0}
     .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-    .menu-overlay{display:none;position:fixed;inset:0;z-index:100}
+    .menu-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.15)}
     .menu-overlay.open{display:block}
-    .menu-drawer{position:absolute;top:52px;right:0;background:#fff;border-radius:0 0 0 12px;box-shadow:0 4px 20px rgba(0,0,0,.18);min-width:160px;overflow:hidden}
-    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f0f0f0;font-family:inherit}
+    .menu-drawer{position:absolute;top:58px;right:8px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.16);min-width:180px;overflow:hidden;border:1px solid rgba(0,0,0,.06)}
+    .menu-drawer a,.menu-drawer button{display:block;width:100%;padding:15px 22px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;text-align:left;background:none;border:none;cursor:pointer;border-bottom:1px solid #f3f5f8;font-family:inherit;transition:background .1s}
     .menu-drawer a:last-child,.menu-drawer button:last-child{border-bottom:none}
-    .menu-drawer a:hover,.menu-drawer button:hover{background:#f0f4f8}
+    .menu-drawer a:hover,.menu-drawer button:hover{background:#f5f7fa}
+    .menu-drawer a:active,.menu-drawer button:active{background:#edf0f5}
     .menu-drawer .menu-logout{color:#c0392b}
     /* ── PC: スマホ幅中央固定 ── */
     .page-wrapper{width:100%;min-height:100vh}
@@ -53,43 +55,43 @@
 
     /* ── カード ── */
     .container{padding:16px;max-width:480px;margin:0 auto}
-    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px}
-    .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+    .card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 20px;margin-bottom:16px;border:1px solid rgba(0,0,0,.04)}
+    .card-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px;letter-spacing:.02em}
 
     /* ── 日付入力 ── */
-    input[type="date"]{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;background:var(--white);color:var(--text);-webkit-appearance:none}
-    input[type="date"]:focus{border-color:var(--blue)}
+    input[type="date"]{width:100%;padding:13px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s, box-shadow .2s;background:var(--white);color:var(--text);-webkit-appearance:none}
+    input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,.12)}
 
     /* ── ピッカー共通 ── */
     .picker-wrap{position:relative}
     .picker-btn{
       width:100%;padding:13px 14px;
-      border:1.5px solid var(--border);border-radius:9px;
+      border:1px solid var(--border);border-radius:10px;
       font-size:17px;font-weight:700;font-family:inherit;
       background:var(--white);cursor:pointer;
       display:flex;justify-content:space-between;align-items:center;
-      transition:border-color .15s;
+      transition:border-color .2s, box-shadow .2s;
     }
-    .picker-btn.open{border-color:var(--blue);border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .picker-btn.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,.12);border-bottom-left-radius:0;border-bottom-right-radius:0}
     .picker-btn .chevron{font-size:11px;color:var(--muted);transition:transform .2s}
     .picker-btn.open .chevron{transform:rotate(180deg)}
     .picker-dropdown{
       position:absolute;bottom:calc(100% - 1px);left:0;right:0;
       background:var(--white);
-      border:1.5px solid var(--blue);border-bottom:none;
-      border-top-left-radius:10px;border-top-right-radius:10px;
+      border:1px solid var(--blue);border-bottom:none;
+      border-top-left-radius:12px;border-top-right-radius:12px;
       max-height:220px;overflow-y:auto;
       z-index:50;
-      box-shadow:0 -6px 20px rgba(0,0,0,.12);
+      box-shadow:0 -8px 24px rgba(0,0,0,.10);
     }
     .picker-dropdown::-webkit-scrollbar{width:4px}
     .picker-dropdown::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
     .picker-item{
-      padding:10px 16px;font-size:15px;cursor:pointer;
+      padding:11px 16px;font-size:15px;cursor:pointer;
       border-bottom:1px solid #f0f4f8;
       transition:background .1s;
     }
-    .picker-item:first-child{border-top-left-radius:8px;border-top-right-radius:8px}
+    .picker-item:first-child{border-top-left-radius:10px;border-top-right-radius:10px}
     .picker-item:last-child{border-bottom:none}
     .picker-item:hover{background:#f0f4fb}
     .picker-item.selected{background:var(--blue);color:#fff;font-weight:700}
@@ -97,39 +99,39 @@
     .picker-item.empty-opt.selected{background:#eef0f4;color:var(--muted)}
 
     /* ── 看護師 横並びグリッド ── */
-    .nurse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-    .nurse-col-label{display:flex;align-items:center;gap:6px;margin-bottom:6px}
-    .badge-kaigo{background:var(--kaigo-bg);color:var(--kaigo);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
-    .badge-iryo {background:var(--iryo-bg); color:var(--iryo); padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
+    .nurse-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+    .nurse-col-label{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+    .badge-kaigo{background:var(--kaigo-bg);color:var(--kaigo);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+    .badge-iryo {background:var(--iryo-bg); color:var(--iryo); padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
     .nurse-col.kaigo .picker-btn{color:var(--kaigo)}
     .nurse-col.iryo  .picker-btn{color:var(--iryo)}
     .nurse-col .picker-btn .val-empty{color:var(--muted);font-weight:400;font-size:14px}
 
     /* ── 合計バー ── */
-    .total-bar{background:var(--blue-dark);color:#fff;border-radius:9px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .total-bar{background:linear-gradient(135deg, #1F497D 0%, #2a5f9e 100%);color:#fff;border-radius:11px;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;box-shadow:0 2px 8px rgba(31,73,125,.2)}
     .total-bar span{font-size:13px;opacity:.85}
-    .total-bar strong{font-size:20px;font-weight:800}
+    .total-bar strong{font-size:21px;font-weight:800}
 
     /* ── 注意書き ── */
     .notes{margin-bottom:16px;padding:2px 4px}
-    .notes p{font-size:12px;color:var(--muted);line-height:2;white-space:nowrap}
+    .notes p{font-size:11.5px;color:var(--muted);line-height:2;white-space:nowrap;opacity:.85}
 
     /* ── 送信ボタン ── */
-    .submit-btn{width:100%;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s}
-    .submit-btn:active{background:var(--blue-dark)}
-    .submit-btn:disabled{background:#9ab3d1;cursor:default}
+    .submit-btn{width:100%;padding:16px;background:linear-gradient(135deg, #2E75B6 0%, #3a8ad4 100%);color:#fff;border:none;border-radius:12px;font-size:17px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:transform .1s, box-shadow .15s;box-shadow:0 3px 12px rgba(46,117,182,.3)}
+    .submit-btn:active{transform:scale(0.98);box-shadow:0 1px 6px rgba(46,117,182,.25)}
+    .submit-btn:disabled{background:#9ab3d1;cursor:default;box-shadow:none;transform:none}
 
     /* ── 結果ビュー ── */
-    .result-header{text-align:center;padding:16px 0 8px}
+    .result-header{text-align:center;padding:18px 0 10px}
     .result-header .check{font-size:48px;margin-bottom:8px}
     .result-header h2{font-size:17px;font-weight:700;color:var(--ok)}
     .result-header .date-label{font-size:15px;color:var(--text);margin-top:6px;font-weight:600}
-    .continue-btn{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
-    .continue-btn:active{background:var(--blue-dark)}
+    .continue-btn{width:100%;padding:15px;background:linear-gradient(135deg, #2E75B6 0%, #3a8ad4 100%);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;transition:transform .1s;box-shadow:0 3px 12px rgba(46,117,182,.3)}
+    .continue-btn:active{transform:scale(0.98)}
     .loading{text-align:center;padding:20px;color:var(--muted);font-size:13px}
 
     /* ── 実績カード ── */
-    .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:14px}
+    .result-card{background:var(--bg);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 18px;margin-bottom:16px;border:1px solid rgba(0,0,0,.04)}
     .result-greeting{font-size:16px;font-weight:700;color:var(--text);text-align:center;line-height:1.7;margin-bottom:14px}
     .result-divider{border:none;border-top:1px solid var(--border);margin:0 0 14px}
     .result-goal-line{font-size:13px;font-weight:600;color:var(--muted);text-align:center;margin-bottom:16px}
@@ -142,43 +144,44 @@
     .result-sub-grid{display:grid;gap:8px;margin-top:14px}
     .result-sub-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
     .result-sub-grid.cols-2{grid-template-columns:1fr 1fr}
-    .result-sub-box{background:#fff;border-radius:10px;padding:10px 8px;text-align:center}
+    .result-sub-box{background:#fff;border-radius:11px;padding:11px 8px;text-align:center;border:1px solid rgba(0,0,0,.04)}
     .result-sub-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
     .result-sub-val{font-size:18px;font-weight:800;color:var(--text)}
     .result-sub-unit{font-size:12px;color:var(--muted);margin-left:2px}
 
     /* ── 予定アイテム ── */
-    .schedule-item{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+    .schedule-item{border:1px solid var(--border);border-radius:11px;padding:14px 16px;margin-bottom:10px;transition:box-shadow .15s}
     .schedule-item:last-child{margin-bottom:0}
     .schedule-item-date{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
     .schedule-item-values{font-size:13px;color:var(--muted);margin-bottom:10px}
     .schedule-item-btns{display:flex;gap:8px}
-    .sched-btn{padding:7px 16px;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s}
-    .sched-btn:active{opacity:.75}
+    .sched-btn{padding:8px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:transform .1s, opacity .15s}
+    .sched-btn:active{transform:scale(0.97)}
     .sched-confirm{background:var(--blue);color:#fff}
-    .sched-confirm:disabled{background:#9ab3d1;cursor:default;opacity:1}
+    .sched-confirm:disabled{background:#9ab3d1;cursor:default;opacity:1;transform:none}
     .sched-delete{background:#eef0f4;color:var(--muted)}
     .schedule-reminder{text-align:center;padding:8px 0 4px;font-size:14px;line-height:1.8;color:var(--ok)}
 
     /* ── 修正期間アラートバナー ── */
-    .reminder-banner{background:#eff6ff;border:1.5px solid #3b82f6;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin:12px 16px 0;box-shadow:0 2px 8px rgba(59,130,246,.15)}
+    .reminder-banner{background:#eff6ff;border:1px solid #93bbf5;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin:14px 16px 0;box-shadow:0 2px 8px rgba(59,130,246,.1)}
     .reminder-banner-icon{font-size:24px;flex-shrink:0}
     .reminder-banner-title{font-size:13px;font-weight:700;color:#1e40af;margin-bottom:2px}
     .reminder-banner-desc{font-size:11px;color:#3b82f6}
-    .alert-banner{background:#fffbeb;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin:12px 16px 0;box-shadow:0 2px 8px rgba(245,158,11,.15)}
+    .alert-banner{background:#fffbeb;border:1px solid #fcd577;border-radius:14px;padding:13px 16px;display:flex;align-items:flex-start;gap:10px;margin:14px 16px 0;box-shadow:0 2px 8px rgba(245,158,11,.1)}
     .alert-banner-icon{font-size:20px;flex-shrink:0;margin-top:1px}
     .alert-banner-title{font-size:13px;font-weight:700;color:#92400e}
     .alert-banner-desc{font-size:12px;color:#b45309;margin-top:3px;line-height:1.6}
     .alert-banner-desc b{color:#dc2626}
 
     /* ── 上書きモーダル ── */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:100;align-items:center;justify-content:center;padding:20px}
     .modal-overlay.show{display:flex}
-    .modal{background:#fff;border-radius:var(--radius);padding:22px 20px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+    .modal{background:#fff;border-radius:18px;padding:24px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2)}
     .modal h2{font-size:15px;color:var(--warn);font-weight:700;margin-bottom:10px}
     .modal p{font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px}
     .modal-btns{display:flex;gap:10px}
-    .modal-btns button{flex:1;padding:12px;border-radius:8px;border:none;font-size:14px;font-weight:700;cursor:pointer}
+    .modal-btns button{flex:1;padding:13px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:transform .1s}
+    .modal-btns button:active{transform:scale(0.97)}
     .btn-cancel{background:#eef0f4;color:var(--muted)}
     .btn-ok{background:var(--blue);color:#fff}
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
