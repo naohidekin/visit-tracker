@@ -170,6 +170,8 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;
   const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
+  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
 
   try {
     const api = await getSheets();
@@ -198,13 +200,15 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const avg = working_days > 0 ? total / working_days : 0;
       const thresholdAN    = ilineAN * working_days;
       const over_hoursAN   = Math.max(0, total - thresholdAN);
+      const rateAN = staff.incentive_rate ?? defNurseRate;
       const incentive_countAN  = Math.floor(over_hoursAN / 0.5);
-      const incentive_amountAN = incentive_countAN * 2000;
+      const incentive_amountAN = incentive_countAN * Math.round(rateAN / 2);
       res.json({ type: 'nurse', year: y, month: m, days,
         stats: { total_kaigo, total_iryo, total, working_days,
                  incentive_line: ilineAN, incentive_triggered: avg > ilineAN,
                  over_hours: Math.round(over_hoursAN * 10) / 10,
                  incentive_amount: incentive_amountAN,
+                 incentive_rate: rateAN,
                  work_hours: staff.work_hours ?? null } });
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
@@ -226,11 +230,13 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const avg = working_days > 0 ? total_units / working_days : 0;
       const threshold        = ilineAR * working_days;
       const over_units       = Math.max(0, total_units - threshold);
-      const incentive_amount = Math.floor(over_units) * 500;
+      const rateAR = staff.incentive_rate ?? defRehabRate;
+      const incentive_amount = Math.floor(over_units) * rateAR;
       res.json({ type: staff.type === 'nurse' ? 'nurse' : 'rehab', staffType: staff.type, year: y, month: m, days,
         stats: { total_units, working_days,
                  incentive_line: ilineAR, incentive_triggered: avg > ilineAR,
                  over_units: Math.floor(over_units), incentive_amount,
+                 incentive_rate: rateAR,
                  work_hours: staff.work_hours ?? null } });
     }
   } catch (e) {
@@ -251,6 +257,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
 
   const staffData = loadStaff();
   const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
+  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
   const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
 
   try {
@@ -279,19 +287,21 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
           const threshold = effectiveLine * working_days;
           const overHours = Math.max(0, total - threshold);
-          const amount = Math.floor(overHours / 0.5) * 2000;
+          const rate = staff.incentive_rate ?? defNurseRate;
+          const amount = Math.floor(overHours / 0.5) * Math.round(rate / 2);
           total_amount += amount;
           results.push({
             id: staff.id, name: staff.name, type: 'nurse',
             work_hours: staff.work_hours ?? null,
             incentive_line: rawLine, effective_line: effectiveLine,
+            incentive_rate: rate,
             working_days, threshold: Math.round(threshold * 100) / 100,
             total: Math.round(total * 10) / 10,
             total_kaigo: Math.round(total_kaigo * 10) / 10,
             total_iryo: Math.round(total_iryo * 10) / 10,
             over: Math.round(overHours * 10) / 10, amount
           });
-        } else if (staff.type !== 'office' && staff.col) {
+        } else if (staff.col) {
           // リハビリ職共通（PT/OT/ST）: 単一列構造
           const resp = await sheetsRetry(() => api.spreadsheets.values.get({
             spreadsheetId: sid,
@@ -309,12 +319,14 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
           const threshold = effectiveLine * working_days;
           const overUnits = Math.max(0, total_units - threshold);
-          const amount = Math.floor(overUnits) * 500;
+          const rate = staff.incentive_rate ?? defRehabRate;
+          const amount = Math.floor(overUnits) * rate;
           total_amount += amount;
           results.push({
             id: staff.id, name: staff.name, type: staff.type,
             work_hours: staff.work_hours ?? null,
             incentive_line: rawLine, effective_line: effectiveLine,
+            incentive_rate: rate,
             working_days, threshold: Math.round(threshold * 100) / 100,
             total: total_units,
             over: Math.floor(overUnits), amount
@@ -391,26 +403,35 @@ router.post('/api/admin/record', requireAdmin, async (req, res) => {
 // ─── API: インセンティブ設定 ────────────────────────────────────
 router.get('/api/admin/incentive', requireAdmin, (_req, res) => {
   const data = loadStaff();
+  const defs = data.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
   res.json({
-    defaults: data.incentive_defaults || { nurse: 3.5, rehab: 20.0 },
-    staff: data.staff.filter(s => !s.archived).map(s => ({
+    defaults: {
+      nurse: defs.nurse ?? 3.5, rehab: defs.rehab ?? 20.0,
+      nurse_rate: defs.nurse_rate ?? 4000, rehab_rate: defs.rehab_rate ?? 500,
+    },
+    staff: data.staff.filter(s => !s.archived && s.type !== 'office').map(s => ({
       id: s.id, name: s.name, type: s.type,
       furigana_family: s.furigana_family, furigana_given: s.furigana_given,
       incentive_line: s.incentive_line ?? null,
       work_hours: s.work_hours ?? null,
+      incentive_rate: s.incentive_rate ?? null,
     })),
   });
 });
 
 router.post('/api/admin/incentive/defaults', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
-  const { nurse, rehab } = req.body;
+  const { nurse, rehab, nurse_rate, rehab_rate } = req.body;
   const nv = validateNum(nurse, { min: 0, max: 100 });
   const rv = validateNum(rehab, { min: 0, max: 100 });
   if (!nv.valid || !rv.valid) return res.status(400).json({ error: 'インセンティブラインは0〜100の数値で入力してください' });
+  const nrv = validateNum(nurse_rate, { min: 0, max: 100000 });
+  const rrv = validateNum(rehab_rate, { min: 0, max: 100000 });
+  if (!nrv.valid || !rrv.valid) return res.status(400).json({ error: '単価は0以上の数値で入力してください' });
   const data = loadStaff();
-  data.incentive_defaults = { nurse: nv.value, rehab: rv.value };
+  const prev = data.incentive_defaults || {};
+  data.incentive_defaults = { nurse: nv.value, rehab: rv.value, nurse_rate: nrv.value, rehab_rate: rrv.value };
   saveStaff(data);
-  auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: nv.value, rehab: rv.value });
+  auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: nv.value, rehab: rv.value, nurse_rate: nrv.value, rehab_rate: rrv.value });
   res.json({ success: true });
 }));
 
@@ -437,6 +458,19 @@ router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_P
   staff.work_hours = wv.value;
   saveStaff(data);
   auditLog(req, 'staff.work_hours_update', { type: 'staff', id: staff.id, label: staff.name }, { work_hours: staff.work_hours });
+  res.json({ success: true });
+}));
+
+router.post('/api/admin/staff/:id/incentive-rate', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+  const data  = loadStaff();
+  const staff = data.staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  const { rate } = req.body;
+  const rv = validateNum(rate, { min: 0, max: 100000, allowNull: true, allowEmpty: true });
+  if (!rv.valid) return res.status(400).json({ error: '単価は0以上の数値で入力してください' });
+  staff.incentive_rate = rv.value;
+  saveStaff(data);
+  auditLog(req, 'incentive.rate_update', { type: 'incentive', id: staff.id, label: staff.name }, { rate: staff.incentive_rate });
   res.json({ success: true });
 }));
 
