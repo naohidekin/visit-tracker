@@ -269,23 +269,6 @@
     </div>
     <button class="btn btn-blue btn-full" id="loginBtn">ログイン</button>
   </div>
-  <div style="margin-top:12px;text-align:center">
-    <a href="#" id="emergencyLoginLink" style="font-size:14px;color:#999">緊急ログイン（共有パスワード）</a>
-  </div>
-</div>
-
-<!-- ログイン: 緊急フォールバック（共有パスワード） -->
-<div class="card" id="emergencyLoginCard" style="display:none">
-  <h2>緊急ログイン</h2>
-  <p style="font-size:13px;color:#666;margin-bottom:12px">管理者アカウントが利用できない場合のみ使用してください。</p>
-  <div class="msg err" id="emergencyErr"></div>
-  <div class="field">
-    <label for="emergencyPwInput">共有パスワード</label>
-    <input type="password" id="emergencyPwInput" placeholder="管理者共有パスワードを入力" autocomplete="off">
-  </div>
-  <button class="btn btn-blue btn-full" id="emergencyLoginBtn">ログイン</button>
-  <div style="margin-top:8px;text-align:center">
-    <a href="#" id="backToNormalLogin" style="font-size:14px;color:#666">通常ログインに戻る</a>
   </div>
 </div>
 
@@ -1464,12 +1447,10 @@
 
   function showLoginCard(cardId) {
     document.getElementById('loginCard').style.display = cardId === 'loginCard' ? 'block' : 'none';
-    document.getElementById('emergencyLoginCard').style.display = cardId === 'emergencyLoginCard' ? 'block' : 'none';
   }
 
   function onLoginSuccess() {
     document.getElementById('loginCard').style.display = 'none';
-    document.getElementById('emergencyLoginCard').style.display = 'none';
     document.getElementById('appLayout').style.display = 'flex';
     loadAdminIdentity();
     loadStaff();
@@ -1588,24 +1569,6 @@
     }
   }
 
-  // 緊急ログイン（共有パスワード）
-  async function emergencyLogin() {
-    const pw = document.getElementById('emergencyPwInput').value;
-    const err = document.getElementById('emergencyErr');
-    err.style.display = 'none';
-    try {
-      const res = await apiFetch('/api/admin/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
-      });
-      const data = await res.json();
-      if (data.success) { onLoginSuccess(); }
-      else { err.textContent = data.error || 'ログイン失敗'; err.style.display = 'block'; }
-    } catch {
-      err.textContent = 'サーバーに接続できません'; err.style.display = 'block';
-    }
-  }
-
   // 管理者ID表示
   async function loadAdminIdentity() {
     try {
@@ -1638,12 +1601,6 @@
   // パスワード入力 → Enter でログイン
   document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') passwordLogin(); });
   document.getElementById('loginBtn').addEventListener('click', passwordLogin);
-  // 緊急ログイン
-  document.getElementById('emergencyPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') emergencyLogin(); });
-  document.getElementById('emergencyLoginBtn').addEventListener('click', emergencyLogin);
-  document.getElementById('emergencyLoginLink').addEventListener('click', e => { e.preventDefault(); showLoginCard('emergencyLoginCard'); document.getElementById('emergencyPwInput').focus(); });
-  document.getElementById('backToNormalLogin').addEventListener('click', e => { e.preventDefault(); showLoginCard('loginCard'); });
-
   async function adminLogout() {
     await apiFetch('/api/admin/logout', { method: 'POST' });
     location.reload();
@@ -3327,7 +3284,6 @@
   fetch('/api/admin/staff').then(r => {
     if (r.ok) {
       document.getElementById('loginCard').style.display = 'none';
-      document.getElementById('emergencyLoginCard').style.display = 'none';
       document.getElementById('appLayout').style.display = 'flex';
       loadAdminIdentity();
       loadDashboard();

@@ -6,36 +6,10 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
-const { validateUnitValue, lockedRoute, isValidDate } = require('../lib/helpers');
+const { validateUnitValue, lockedRoute, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD, ALL_HOLIDAYS } = require('../lib/constants');
-
-// ヘルパー: JST今日の日付
-function getTodayJST() {
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return now.toISOString().slice(0, 10);
-}
-function getNowJST() {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000);
-}
-
-function isWorkday(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay();
-  if (dow === 0 || dow === 6) return false;
-  if (ALL_HOLIDAYS.has(dateStr)) return false;
-  return true;
-}
-
-function isOnLeaveToday(staffId, dateStr) {
-  const leaveData = loadLeave();
-  return leaveData.requests.some(r =>
-    r.staffId === staffId &&
-    (r.status === 'approved') &&
-    r.dates.includes(dateStr)
-  );
-}
 
 async function hasRecordForDate(staff, dateStr) {
   const d = new Date(dateStr + 'T00:00:00');

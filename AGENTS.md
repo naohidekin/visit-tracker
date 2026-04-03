@@ -62,7 +62,6 @@ visit-tracker/
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
 | `SPREADSHEET_ID` | はい | Google SheetsのID |
-| `ADMIN_PASSWORD` | はい | 管理者ログインパスワード |
 | `SESSION_SECRET` | はい | セッション署名用ランダム文字列（本番は必須） |
 | `GOOGLE_CREDENTIALS` | はい | Google サービスアカウントのJSON（1行） |
 | `PORT` | いいえ | ポート番号（デフォルト: 3000） |

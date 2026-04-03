@@ -28,7 +28,7 @@
 
 | 症状 | 対処 |
 |------|------|
-| スタッフが表示されない | staff.json に登録されている名前と、Excelファイル内の名前が一致しているか確認してください |
+| スタッフが表示されない | 管理画面に登録されているスタッフ名と、Excelファイル内の名前が一致しているか確認してください |
 | 数値がずれている | iBowのエクスポート形式が変わっていないか確認してください |
 | アップロードエラー | ファイル形式（.xlsx）を確認してください |
 
@@ -40,7 +40,7 @@
 |------|------|
 | データが取得できない | Google認証情報（GOOGLE_CREDENTIALS）が有効か確認してください |
 | 列がずれている | 管理画面の「メンテナンス機能」で列位置の修正を実行してください |
-| 翌年シートが作れない | spreadsheet-registry.json の内容を確認してください |
+| 翌年シートが作れない | データベース内のスプレッドシート登録情報を確認してください |
 
 ---
 
@@ -58,7 +58,6 @@
 
 | 環境変数 | 用途 |
 |---------|------|
-| `ADMIN_PASSWORD` | 管理者ログインパスワード |
 | `SESSION_SECRET` | セッション暗号化キー |
 | `GOOGLE_CREDENTIALS` | Google API認証情報（JSON） |
 | `SPREADSHEET_ID` | 当年のGoogleスプレッドシートID |
@@ -66,18 +65,91 @@
 
 ---
 
-## データファイル一覧
+## データベース
 
-システムが使用するデータファイルの一覧です。
+システムのすべてのデータは SQLite データベース（`visit-tracker.db`）に格納されています。
+デフォルトの保存先は `DATA_DIR` 環境変数で指定されたディレクトリ（本番: `/data`）です。
 
-| ファイル | 内容 |
+### 格納データ一覧
+
+| テーブル | 内容 |
 |---------|------|
-| `staff.json` | スタッフ情報・認証情報 |
-| `notices.json` | お知らせデータ |
-| `leave-requests.json` | 有給休暇申請データ |
-| `oncall-records.json` | オンコール記録 |
-| `schedules.json` | 未確定の予定データ |
-| `spreadsheet-registry.json` | 年度別スプレッドシートID |
-| `excel-results.json` | Excel集計結果の履歴 |
+| `staff` | スタッフ情報・認証情報 |
+| `notices` / `notice_read_status` | お知らせデータ・既読状態 |
+| `leave_requests` | 有給休暇申請データ |
+| `oncall_records` | オンコール記録 |
+| `schedules` | 未確定の予定データ |
+| `attendance` / `reminders_sent` | 出勤確定・リマインダー送信履歴 |
+| `standby_records` / `custom_holidays` / `rainy_days` | 待機記録 |
+| `spreadsheet_registry` | 年度別スプレッドシートID |
+| `excel_results` | Excel集計結果の履歴 |
+| `reset_tokens` | パスワードリセットトークン |
+| `webauthn_credentials` | 生体認証/セキュリティキー |
+| `audit_log` | 操作ログ（改ざん検知チェーン付き） |
+| `settings` | アプリ設定（インセンティブデフォルト等） |
 
-> **バックアップ推奨**: これらのJSONファイルは定期的にバックアップを取ることを推奨します。
+---
+
+## バックアップと復元
+
+### バックアップ手順
+
+データベースファイルをコピーするだけでバックアップできます。
+
+**Render.com（本番環境）の場合:**
+
+```bash
+# SSH接続後、/data ディレクトリでバックアップ
+cp /data/visit-tracker.db /data/backup/visit-tracker-$(date +%Y%m%d).db
+```
+
+**ローカル環境の場合:**
+
+```bash
+cp visit-tracker.db visit-tracker-backup-$(date +%Y%m%d).db
+```
+
+> **重要**: バックアップ時は `.db-wal` と `.db-shm` ファイルも一緒にコピーしてください。
+> これらはWAL（先行書き込みログ）モードの一時ファイルで、未反映のデータが含まれている場合があります。
+
+**安全なバックアップ（WALをフラッシュしてから取得）:**
+
+```bash
+# SQLite の checkpoint を実行して WAL を本体に統合
+sqlite3 /data/visit-tracker.db "PRAGMA wal_checkpoint(TRUNCATE);"
+# その後 .db ファイルのみコピーすればOK
+cp /data/visit-tracker.db /data/backup/visit-tracker-$(date +%Y%m%d).db
+```
+
+### 復元手順
+
+1. アプリケーションを停止します
+2. バックアップファイルを元の場所にコピーします
+3. `.db-wal` / `.db-shm` ファイルが残っている場合は削除します
+4. アプリケーションを再起動します
+
+```bash
+# 1. アプリ停止後
+# 2. 復元
+cp /data/backup/visit-tracker-20260404.db /data/visit-tracker.db
+# 3. WALファイルのクリア
+rm -f /data/visit-tracker.db-wal /data/visit-tracker.db-shm
+# 4. アプリ再起動
+```
+
+### 定期バックアップの推奨
+
+- **日次**: 業務終了後にデータベースファイルをバックアップ
+- **週次**: バックアップを外部ストレージ（Google Drive等）にもコピー
+- **保持期間**: 直近30日分を推奨
+
+### 整合性チェック
+
+データベースの整合性を確認するには:
+
+```bash
+sqlite3 /data/visit-tracker.db "PRAGMA integrity_check;"
+# → "ok" と表示されれば正常
+```
+
+監査ログのハッシュチェーン検証は管理画面の監査ログセクションから実行できます。

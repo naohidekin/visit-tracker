@@ -6,19 +6,10 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, isValidDate, validateNum, withFileLock } = require('../lib/helpers');
+const { lockedRoute, isValidDate, validateNum, withFileLock, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant } = require('../lib/leave-calc');
 const { STAFF_PATH, LEAVE_PATH, NOTICES_PATH } = require('../lib/constants');
-
-// ヘルパー: JST今日の日付
-function getTodayJST() {
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return now.toISOString().slice(0, 10);
-}
-function toDateStr(d) {
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
 
 // 全職員対象のため制限なし
 function requireLeaveOncall(req, res, next) {
@@ -29,7 +20,7 @@ function requireLeaveOncall(req, res, next) {
 async function createStaffNotice(staffId, title, body) {
   return await withFileLock(NOTICES_PATH, async () => {
     const data = loadNotices();
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const now = getNowJST();
     const notice = {
       id: 'leave-' + Date.now(),
       date: now.toISOString().slice(0, 10),
@@ -215,7 +206,7 @@ router.post('/api/leave/requests', requireStaff, requireLeaveOncall, lockedRoute
     reason: reason || '',
     status: 'pending',
     adminComment: null,
-    createdAt: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString(),
+    createdAt: getNowJST().toISOString(),
     reviewedAt: null,
     cancelledAt: null,
   };
@@ -235,7 +226,7 @@ router.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, 
     return res.status(400).json({ error: 'この申請は取消できません' });
 
   request.status = 'cancelled';
-  request.cancelledAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  request.cancelledAt = getNowJST().toISOString();
   saveLeave(leaveData);
   auditLog(req, 'leave.cancel', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
   res.json({ ok: true });
@@ -272,7 +263,7 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, lockedRoute(L
 
   request.status = 'approved';
   request.adminComment = req.body.comment || null;
-  request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  request.reviewedAt = getNowJST().toISOString();
   saveLeave(leaveData);
   auditLog(req, 'leave.approve', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
 
@@ -298,7 +289,7 @@ router.post('/api/admin/leave/requests/:id/reject', requireAdmin, lockedRoute(LE
 
   request.status = 'rejected';
   request.adminComment = req.body.comment || null;
-  request.reviewedAt = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  request.reviewedAt = getNowJST().toISOString();
   saveLeave(leaveData);
   auditLog(req, 'leave.reject', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
 

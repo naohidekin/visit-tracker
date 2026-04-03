@@ -8,7 +8,7 @@ const { generateRegistrationOptions, verifyRegistrationResponse,
         generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 const { loadStaff, saveStaff, loadResetTokens, saveResetTokens, generateResetToken } = require('../lib/data');
-const { requireStaff, setCsrfCookie, _invalidatedStaffIds } = require('../lib/auth-middleware');
+const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
 const { checkRateLimit, lockedRoute, isValidDate, sanitizeStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { sendResetEmail } = require('../lib/mail');

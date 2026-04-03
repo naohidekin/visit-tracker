@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadNotices, saveNotices } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute } = require('../lib/helpers');
+const { lockedRoute, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { NOTICES_PATH } = require('../lib/constants');
 
@@ -66,7 +66,7 @@ router.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, 
   const { title, body, source, target } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
   const data = loadNotices();
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const now = getNowJST();
   const noticeSource = (source === 'system') ? 'system' : 'admin';
   const notice = {
     id: noticeSource === 'system' ? 'sys-' + Date.now() : String(Date.now()),

@@ -9,9 +9,9 @@
 
 ## 技術スタック
 
-- **バックエンド**: Node.js 18+ / Express.js 4.x（`server.js` 単一ファイル、約3,100行）
+- **バックエンド**: Node.js 18+ / Express.js 4.x（ルート分割済み: server.js + routes/ + lib/）
 - **フロントエンド**: vanilla HTML/CSS/JS（ビルドステップなし）、PWA対応
-- **データストア**: Google Sheets API（訪問記録）+ JSONファイル（スタッフ・休暇・当番等）
+- **データストア**: SQLite（better-sqlite3, WALモード）+ Google Sheets API（訪問記録の外部連携）
 - **認証**: bcryptjs + cookie-session（7日間）+ WebAuthn/FIDO2
 - **デプロイ**: Render.com（永続ディスク `/data`）
 
@@ -28,33 +28,32 @@ npm test             # テスト実行 (node test-leave.js)
 
 ```
 visit-tracker/
-├── server.js                  ← Express バックエンド（全APIルート含む）
+├── server.js                  ← Express エントリポイント（cron, 静的配信）
+├── lib/                       ← バックエンドモジュール
+│   ├── db.js                  ← SQLite初期化・スキーマ・JSON移行
+│   ├── data.js                ← データ永続化API（SQLiteバックエンド）
+│   ├── audit.js               ← 監査ログ（SHA-256チェーン, SQLite）
+│   ├── helpers.js             ← バリデーション、日付ユーティリティ、ファイルロック
+│   ├── constants.js           ← パス・設定定数
+│   ├── auth-middleware.js     ← 認証ミドルウェア
+│   ├── webauthn.js            ← WebAuthn/FIDO2資格情報管理
+│   ├── leave-calc.js          ← 有給計算ロジック
+│   ├── sheets.js              ← Google Sheets API連携
+│   ├── mail.js                ← メール送信
+│   └── startup.js             ← 起動時初期化
+├── routes/                    ← APIルート
+│   ├── auth.js, record.js, leave.js, oncall.js
+│   ├── schedules.js, notices.js, admin.js
 ├── test-leave.js              ← 有給計算のユニットテスト
-├── staff.json                 ← スタッフマスタ（ID, 名前, 職種, パスワードハッシュ, 有給残日数）
-├── package.json
-├── .env.example               ← 環境変数テンプレート
-├── render.yaml                ← Renderデプロイ設定
-├── scripts/
-│   └── protect-sheets.js      ← Sheetsの保護設定スクリプト
+├── visit-tracker.db           ← SQLiteデータベース（WALモード）
 ├── public/                    ← フロントエンド（静的ファイル）
 │   ├── index.html             ← メイン入力画面（PWA）
-│   ├── login.html             ← ログイン
-│   ├── admin.html             ← 管理者ダッシュボード
-│   ├── leave.html             ← 有給管理
-│   ├── oncall.html            ← 当番管理
-│   ├── notices.html           ← お知らせ
-│   ├── history.html           ← 操作履歴
-│   ├── manual.html            ← ユーザーマニュアル
-│   ├── admin-manual.html      ← 管理者マニュアル
-│   ├── change-password.html   ← パスワード変更
-│   ├── sw.js                  ← Service Worker
-│   └── manifest.json          ← PWAマニフェスト
-├── docs/admin-manual/         ← 管理者マニュアル（Markdown 13ファイル）
-├── leave-requests.json        ← 有給申請データ
-├── notices.json               ← お知らせデータ
-├── oncall-records.json        ← 当番記録
-├── schedules.json             ← スケジュール
-└── audit-log.json             ← 操作ログ（SHA-256チェーン）
+│   ├── login.html, admin.html, leave.html, oncall.html
+│   ├── notices.html, history.html, manual.html, admin-manual.html
+│   ├── change-password.html, forgot-password.html, reset-password.html
+│   ├── sw.js, manifest.json
+│   └── vendor/                ← ローカル配信ライブラリ
+└── docs/admin-manual/         ← 管理者マニュアル（Markdown）
 ```
 
 ## 環境変数（.env）
@@ -62,7 +61,6 @@ visit-tracker/
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
 | `SPREADSHEET_ID` | はい | Google SheetsのID |
-| `ADMIN_PASSWORD` | はい | 管理者ログインパスワード |
 | `SESSION_SECRET` | はい | セッション署名用ランダム文字列（本番は必須） |
 | `GOOGLE_CREDENTIALS` | はい | Google サービスアカウントのJSON（1行） |
 | `PORT` | いいえ | ポート番号（デフォルト: 3000） |
@@ -72,19 +70,20 @@ visit-tracker/
 ## アーキテクチャの重要ポイント
 
 ### server.js の構成
-- すべてのAPIルート、ミドルウェア、ビジネスロジックが `server.js` に集約
-- Google Sheets APIのラッパー関数（リトライ付き）
-- 認証ミドルウェア（スタッフ用・管理者用の2系統）
-- node-cronによる定時タスク（リマインダー通知、トークン清掃）
+- エントリポイント: Express初期化、静的配信、cron定時タスク
+- APIルートは `routes/` に分割（auth, record, leave, oncall, schedules, notices, admin）
+- 共通ロジックは `lib/` に集約（data, db, audit, helpers, sheets等）
 
 ### データ永続化
-- **Google Sheets**: 年度ごとにスプレッドシートを自動作成。月別シート（1月〜12月）に日次の訪問単位数を記録
-- **JSONファイル**: `staff.json`, `leave-requests.json`, `oncall-records.json` 等をfsで読み書き
-- **監査ログ**: SHA-256ハッシュチェーンで改ざん検知
+- **SQLite** (`visit-tracker.db`): 全アプリデータの正本（WALモード、better-sqlite3）
+  - スタッフ、有給、オンコール、お知らせ、出勤確定、待機、WebAuthn、監査ログ等
+  - 初回起動時にJSONファイルから自動移行
+- **Google Sheets**: 訪問記録の外部連携先（年度ごとスプレッドシート、月別シート）
+- **監査ログ**: SHA-256ハッシュチェーンで改ざん検知（SQLiteテーブル内）
 
 ### 認証フロー
 - スタッフ: ID/パスワード → cookie-session（7日間）
-- 管理者: 共通パスワード → 別セッション
+- 管理者: 管理者権限スタッフのID/パスワード → 管理者セッション
 - WebAuthn: 生体認証/セキュリティキーに対応
 
 ### ビジネスルール
@@ -146,6 +145,5 @@ visit-tracker/
 
 ## 既知の課題・TODO
 
-- 管理者認証が共有パスワード方式（個別アカウント化・MFA導入を検討）
-- JSONファイルベースの設計（複数インスタンス運用時はSQLite移行が必要）
+- lockedRoute/withFileLock はSQLite移行後も残存（無害だが将来的に除去可能）
 - Sheets APIのレート制限対応

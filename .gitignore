@@ -3,6 +3,9 @@ node_modules/
 *.json.bak
 
 # データファイル（パスワードハッシュ・個人情報を含む）
+*.db
+*.db-wal
+*.db-shm
 staff.json
 leave-requests.json
 oncall-records.json

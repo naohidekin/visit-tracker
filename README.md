@@ -80,7 +80,6 @@ git push -u origin main
 | 環境変数 | 値 |
 |----------|----|
 | `SPREADSHEET_ID` | `1CwZ-h1ZnJ4tdwQ_B56DOPNt35ffGHUXg` |
-| `ADMIN_PASSWORD` | `nicot301`（または任意のパスワード） |
 | `SESSION_SECRET` | ランダムな長い文字列（例：openssl rand -base64 32 で生成） |
 | `GOOGLE_CREDENTIALS` | credentials.json の中身を**1行のJSON文字列**として貼り付け |
 
@@ -109,7 +108,7 @@ cat credentials.json | tr -d '\n' | pbcopy
 | 小澤悠那 | ozawa06 | YO06 |
 | 大江綾子 | ooe07 | AO07 |
 
-管理者URL: `/admin`  パスワード: 環境変数 `ADMIN_PASSWORD` の値
+管理者URL: `/admin`  管理者権限を持つスタッフIDでログイン
 
 ---
 

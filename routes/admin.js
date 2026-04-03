@@ -3,7 +3,6 @@
 
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const XLSX = require('xlsx');
@@ -17,8 +16,8 @@ const {
   getSpreadsheetIdForYear,
 } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
-const { requireStaff, setCsrfCookie, _invalidatedStaffIds } = require('../lib/auth-middleware');
-const { checkRateLimit, lockedRoute, isValidDate, validateUnitValue, validateNum, withFileLock, colToIdx, idxToCol } = require('../lib/helpers');
+const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
+const { checkRateLimit, lockedRoute, isValidDate, validateUnitValue, validateNum, withFileLock, colToIdx, idxToCol, getTodayJST, getYearMonthJST, formatLocalDate, isWorkday, isOnLeaveToday, getStandbyFeeWithCustom } = require('../lib/helpers');
 const { auditLog, loadAuditLog, verifyAuditChain } = require('../lib/audit');
 const { getSheets, sheetsRetry, createSpreadsheetForYear } = require('../lib/sheets');
 const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
@@ -27,42 +26,6 @@ const {
   STAFF_PATH, SPREADSHEET_ID, STANDBY_PATH, NOTICES_PATH,
   DATA_START_ROW, HEADER_ROW, MONTHS, WD, ALL_HOLIDAYS,
 } = require('../lib/constants');
-
-// ヘルパー: JST今日の日付
-function getTodayJST() {
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return now.toISOString().slice(0, 10);
-}
-
-function formatLocalDate(d) {
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function isWorkday(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay();
-  if (dow === 0 || dow === 6) return false;
-  if (ALL_HOLIDAYS.has(dateStr)) return false;
-  return true;
-}
-
-function getStandbyFeeWithCustom(dateStr, customHols) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const dow = d.getDay();
-  if (ALL_HOLIDAYS.has(dateStr) || customHols.has(dateStr)) return { fee: 10000, category: '祝日' };
-  if (dow === 0) return { fee: 10000, category: '日曜' };
-  if (dow === 6) return { fee: 5000, category: '土曜' };
-  return { fee: 2000, category: '平日' };
-}
-
-function isOnLeaveToday(staffId, dateStr) {
-  const leaveData = loadLeave();
-  return leaveData.requests.some(r =>
-    r.staffId === staffId &&
-    (r.status === 'approved') &&
-    r.dates.includes(dateStr)
-  );
-}
 
 // 全スタッフの入力状況を一括取得（batchGet で効率化）
 async function getAllStaffRecordStatus(dateStr) {
@@ -501,17 +464,6 @@ router.post('/api/admin/login', async (req, res) => {
 
     const { staffId, password } = req.body;
 
-    // --- 緊急フォールバック: 共有パスワード（ADMIN_PASSWORD設定時のみ） ---
-    if (!staffId && password && process.env.ADMIN_PASSWORD) {
-      if (password === process.env.ADMIN_PASSWORD) {
-        req.session.isAdmin = true;
-        setCsrfCookie(res);
-        auditLog(req, 'auth.admin_emergency_login', { type: 'auth', label: '管理者（緊急）' });
-        return res.json({ success: true });
-      }
-      return res.status(401).json({ error: 'パスワードが正しくありません' });
-    }
-
     // --- パスワード認証 ---
     if (!staffId || !password) {
       return res.status(400).json({ error: 'スタッフIDとパスワードを入力してください' });
@@ -620,19 +572,25 @@ router.post('/api/admin/webauthn/login-verify', async (req, res) => {
     const newCounter = verification.authenticationInfo.newCounter;
     await updateCredentialCounter(credential.id, newCounter);
 
-    // 認証成功
+    // 認証成功 — セッション発行直前に is_admin / archived を再確認
     const data = loadStaff();
     const staff = data.staff.find(s => s.id === pendingId);
+    if (!staff || !staff.is_admin || staff.archived) {
+      delete req.session.pendingAdminStaffId;
+      delete req.session.adminWebAuthnChallenge;
+      auditLog(req, 'auth.admin_login_failed', { type: 'auth', id: pendingId, label: 'Face ID成功後に管理者権限なし' });
+      return res.status(401).json({ error: '管理者権限がありません' });
+    }
     req.session.isAdmin = true;
     req.session.adminStaffId = pendingId;
-    req.session.adminStaffName = staff ? staff.name : pendingId;
+    req.session.adminStaffName = staff.name;
     req.session.staffId = pendingId;
-    req.session.staffName = staff ? staff.name : pendingId;
-    req.session.staffType = staff ? staff.type : null;
+    req.session.staffName = staff.name;
+    req.session.staffType = staff.type;
     delete req.session.pendingAdminStaffId;
     delete req.session.adminWebAuthnChallenge;
     setCsrfCookie(res);
-    auditLog(req, 'auth.admin_login', { type: 'auth', id: pendingId, label: staff ? staff.name : pendingId });
+    auditLog(req, 'auth.admin_login', { type: 'auth', id: pendingId, label: staff.name });
     res.json({ success: true });
   } catch (e) {
     console.error('管理者WebAuthn検証エラー:', e);
@@ -698,12 +656,7 @@ router.patch('/api/admin/staff/:id/archive', requireAdmin, lockedRoute(STAFF_PAT
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   staff.archived = !staff.archived;
   saveStaff(data);
-  // アーカイブ時は即座にセッションを無効化、復帰時はブラックリストから除去
-  if (staff.archived) {
-    _invalidatedStaffIds.add(staff.id);
-  } else {
-    _invalidatedStaffIds.delete(staff.id);
-  }
+  // requireStaff が毎リクエストDBを確認するため、即時に無効化が反映される
   auditLog(req, 'staff.archive_toggle', { type: 'staff', id: staff.id, label: staff.name }, { archived: staff.archived });
   res.json({ success: true, archived: staff.archived, staff: data.staff });
 }));
@@ -1304,7 +1257,7 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
     const INSURANCE_ALIASES = ['保険適用', '保険種別', '保険区分', '適用保険'];
 
     // Load registered (non-archived) staff for filtering
-    const staffData = JSON.parse(fs.readFileSync(STAFF_PATH, 'utf8'));
+    const staffData = loadStaff();
     const activeStaff = staffData.staff.filter(s => !s.archived);
     const registeredNames = activeStaff.map(s => s.name.replace(/\s+/g, ''));
 
@@ -1468,10 +1421,7 @@ router.post('/api/admin/analyze-excel', requireAdmin, upload.single('file'), (re
     });
 
     // Auto-save results
-    const ym = req.body.yearMonth || (() => {
-      const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-      return `${jst.getFullYear()}-${String(jst.getMonth()+1).padStart(2,'0')}`;
-    })();
+    const ym = req.body.yearMonth || getYearMonthJST();
     const allResults = loadExcelResults();
     allResults[ym] = {
       analyzedAt: new Date().toISOString(),

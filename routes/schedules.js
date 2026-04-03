@@ -6,16 +6,10 @@ const router = express.Router();
 
 const { loadStaff, loadSchedules, saveSchedules, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute } = require('../lib/helpers');
+const { lockedRoute, getTodayJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { SCHEDULES_PATH, DATA_START_ROW } = require('../lib/constants');
-
-// ヘルパー: JST今日の日付
-function getTodayJST() {
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return now.toISOString().slice(0, 10);
-}
 
 // ─── API: 予定管理 ──────────────────────────────────────────────
 router.get('/api/schedules', requireStaff, (req, res) => {

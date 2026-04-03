@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadOncall, saveOncall } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, validateNum, withFileLock } = require('../lib/helpers');
+const { lockedRoute, validateNum, withFileLock, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { STAFF_PATH, ONCALL_PATH } = require('../lib/constants');
 
@@ -69,7 +69,7 @@ router.post('/api/oncall/records', requireStaff, requireLeaveOncall, lockedRoute
 
   const data = loadOncall();
   const existing = data.records.find(r => r.staffId === req.session.staffId && r.date === date);
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString();
+  const now = getNowJST().toISOString();
 
   if (existing) {
     existing.count = c;

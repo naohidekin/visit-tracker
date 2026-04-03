@@ -13,7 +13,7 @@ const helmet   = require('helmet');
 
 // ─── lib/ モジュール ────────────────────────────────────────────
 const C = require('./lib/constants');
-const { getTodayJST, isWorkday } = require('./lib/helpers');
+const { getTodayJST, getNowJST, isWorkday, cleanExpiredRateLimits } = require('./lib/helpers');
 const { loadNotices, saveNotices, loadAttendance, saveAttendance } = require('./lib/data');
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
@@ -67,11 +67,12 @@ app.use(helmet({
 
 app.use(express.json());
 app.use(csession({
-  name:    'visit_sess',
-  keys:    [process.env.SESSION_SECRET || 'dev-secret-please-change'],
-  maxAge:  7 * 24 * 60 * 60 * 1000,
+  name:     'visit_sess',
+  keys:     [process.env.SESSION_SECRET],
+  maxAge:   7 * 24 * 60 * 60 * 1000,
   httpOnly: true,
   sameSite: 'strict',
+  secure:   isProd,
 }));
 
 // ─── 静的HTMLファイルの認証ガード ───────────────────────────────
@@ -177,7 +178,7 @@ app.use('/', adminRoutes);
 // ─── 運営お知らせ自動発信 ───────────────────────────────────────
 function createSystemNotice(title, body, target) {
   const data = loadNotices();
-  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const now = getNowJST();
   const notice = {
     id: 'sys-' + Date.now(),
     date: now.toISOString().slice(0, 10),
@@ -197,7 +198,7 @@ const { withFileLock } = require('./lib/helpers');
 async function createStaffNotice(staffId, title, body) {
   return await withFileLock(C.NOTICES_PATH, async () => {
     const data = loadNotices();
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const now = getNowJST();
     const notice = {
       id: `reminder-${staffId}-${getTodayJST()}`,
       date: now.toISOString().slice(0, 10),
@@ -244,7 +245,7 @@ async function main() {
 
   // 毎月16日 8:00 に修正可能期間のお知らせを自動発信
   cron.schedule('0 8 16 * *', () => {
-    const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const now = getNowJST();
     const m = now.getMonth() + 1;
     const y = now.getFullYear();
     createSystemNotice(
@@ -310,8 +311,8 @@ async function main() {
   });
   console.log('📝 未入力リマインダー & 出勤自動確定: 毎日 18:00 (JST) 平日のみ');
 
-  // 毎日0:00 UTC: 期限切れリセットトークンを削除
-  cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); });
+  // 毎日0:00 UTC: 期限切れリセットトークン・レート制限エントリを削除
+  cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); });
 
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }
