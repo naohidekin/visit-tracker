@@ -1669,24 +1669,39 @@ router.get('/api/admin/audit-log/verify', requireAdmin, (_req, res) => {
   res.json(result);
 });
 
-// ─── 出勤確定 月次集計 API ──────────────────────────────────────
+// ─── 出勤確定 集計 API（月次 / 締め期間 切替対応）──────────────────
+// mode=billing: 前月16日〜当月15日  mode=monthly(デフォルト): 1日〜末日
 router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
-  const { month } = req.query;
+  const { month, mode } = req.query;
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: '月の形式が不正です (YYYY-MM)' });
 
   const [yearStr, monthStr] = month.split('-');
   const year = Number(yearStr);
   const m = Number(monthStr);
-  const daysInMonth = new Date(year, m, 0).getDate();
+  const isBilling = mode === 'billing';
+
+  // 集計対象の日付範囲を決定
+  let startDate, endDate, billingLabel;
+  if (isBilling) {
+    let prevY = year, prevM = m - 1;
+    if (prevM < 1) { prevY--; prevM = 12; }
+    startDate = `${prevY}-${String(prevM).padStart(2, '0')}-16`;
+    endDate   = `${year}-${String(m).padStart(2, '0')}-15`;
+    billingLabel = `${prevM}/16〜${m}/15`;
+  } else {
+    const daysInMonth = new Date(year, m, 0).getDate();
+    startDate = `${yearStr}-${monthStr}-01`;
+    endDate   = `${yearStr}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
+  }
 
   const staffData = loadStaff();
   const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office');
   const attendanceData = loadAttendance();
   const leaveData = loadLeave();
 
-  // 雨の日データを待機データから取得
+  // 雨の日データ（日付範囲でフィルタ）
   const standbyData = loadStandby();
-  const rainyDaysSet = new Set((standbyData.rainyDays || []).filter(d => d.startsWith(month)));
+  const rainyDaysSet = new Set((standbyData.rainyDays || []).filter(d => d >= startDate && d <= endDate));
 
   // スタッフ別集計初期化
   const summary = {};
@@ -1698,9 +1713,16 @@ router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
     };
   }
 
-  // 日ごとに集計
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${yearStr}-${monthStr}-${String(d).padStart(2, '0')}`;
+  // 日付範囲をイテレート
+  const cur = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  while (cur <= end) {
+    const dd = cur.getFullYear();
+    const mm = String(cur.getMonth() + 1).padStart(2, '0');
+    const day = String(cur.getDate()).padStart(2, '0');
+    const dateStr = `${dd}-${mm}-${day}`;
+    cur.setDate(cur.getDate() + 1);
+
     if (!isWorkday(dateStr)) continue;
 
     const dayRecords = attendanceData.records[dateStr] || {};
@@ -1736,12 +1758,19 @@ router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
     }
   }
 
-  res.json({
+  const result = {
     month,
+    mode: isBilling ? 'billing' : 'monthly',
     rainyDays: Array.from(rainyDaysSet).sort(),
     rainyDayCount: rainyDaysSet.size,
     staff: Object.values(summary),
-  });
+  };
+  if (isBilling) {
+    result.billingStart = startDate;
+    result.billingEnd = endDate;
+    result.billingLabel = billingLabel;
+  }
+  res.json(result);
 });
 
 module.exports = router;

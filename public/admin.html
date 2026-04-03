@@ -985,18 +985,22 @@
       </div><!-- /sec-excel-history -->
 
       <div class="page-section" id="sec-attendance">
-      <!-- 出勤確定 月次集計 -->
+      <!-- 出勤確定 集計 -->
       <div class="card">
         <div class="card-header">
-          <h2>✅ 出勤確定 月次集計</h2>
+          <h2>✅ 出勤確定 集計</h2>
           <span class="acc-icon">▼</span>
         </div>
         <div class="card-body">
+          <div style="display:flex;gap:4px;margin-bottom:10px">
+            <button id="attendanceModeMonthly" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:8px 0 0 8px;font-size:14px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;transition:all .2s">月次</button>
+            <button id="attendanceModeBilling" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:0 8px 8px 0;font-size:14px;font-weight:700;cursor:pointer;background:#fff;color:var(--blue);font-family:inherit;transition:all .2s">締め期間</button>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
             <select id="attendanceMonth" style="flex:1;min-width:140px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit"></select>
             <button class="btn-csv" id="attendanceCSVBtn">CSV出力</button>
           </div>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:10px">有給未申請＋訪問記録入力済み＝出勤として自動確定（毎日18時に集計）</p>
+          <p id="attendancePeriodLabel" style="font-size:13px;color:var(--muted);margin-bottom:10px">有給未申請＋訪問記録入力済み＝出勤として自動確定（毎日18時に集計）</p>
           <div id="attendanceMonthlySpinner" class="spinner" style="display:none">読み込み中...</div>
           <div class="table-wrap" id="attendanceMonthlyTableWrap" style="display:none">
             <table style="width:100%;font-size:14px;border-collapse:collapse">
@@ -1258,7 +1262,7 @@
     'sec-monthly': 'スタッフ月次実績',
     'sec-excel': 'iBow Excel集計',
     'sec-excel-history': 'iBow集計履歴',
-    'sec-attendance': '出勤確定 月次集計',
+    'sec-attendance': '出勤確定 集計',
     'sec-incentive-settings': 'インセンティブ設定',
     'sec-add-staff': 'スタッフ追加',
     'sec-next-year': '翌年スプレッドシート作成',
@@ -3704,13 +3708,38 @@
     downloadCSV(headers, rows, `待機一覧_${month}.csv`);
   }
 
-  // ── 出勤確定 月次集計 ──────────────────────────────────────────
+  // ── 出勤確定 集計（月次 / 締め期間 切替） ───────────────────────
   let attendanceMonthInited = false;
+  let attendanceMode = 'monthly'; // 'monthly' or 'billing'
 
   function initAttendanceMonth() {
     if (attendanceMonthInited) return;
     attendanceMonthInited = true;
+    repopulateAttendanceMonth();
+    document.getElementById('attendanceModeMonthly').addEventListener('click', () => switchAttendanceMode('monthly'));
+    document.getElementById('attendanceModeBilling').addEventListener('click', () => switchAttendanceMode('billing'));
+  }
+
+  function switchAttendanceMode(mode) {
+    if (attendanceMode === mode) return;
+    attendanceMode = mode;
+    const btnM = document.getElementById('attendanceModeMonthly');
+    const btnB = document.getElementById('attendanceModeBilling');
+    if (mode === 'monthly') {
+      btnM.style.background = 'var(--blue)'; btnM.style.color = '#fff';
+      btnB.style.background = '#fff'; btnB.style.color = 'var(--blue)';
+    } else {
+      btnB.style.background = 'var(--blue)'; btnB.style.color = '#fff';
+      btnM.style.background = '#fff'; btnM.style.color = 'var(--blue)';
+    }
+    repopulateAttendanceMonth();
+    loadAttendanceMonthly();
+  }
+
+  function repopulateAttendanceMonth() {
     const sel = document.getElementById('attendanceMonth');
+    const currentVal = sel.value;
+    sel.innerHTML = '';
     const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
     const curY = now.getFullYear();
     const curM = now.getMonth() + 1;
@@ -3719,11 +3748,17 @@
       if (m < 1) { y--; m += 12; }
       if (m > 12) { y++; m -= 12; }
       const val = `${y}-${String(m).padStart(2, '0')}`;
-      const label = `${y}年${m}月`;
+      let label;
+      if (attendanceMode === 'billing') {
+        const prevM = m === 1 ? 12 : m - 1;
+        label = `${y}年${m}月支給（${prevM}/16〜${m}/15）`;
+      } else {
+        label = `${y}年${m}月`;
+      }
       const opt = document.createElement('option');
       opt.value = val;
       opt.textContent = label;
-      if (offset === 0) opt.selected = true;
+      if (val === currentVal || (offset === 0 && !currentVal)) opt.selected = true;
       sel.appendChild(opt);
     }
   }
@@ -3740,9 +3775,17 @@
     tableWrap.style.display = 'none';
 
     try {
-      const resp = await fetch(`/api/admin/attendance/monthly?month=${month}`);
+      const resp = await apiFetch(`/api/admin/attendance/monthly?month=${month}&mode=${attendanceMode}`);
       const data = await resp.json();
       spinner.style.display = 'none';
+
+      // 期間ラベル更新
+      const label = document.getElementById('attendancePeriodLabel');
+      if (attendanceMode === 'billing') {
+        label.textContent = `締め期間: ${data.billingStart} 〜 ${data.billingEnd}（${data.billingLabel}）`;
+      } else {
+        label.textContent = '有給未申請＋訪問記録入力済み＝出勤として自動確定（毎日18時に集計）';
+      }
 
       const tbody = document.getElementById('attendanceMonthlyBody');
       tbody.innerHTML = '';
@@ -3756,8 +3799,8 @@
       for (const s of data.staff) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td style="padding:6px;border-bottom:1px solid var(--border)">${s.name}</td>
-          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);font-size:13px">${TYPE_LABELS[s.type] || s.type}</td>
+          <td style="padding:6px;border-bottom:1px solid var(--border)">${esc(s.name)}</td>
+          <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);font-size:13px">${esc(TYPE_LABELS[s.type] || s.type)}</td>
           <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border)">${s.workDays}</td>
           <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--ok);font-weight:600">${s.confirmedDays}</td>
           <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--danger)">${s.absentDays}</td>
@@ -3770,14 +3813,14 @@
       tableWrap.style.display = '';
     } catch (e) {
       spinner.style.display = 'none';
-      showToast('月次集計の取得に失敗しました');
+      showToast('集計の取得に失敗しました');
     }
   }
 
   function exportAttendanceCSV() {
     const month = document.getElementById('attendanceMonth').value;
     if (!month) return;
-    fetch(`/api/admin/attendance/monthly?month=${month}`)
+    apiFetch(`/api/admin/attendance/monthly?month=${month}&mode=${attendanceMode}`)
       .then(r => r.json())
       .then(data => {
         if (!data.staff) return;
@@ -3786,9 +3829,10 @@
           s.name, TYPE_LABELS[s.type] || s.type, s.workDays, s.confirmedDays,
           s.absentDays, s.leaveDays, s.unconfirmedDays, s.rainyDayAttendance,
         ]);
-        downloadCSV(headers, rows, `出勤集計_${month}.csv`);
+        const suffix = attendanceMode === 'billing' ? '締め期間' : '月次';
+        downloadCSV(headers, rows, `出勤集計_${suffix}_${month}.csv`);
       })
-      .catch(e => showToast('CSV出力に失敗しました'));
+      .catch(() => showToast('CSV出力に失敗しました'));
   }
 
   // 6) 監査ログ
