@@ -389,6 +389,15 @@
           <h3>⚠️ 要対応</h3>
           <div id="dashAlertList"><div class="dash-alert-none">読み込み中...</div></div>
         </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <h2>仕様変更</h2>
+            <span class="acc-icon">▼</span>
+          </div>
+          <div class="card-body">
+            <div id="dashChangelogList"><div style="color:var(--muted);font-size:13px">読み込み中...</div></div>
+          </div>
+        </div>
       </div>
 
       <!-- ══ 日常業務 ══ -->
@@ -463,6 +472,14 @@
               </select>
             </div>
             <div class="field">
+              <label>対象</label>
+              <select id="noticeTarget" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;color:var(--text);background:#fff">
+                <option value="staff">スタッフ向け</option>
+                <option value="admin">管理者向け</option>
+                <option value="">全員</option>
+              </select>
+            </div>
+            <div class="field">
               <label>タイトル</label>
               <input id="noticeTitle" placeholder="お知らせのタイトル">
             </div>
@@ -478,7 +495,7 @@
           <div class="table-wrap" id="noticesTableWrap" style="display:none">
             <table>
               <thead>
-                <tr><th>種別</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
+                <tr><th>種別</th><th>対象</th><th>タイトル</th><th>日付</th><th>操作</th></tr>
               </thead>
               <tbody id="noticesBody"></tbody>
             </table>
@@ -1341,6 +1358,8 @@
 
     // アラートリスト構築
     buildDashAlerts();
+    // 仕様変更お知らせ読み込み
+    loadDashChangelog();
   }
 
   function buildDashAlerts() {
@@ -1357,6 +1376,33 @@
       list.innerHTML = '<div class="dash-alert-none">対応が必要な項目はありません</div>';
     } else {
       list.innerHTML = alerts.map(a => `<div class="dash-alert-item">${esc(a)}</div>`).join('');
+    }
+  }
+
+  // ── ダッシュボード: 仕様変更お知らせ ────────────────────────────
+  async function loadDashChangelog() {
+    const el = document.getElementById('dashChangelogList');
+    try {
+      const res = await fetch('/api/admin/notices/changelog');
+      const data = await res.json();
+      const notices = data.notices || [];
+      if (!notices.length) {
+        el.innerHTML = '<div style="color:var(--muted);font-size:13px">管理者向けの仕様変更お知らせはありません</div>';
+        return;
+      }
+      el.innerHTML = notices.map(n => {
+        const d = n.date || '';
+        const m = d ? `${parseInt(d.slice(5,7))}月${parseInt(d.slice(8,10))}日` : '';
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:600;font-size:14px">${esc(n.title)}</span>
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap;margin-left:8px">${m}</span>
+          </div>
+          <div style="font-size:13px;color:#555;white-space:pre-wrap;line-height:1.5">${esc(n.body)}</div>
+        </div>`;
+      }).join('');
+    } catch {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px">読み込みに失敗しました</div>';
     }
   }
 
@@ -2004,9 +2050,13 @@
       const badge = isSystem
         ? '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fff3cd;color:#856404;border:1px solid #ffc107">運営</span>'
         : '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f4fd;color:#1565c0;border:1px solid #90caf9">管理者</span>';
+      const targetLabel = n.target === 'admin' ? '<span style="font-size:12px;color:#7b1fa2">管理者</span>'
+        : n.target === 'staff' ? '<span style="font-size:12px;color:#1565c0">スタッフ</span>'
+        : '<span style="font-size:12px;color:#666">全員</span>';
       const btns = `<button class="btn-xs btn-edit" data-action="edit-notice" data-id="${esc(n.id)}">編集</button><button class="btn-xs btn-danger" data-action="delete-notice" data-id="${esc(n.id)}">削除</button>`;
       return `<tr>
         <td>${badge}</td>
+        <td>${targetLabel}</td>
         <td style="font-size:13px;font-weight:600">${esc(n.title)}</td>
         <td style="white-space:nowrap;font-size:14px;color:var(--muted)">${n.date || ''}</td>
         <td class="td-btns">${btns}</td>
@@ -2033,6 +2083,7 @@
     if (!n) return;
     editingNoticeId = id;
     document.getElementById('noticeSource').value = n.source || 'admin';
+    document.getElementById('noticeTarget').value = n.target || '';
     document.getElementById('noticeTitle').value = n.title;
     document.getElementById('noticeBody').value  = n.body;
     const msgEl = document.getElementById('noticeMsg');
@@ -2051,10 +2102,11 @@
       return;
     }
     const source = document.getElementById('noticeSource').value;
+    const target = document.getElementById('noticeTarget').value;
     const res = await apiFetch('/api/admin/notices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body, source })
+      body: JSON.stringify({ title, body, source, target })
     });
     const data = await res.json();
     if (data.ok) {
@@ -2062,6 +2114,7 @@
       document.getElementById('noticeTitle').value = '';
       document.getElementById('noticeBody').value  = '';
       document.getElementById('noticeSource').value = 'admin';
+      document.getElementById('noticeTarget').value = 'staff';
       msgEl.style.display = 'none';
       loadAdminNotices();
     } else {
@@ -2078,10 +2131,11 @@
       msgEl.style.display = 'block'; msgEl.className = 'msg err'; msgEl.textContent = 'タイトルと本文を入力してください';
       return;
     }
+    const target = document.getElementById('noticeTarget').value;
     const res = await apiFetch(`/api/admin/notices/${editingNoticeId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body })
+      body: JSON.stringify({ title, body, target })
     });
     const data = await res.json();
     if (data.ok) {
@@ -2096,6 +2150,7 @@
   function cancelEditNotice() {
     editingNoticeId = null;
     document.getElementById('noticeSource').value = 'admin';
+    document.getElementById('noticeTarget').value = 'staff';
     document.getElementById('noticeTitle').value = '';
     document.getElementById('noticeBody').value  = '';
     const msgEl = document.getElementById('noticeMsg');

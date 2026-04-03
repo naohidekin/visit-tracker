@@ -17,6 +17,7 @@ router.get('/api/notices', requireStaff, (_req, res) => {
   const readIds = readStatus[staffId] || [];
   const list = notices
     .filter(n => !n.targetStaffId || n.targetStaffId === staffId)
+    .filter(n => n.target !== 'admin')  // 管理者向けお知らせはスタッフに表示しない
     .map(n => ({ ...n, isRead: readIds.includes(n.id) }))
     .sort((a, b) => (b.createdAt || b.date || '').localeCompare(a.createdAt || a.date || ''));
   res.json({ notices: list });
@@ -28,6 +29,7 @@ router.get('/api/notices/unread-count', requireStaff, (req, res) => {
   const readIds = readStatus[staffId] || [];
   const count = notices
     .filter(n => !n.targetStaffId || n.targetStaffId === staffId)
+    .filter(n => n.target !== 'admin')
     .filter(n => !readIds.includes(n.id)).length;
   res.json({ count });
 });
@@ -50,8 +52,18 @@ router.get('/api/admin/notices', requireAdmin, (_req, res) => {
   res.json({ notices: sorted });
 });
 
+// 管理者ダッシュボード用: 管理者向け仕様変更お知らせ
+router.get('/api/admin/notices/changelog', requireAdmin, (_req, res) => {
+  const { notices } = loadNotices();
+  const adminNotices = notices
+    .filter(n => n.target === 'admin')
+    .sort((a, b) => (b.createdAt || b.date || '').localeCompare(a.createdAt || a.date || ''))
+    .slice(0, 10);  // 直近10件
+  res.json({ notices: adminNotices });
+});
+
 router.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
-  const { title, body, source } = req.body;
+  const { title, body, source, target } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
   const data = loadNotices();
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -64,6 +76,8 @@ router.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, 
     source: noticeSource,
     createdAt: now.toISOString()
   };
+  // 対象画面: "staff" = スタッフ向け, "admin" = 管理者向け, 未指定 = 全員
+  if (target === 'staff' || target === 'admin') notice.target = target;
   data.notices.push(notice);
   saveNotices(data);
   auditLog(req, 'notice.create', { type: 'notice', id: notice.id, label: title });
@@ -76,6 +90,8 @@ router.patch('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (
   if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
   if (req.body.title) notice.title = req.body.title;
   if (req.body.body) notice.body = req.body.body;
+  if (req.body.target === 'staff' || req.body.target === 'admin') notice.target = req.body.target;
+  else if (req.body.target === '') delete notice.target;  // 全員に戻す
   saveNotices(data);
   auditLog(req, 'notice.update', { type: 'notice', id: notice.id, label: notice.title });
   res.json({ ok: true, notice });

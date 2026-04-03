@@ -175,7 +175,7 @@ app.use('/', noticesRoutes);
 app.use('/', adminRoutes);
 
 // ─── 運営お知らせ自動発信 ───────────────────────────────────────
-function createSystemNotice(title, body) {
+function createSystemNotice(title, body, target) {
   const data = loadNotices();
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const notice = {
@@ -185,6 +185,7 @@ function createSystemNotice(title, body) {
     source: 'system',
     createdAt: now.toISOString()
   };
+  if (target === 'staff' || target === 'admin') notice.target = target;
   data.notices.push(notice);
   saveNotices(data);
   console.log(`[system] 運営お知らせ作成: ${title}`);
@@ -248,7 +249,8 @@ async function main() {
     const y = now.getFullYear();
     createSystemNotice(
       `修正可能期間のお知らせ（${m}月）`,
-      `${y}年${m}月の修正可能期間は ${m}月16日〜${m}月20日 です。\n\n締日（${m}月15日）以前のデータに修正がある方は、この期間内に修正をお願いします。\n20日を過ぎると修正できなくなりますのでご注意ください。`
+      `${y}年${m}月の修正可能期間は ${m}月16日〜${m}月20日 です。\n\n締日（${m}月15日）以前のデータに修正がある方は、この期間内に修正をお願いします。\n20日を過ぎると修正できなくなりますのでご注意ください。`,
+      'staff'
     );
   });
   console.log('📢 運営お知らせスケジュール: 毎月16日 8:00 に修正可能期間を自動通知');
