@@ -24,7 +24,7 @@ const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
 const { loadCredentials, updateCredentialCounter, getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
 const {
   STAFF_PATH, SPREADSHEET_ID, STANDBY_PATH, NOTICES_PATH,
-  DATA_START_ROW, HEADER_ROW, MONTHS, WD, ALL_HOLIDAYS,
+  DATA_START_ROW, HEADER_ROW, MONTHS, WD,
 } = require('../lib/constants');
 
 // 全スタッフの入力状況を一括取得（batchGet で効率化）
@@ -1651,6 +1651,19 @@ router.get('/api/admin/audit-log', requireAdmin, (req, res) => {
 router.get('/api/admin/audit-log/verify', requireAdmin, (_req, res) => {
   const result = verifyAuditChain();
   res.json(result);
+});
+
+// ─── システムヘルスチェック ─────────────────────────────────────
+router.get('/api/admin/health', requireAdmin, (_req, res) => {
+  const { runHealthChecks } = require('../lib/health');
+  res.json(runHealthChecks());
+});
+
+router.get('/api/admin/health/last', requireAdmin, (_req, res) => {
+  const { getLastHealthCheck } = require('../lib/health');
+  const last = getLastHealthCheck();
+  if (!last) return res.json({ ok: null, checkedAt: null, checks: [] });
+  res.json(last);
 });
 
 // ─── 出勤確定 集計 API（月次 / 締め期間 切替対応）──────────────────

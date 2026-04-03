@@ -301,7 +301,7 @@
         <span class="nav-icon">🏖</span>有給休暇管理<span class="nav-badge" id="badgeLeave" style="display:none"></span>
       </button>
       <button class="nav-item" data-section="sec-audit">
-        <span class="nav-icon">📝</span>操作履歴
+        <span class="nav-icon">📝</span>操作履歴 / 診断
       </button>
       <div class="nav-group-label">月次業務</div>
       <button class="nav-item" data-section="sec-standby">
@@ -603,6 +603,31 @@
       </div><!-- /sec-leave -->
 
       <div class="page-section" id="sec-audit">
+      <!-- システムヘルスチェック -->
+      <div class="card">
+        <h2 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          システム診断
+          <span id="healthStatusBadge" style="font-size:12px;padding:3px 10px;border-radius:12px;background:#e8ecf2;color:var(--muted)">未実行</span>
+        </h2>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-blue btn-sm" id="healthRunBtn">今すぐ実行</button>
+          <span id="healthLastRun" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div id="healthResults" style="display:none">
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <thead>
+              <tr style="background:#f7f9fb">
+                <th style="padding:7px 10px;text-align:left;border-bottom:1px solid #e8edf5">チェック項目</th>
+                <th style="padding:7px 10px;text-align:center;border-bottom:1px solid #e8edf5;width:60px">状態</th>
+                <th style="padding:7px 10px;text-align:left;border-bottom:1px solid #e8edf5">詳細</th>
+              </tr>
+            </thead>
+            <tbody id="healthCheckBody"></tbody>
+          </table>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">※ 毎日 02:00 (JST) に自動実行されます</p>
+        </div>
+      </div>
+
       <!-- 操作履歴 -->
       <div class="card">
         <h2 id="auditCardToggle" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center">
@@ -3299,6 +3324,56 @@
     }
   }).catch(() => {});
 
+  // ── システムヘルスチェック ──────────────────────────────────
+  function renderHealthResult(result) {
+    const badge  = document.getElementById('healthStatusBadge');
+    const body   = document.getElementById('healthCheckBody');
+    const panel  = document.getElementById('healthResults');
+    const lastRun = document.getElementById('healthLastRun');
+
+    badge.textContent = result.ok ? '✅ 正常' : '❌ 異常あり';
+    badge.style.background = result.ok ? '#d4edda' : '#f8d7da';
+    badge.style.color       = result.ok ? '#155724' : '#721c24';
+
+    const dt = new Date(result.checkedAt);
+    lastRun.textContent = `前回: ${dt.toLocaleString('ja-JP')}`;
+
+    body.innerHTML = result.checks.map(c => `
+      <tr style="border-bottom:1px solid #f0f4f8">
+        <td style="padding:7px 10px">${esc(c.name)}</td>
+        <td style="padding:7px 10px;text-align:center">${c.ok ? '✅' : '❌'}</td>
+        <td style="padding:7px 10px;color:${c.ok ? 'var(--muted)' : '#c0392b'}">${esc(c.detail)}</td>
+      </tr>`).join('');
+
+    panel.style.display = 'block';
+  }
+
+  async function runHealthCheck() {
+    const btn = document.getElementById('healthRunBtn');
+    btn.disabled = true;
+    btn.textContent = '実行中…';
+    try {
+      const res = await apiFetch('/api/admin/health');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      renderHealthResult(data);
+    } catch (e) {
+      showToast('ヘルスチェックに失敗しました: ' + e.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '今すぐ実行';
+    }
+  }
+
+  async function loadLastHealthCheck() {
+    try {
+      const res = await apiFetch('/api/admin/health/last');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.checkedAt) renderHealthResult(data);
+    } catch (_) {}
+  }
+
   // ── 監査ログ ──────────────────────────────────────────────
   const AUDIT_ACTION_LABELS = {
     'auth.login': 'ログイン',
@@ -4128,6 +4203,10 @@
   });
   document.getElementById('leaveEditSaveBtn').addEventListener('click', saveLeaveEdit);
   document.getElementById('leaveEditCancelBtn').addEventListener('click', closeLeaveEditModal);
+
+  // Health check
+  document.getElementById('healthRunBtn').addEventListener('click', runHealthCheck);
+  loadLastHealthCheck();
 
   // Audit log
   document.getElementById('auditSearchBtn').addEventListener('click', loadAuditLog);

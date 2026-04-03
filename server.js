@@ -314,9 +314,23 @@ async function main() {
   // 毎日0:00 UTC: 期限切れリセットトークン・レート制限エントリを削除
   cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); });
 
+  // 毎日 02:00 JST: システムヘルスチェック
+  cron.schedule('0 17 * * *', () => {
+    const { runHealthChecks } = require('./lib/health');
+    const result = runHealthChecks();
+    if (result.ok) {
+      console.log('[health] ✅ 全チェック正常:', result.checkedAt);
+    } else {
+      const failed = result.checks.filter(c => !c.ok).map(c => `${c.name}(${c.detail})`).join(', ');
+      console.error('[health] ❌ 異常検知:', failed);
+    }
+  }, { timezone: 'Asia/Tokyo' });
+
   app.listen(PORT, () => console.log(`✅ Server → http://localhost:${PORT}`));
 }
-main().catch(e => { console.error(e); process.exit(1); });
+// テスト時は自動起動しない（test-api.js が ensureDataDir() を手動呼び出す）
+if (process.env.NODE_ENV !== 'test') {
+  main().catch(e => { console.error(e); process.exit(1); });
+}
 
-// テスト用エクスポート
-module.exports = { app };
+module.exports = { app, main };
