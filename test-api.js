@@ -32,7 +32,8 @@ let failed = 0;
 
 // レート制限をリセット（テスト間の干渉を防ぐ）
 function clearRateLimits() {
-  getDb().prepare('DELETE FROM rate_limit').run();
+  try { getDb().prepare('DELETE FROM rate_limit').run(); }
+  catch (e) { console.warn('⚠️ rate_limit クリア失敗:', e.message); }
 }
 
 async function test(name, fn) {

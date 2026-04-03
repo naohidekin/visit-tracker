@@ -315,7 +315,7 @@ async function main() {
   cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); });
 
   // 毎日 02:00 JST: システムヘルスチェック
-  cron.schedule('0 17 * * *', () => {
+  cron.schedule('0 2 * * *', () => {
     const { runHealthChecks } = require('./lib/health');
     const result = runHealthChecks();
     if (result.ok) {

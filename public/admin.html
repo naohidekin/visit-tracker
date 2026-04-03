@@ -3335,10 +3335,12 @@
     badge.style.background = result.ok ? '#d4edda' : '#f8d7da';
     badge.style.color       = result.ok ? '#155724' : '#721c24';
 
-    const dt = new Date(result.checkedAt);
-    lastRun.textContent = `前回: ${dt.toLocaleString('ja-JP')}`;
+    if (result.checkedAt) {
+      const dt = new Date(result.checkedAt);
+      lastRun.textContent = `前回: ${dt.toLocaleString('ja-JP')}`;
+    }
 
-    body.innerHTML = result.checks.map(c => `
+    body.innerHTML = (result.checks || []).map(c => `
       <tr style="border-bottom:1px solid #f0f4f8">
         <td style="padding:7px 10px">${esc(c.name)}</td>
         <td style="padding:7px 10px;text-align:center">${c.ok ? '✅' : '❌'}</td>

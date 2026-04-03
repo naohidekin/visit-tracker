@@ -265,17 +265,22 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, lockedRoute(L
   request.adminComment = req.body.comment || null;
   request.reviewedAt = getNowJST().toISOString();
   saveLeave(leaveData);
-  auditLog(req, 'leave.approve', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
+  auditLog(req, 'leave.approve', { type: 'leave', id: request.id, label: `${request.staffName} ${(request.dates || [])[0]}` });
 
-  // 通知を作成
-  const dateStr = request.dates.length === 1
-    ? request.dates[0]
-    : `${request.dates[0]}〜${request.dates[request.dates.length - 1]}`;
-  const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-  await createStaffNotice(request.staffId,
-    '有給申請が承認されました',
-    `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
-  );
+  // 通知を作成（失敗しても承認自体は確定済みなのでエラーを握りつぶす）
+  try {
+    const dates    = request.dates || [];
+    const dateStr  = dates.length === 0 ? '(日付不明)'
+      : dates.length === 1 ? dates[0]
+      : `${dates[0]}〜${dates[dates.length - 1]}`;
+    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
+    await createStaffNotice(request.staffId,
+      '✅ 有給申請が承認されました',
+      `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
+    );
+  } catch (e) {
+    console.error('[leave.approve] 通知の作成に失敗:', e.message);
+  }
 
   res.json({ ok: true });
 }));
@@ -291,17 +296,22 @@ router.post('/api/admin/leave/requests/:id/reject', requireAdmin, lockedRoute(LE
   request.adminComment = req.body.comment || null;
   request.reviewedAt = getNowJST().toISOString();
   saveLeave(leaveData);
-  auditLog(req, 'leave.reject', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
+  auditLog(req, 'leave.reject', { type: 'leave', id: request.id, label: `${request.staffName} ${(request.dates || [])[0]}` });
 
-  // 通知を作成
-  const dateStr = request.dates.length === 1
-    ? request.dates[0]
-    : `${request.dates[0]}〜${request.dates[request.dates.length - 1]}`;
-  const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-  await createStaffNotice(request.staffId,
-    '有給申請が却下されました',
-    `${dateStr}（${typeLabel}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
-  );
+  // 通知を作成（失敗しても却下自体は確定済みなのでエラーを握りつぶす）
+  try {
+    const dates    = request.dates || [];
+    const dateStr  = dates.length === 0 ? '(日付不明)'
+      : dates.length === 1 ? dates[0]
+      : `${dates[0]}〜${dates[dates.length - 1]}`;
+    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
+    await createStaffNotice(request.staffId,
+      '❌ 有給申請が却下されました',
+      `${dateStr}（${typeLabel}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
+    );
+  } catch (e) {
+    console.error('[leave.reject] 通知の作成に失敗:', e.message);
+  }
 
   res.json({ ok: true });
 }));
