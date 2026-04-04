@@ -1111,8 +1111,8 @@
           <div class="auto-label" id="idAutoLabel"></div>
         </div>
         <div class="field">
-          <label>初期パスワード</label>
-          <input type="text" id="newInitialPw" placeholder="HY08">
+          <label>初期パスワード（8文字以上）</label>
+          <input type="text" id="newInitialPw" placeholder="8文字以上" minlength="8">
           <div class="auto-label" id="pwAutoLabel"></div>
         </div>
         <div class="field">
@@ -1839,6 +1839,9 @@
 
     if (!name || !loginId || !initPw) {
       err.textContent = '名前・ログインID・初期PWは必須です'; err.style.display = 'block'; return;
+    }
+    if (initPw.length < 8) {
+      err.textContent = '初期パスワードは8文字以上で設定してください'; err.style.display = 'block'; return;
     }
 
     btn.disabled = true; btn.textContent = '処理中（全月シート更新中）...';

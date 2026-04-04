@@ -79,7 +79,7 @@ router.post('/api/reset-password', lockedRoute(STAFF_PATH, async (req, res) => {
   const { token, newPassword, confirmPassword } = req.body;
   if (!token || !newPassword) return res.status(400).json({ error: 'パラメータが不足しています' });
   if (newPassword !== confirmPassword) return res.status(400).json({ error: 'パスワードが一致しません' });
-  if (newPassword.length < 4) return res.status(400).json({ error: 'パスワードは4文字以上で設定してください' });
+  if (newPassword.length < 8) return res.status(400).json({ error: 'パスワードは8文字以上で設定してください' });
 
   const tokenData = loadResetTokens();
   const entry = tokenData.tokens.find(t => t.token === token && !t.used);
@@ -313,8 +313,8 @@ router.post('/api/change-password', requireStaff, lockedRoute(STAFF_PATH, async 
   const { currentPassword, newPassword, confirmPassword } = req.body;
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'パラメータが不足しています' });
-  if (newPassword.length < 4 || newPassword.length > 20)
-    return res.status(400).json({ error: 'パスワードは4〜20文字で設定してください' });
+  if (newPassword.length < 8)
+    return res.status(400).json({ error: 'パスワードは8文字以上で設定してください' });
   if (newPassword !== confirmPassword)
     return res.status(400).json({ error: '新しいパスワードが一致しません' });
 

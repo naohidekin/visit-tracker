@@ -665,6 +665,8 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
   const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall, email } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
+  if (initialPw.length < 8)
+    return res.status(400).json({ error: '初期パスワードは8文字以上で設定してください' });
   const VALID_STAFF_TYPES = ['nurse', 'PT', 'OT', 'ST', 'office', 'admin'];
   if (!VALID_STAFF_TYPES.includes(type))
     return res.status(400).json({ error: `スタッフ種別が不正です（${VALID_STAFF_TYPES.join('/')}）` });
