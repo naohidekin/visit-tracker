@@ -139,6 +139,22 @@
       #leaveBalanceTableWrap .leave-num-label { font-size:10px; color:var(--muted) }
       #leaveBalanceTableWrap .leave-num-val { font-size:14px; font-weight:700 }
     }
+    @media(max-width:600px){
+      #sec-standby .table-wrap table{min-width:0!important;width:100%;table-layout:fixed}
+      #sec-standby .table-wrap table th:nth-child(1),
+      #sec-standby .table-wrap table td:nth-child(1){width:42px}
+      #sec-standby .table-wrap table th:nth-child(2),
+      #sec-standby .table-wrap table td:nth-child(2){width:26px}
+      #sec-standby .table-wrap table th:nth-child(3),
+      #sec-standby .table-wrap table td:nth-child(3){width:32px}
+      #sec-standby .table-wrap table th:nth-child(5),
+      #sec-standby .table-wrap table td:nth-child(5){width:50px}
+      #sec-standby .table-wrap table th:nth-child(6),
+      #sec-standby .table-wrap table td:nth-child(6){width:28px}
+      #sec-standby .table-wrap table th,
+      #sec-standby .table-wrap table td{padding:4px 2px;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+      #sec-standby .table-wrap select[data-action="standby-select"]{font-size:11px;padding:3px 1px;width:100%!important}
+    }
     /* ── インセンティブ個別設定（モバイル最適化） ── */
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
