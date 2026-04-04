@@ -125,6 +125,20 @@
     .staff-table td{padding:6px 4px}
     .staff-table .td-btns{gap:2px;flex-wrap:nowrap}
     .staff-table .btn-xs{padding:4px 6px;font-size:12px}
+    /* ── 有給残日数（スマホ: カード表示） ── */
+    @media(max-width:600px){
+      #leaveBalanceTableWrap table thead { display:none }
+      #leaveBalanceTableWrap table, #leaveBalanceTableWrap tbody, #leaveBalanceTableWrap tr, #leaveBalanceTableWrap td { display:block; width:100% }
+      #leaveBalanceTableWrap tr { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:10px; padding:10px 12px }
+      #leaveBalanceTableWrap td { padding:2px 0; font-size:13px; border:none }
+      #leaveBalanceTableWrap td::before { content:attr(data-label); font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:1px }
+      #leaveBalanceTableWrap td.leave-name { font-size:15px; font-weight:700; margin-bottom:4px }
+      #leaveBalanceTableWrap td.leave-balance { font-size:18px; font-weight:800 }
+      #leaveBalanceTableWrap .leave-row-nums { display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 }
+      #leaveBalanceTableWrap .leave-num-item { display:flex; flex-direction:column; align-items:center; min-width:40px }
+      #leaveBalanceTableWrap .leave-num-label { font-size:10px; color:var(--muted) }
+      #leaveBalanceTableWrap .leave-num-val { font-size:14px; font-weight:700 }
+    }
     /* ── インセンティブ個別設定（モバイル最適化） ── */
     .iline-list{display:flex;flex-direction:column;gap:0}
     .iline-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef0f4}
@@ -548,7 +562,7 @@
             <div class="table-wrap" id="leaveBalanceTableWrap" style="display:none">
               <table>
                 <thead>
-                  <tr><th>名前</th><th>入社日</th><th>最終付与</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
+                  <tr><th>名前</th><th>入社日</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
                 </thead>
                 <tbody id="leaveBalanceBody"></tbody>
               </table>
@@ -1674,7 +1688,7 @@
     const ocBtn = s.type === 'nurse'
       ? `<button class="btn-xs ${s.oncall_eligible ? 'btn-green' : 'btn-reset'}" data-action="toggle-oncall" data-id="${esc(s.id)}" data-eligible="${s.oncall_eligible ? 'true' : 'false'}" title="オンコール対象">${s.oncall_eligible ? 'OC有' : 'OC無'}</button>`
       : '';
-    const adminBadge = s.is_admin ? '<span style="background:#e53935;color:#fff;font-size:14px;padding:1px 5px;border-radius:3px;margin-left:4px">管理者</span>' : '';
+    const adminBadge = s.is_admin ? '<span style="background:#e53935;color:#fff;font-size:11px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:700">管</span>' : '';
     const adminBtn = s.is_admin
       ? `<button class="btn-xs btn-danger revoke-admin-btn" data-id="${esc(s.id)}" title="管理者権限剥奪">管理者解除</button>`
       : `<button class="btn-xs btn-green grant-admin-btn" data-id="${esc(s.id)}" title="管理者権限付与">管理者付与</button>`;
@@ -2534,17 +2548,21 @@
     spinner.style.display = 'none';
     wrap.style.display = '';
 
-    document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => `<tr>
-      <td>${esc(s.name)}</td>
-      <td style="font-size:14px">${s.hire_date || '未設定'}</td>
-      <td>${s.auto_grant_days}日</td>
-      <td>${s.granted}日</td>
-      <td>${s.carried_over}日</td>
-      <td>${s.manual_adjustment >= 0 ? '+' : ''}${s.manual_adjustment}</td>
-      <td>${s.used}日</td>
-      <td style="font-weight:700;color:${s.balance <= 0 ? '#c0392b' : 'var(--text)'}">${s.balance}日</td>
-      <td><button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}">編集</button></td>
-    </tr>`).join('');
+    document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
+      const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
+      const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
+      const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}">編集</button>`;
+      return `<tr>
+        <td class="leave-name">${esc(s.name)}</td>
+        <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
+        <td data-label="付与">${s.granted}日</td>
+        <td data-label="繰越">${s.carried_over}日</td>
+        <td data-label="調整">${adjStr}</td>
+        <td data-label="使用">${s.used}日</td>
+        <td class="leave-balance" data-label="残" style="font-weight:700;color:${balColor}">${s.balance}日</td>
+        <td data-label="">${editBtn}</td>
+      </tr>`;
+    }).join('');
   }
 
   function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj) {
