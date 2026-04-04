@@ -125,20 +125,6 @@
     .staff-table td{padding:6px 4px}
     .staff-table .td-btns{gap:2px;flex-wrap:nowrap}
     .staff-table .btn-xs{padding:4px 6px;font-size:12px}
-    /* ── 有給残日数（スマホ: カード表示） ── */
-    @media(max-width:600px){
-      #leaveBalanceTableWrap table thead { display:none }
-      #leaveBalanceTableWrap table, #leaveBalanceTableWrap tbody, #leaveBalanceTableWrap tr, #leaveBalanceTableWrap td { display:block; width:100% }
-      #leaveBalanceTableWrap tr { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:10px; padding:10px 12px }
-      #leaveBalanceTableWrap td { padding:2px 0; font-size:13px; border:none }
-      #leaveBalanceTableWrap td::before { content:attr(data-label); font-size:11px; color:var(--muted); font-weight:600; display:block; margin-bottom:1px }
-      #leaveBalanceTableWrap td.leave-name { font-size:15px; font-weight:700; margin-bottom:4px }
-      #leaveBalanceTableWrap td.leave-balance { font-size:18px; font-weight:800 }
-      #leaveBalanceTableWrap .leave-row-nums { display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 }
-      #leaveBalanceTableWrap .leave-num-item { display:flex; flex-direction:column; align-items:center; min-width:40px }
-      #leaveBalanceTableWrap .leave-num-label { font-size:10px; color:var(--muted) }
-      #leaveBalanceTableWrap .leave-num-val { font-size:14px; font-weight:700 }
-    }
     @media(max-width:600px){
       #sec-standby .table-wrap table{min-width:0!important;width:100%;table-layout:fixed}
       #sec-standby .table-wrap table th:nth-child(1),
