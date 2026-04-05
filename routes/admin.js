@@ -1070,10 +1070,11 @@ router.patch('/api/admin/staff/:id', requireAdmin, asyncRoute((req, res) => {
 }));
 
 router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) => {
-  const data = loadStaff();
-  const idx  = data.staff.findIndex(s => s.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  const [removed] = data.staff.splice(idx, 1);
+  // Pre-read to get removed staff info for Sheets operations
+  const preData = loadStaff();
+  const preIdx  = preData.staff.findIndex(s => s.id === req.params.id);
+  if (preIdx === -1) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  const removed = { ...preData.staff[preIdx] };
 
   try {
     const api      = await getSheets();
@@ -1081,9 +1082,11 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
     const allSids  = [...new Set([SPREADSHEET_ID, ...Object.values(registry)])];
 
     const sheetErrors = [];
+    // Compute divider info from pre-read data (excluding the staff to be removed)
+    const preStaffWithoutRemoved = preData.staff.filter(s => s.id !== req.params.id);
     if (removed.type === 'nurse') {
       const delStart = colToIdx(removed.kaigo_col);
-      const activeNursesBeforeDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
+      const activeNursesBeforeDel = preStaffWithoutRemoved.filter(s => s.type === 'nurse' && !s.archived);
       const oldDividerIdx = activeNursesBeforeDel.length > 0
         ? Math.max(...activeNursesBeforeDel.map(s => colToIdx(s.iryo_col))) : null;
 
@@ -1105,18 +1108,15 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
           sheetErrors.push(ssId);
         }
       }
-      for (const s of data.staff) {
-        if (s.type === 'nurse' && colToIdx(s.kaigo_col) > delStart) {
-          s.kaigo_col = idxToCol(colToIdx(s.kaigo_col) - 2);
-          s.iryo_col  = idxToCol(colToIdx(s.iryo_col)  - 2);
+      // Compute new divider after column shift (simulate shift on pre-read data)
+      const shiftedNurses = activeNursesBeforeDel.map(s => {
+        if (colToIdx(s.kaigo_col) > delStart) {
+          return { ...s, kaigo_col: idxToCol(colToIdx(s.kaigo_col) - 2), iryo_col: idxToCol(colToIdx(s.iryo_col) - 2) };
         }
-      }
-      for (const s of data.staff) {
-        if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
-      }
-      const activeNursesAfterDel = data.staff.filter(s => s.type === 'nurse' && !s.archived);
-      const newDividerIdx = activeNursesAfterDel.length > 0
-        ? Math.max(...activeNursesAfterDel.map(s => colToIdx(s.iryo_col))) : null;
+        return s;
+      });
+      const newDividerIdx = shiftedNurses.length > 0
+        ? Math.max(...shiftedNurses.map(s => colToIdx(s.iryo_col))) : null;
       const SOLID        = { style: 'SOLID',       color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
       for (const ssId of allSids) {
@@ -1153,6 +1153,34 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
           if (!sheetErrors.includes(ssId)) sheetErrors.push(ssId);
         }
       }
+
+      // Atomically re-load, remove, shift columns, and save
+      const saveResult = atomicModify(() => {
+        const data = loadStaff();
+        const idx = data.staff.findIndex(s => s.id === req.params.id);
+        if (idx === -1) return { error: 'スタッフが見つかりません', status: 404 };
+        data.staff.splice(idx, 1);
+        for (const s of data.staff) {
+          if (s.type === 'nurse' && colToIdx(s.kaigo_col) > delStart) {
+            s.kaigo_col = idxToCol(colToIdx(s.kaigo_col) - 2);
+            s.iryo_col  = idxToCol(colToIdx(s.iryo_col)  - 2);
+          }
+        }
+        for (const s of data.staff) {
+          if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
+        }
+        saveStaff(data);
+        return { staff: data.staff };
+      });
+      if (saveResult.error) return res.status(saveResult.status).json({ error: saveResult.error });
+
+      auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
+      const result = { success: true, removed, staff: saveResult.staff };
+      if (sheetErrors.length > 0) {
+        result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。手動確認が必要です。`;
+        console.error('⚠️ スタッフ削除: 一部スプレッドシート反映失敗:', sheetErrors);
+      }
+      res.json(result);
     } else if (removed.col) {
       const delIdx = colToIdx(removed.col);
       for (const ssId of allSids) {
@@ -1173,21 +1201,45 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
           sheetErrors.push(ssId);
         }
       }
-      for (const s of data.staff) {
-        if (s.type !== 'nurse' && colToIdx(s.col) > delIdx) {
-          s.col = idxToCol(colToIdx(s.col) - 1);
-        }
-      }
-    }
 
-    saveStaff(data);
-    auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
-    const result = { success: true, removed, staff: data.staff };
-    if (sheetErrors.length > 0) {
-      result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。手動確認が必要です。`;
-      console.error('⚠️ スタッフ削除: 一部スプレッドシート反映失敗:', sheetErrors);
+      // Atomically re-load, remove, shift columns, and save
+      const saveResult = atomicModify(() => {
+        const data = loadStaff();
+        const idx = data.staff.findIndex(s => s.id === req.params.id);
+        if (idx === -1) return { error: 'スタッフが見つかりません', status: 404 };
+        data.staff.splice(idx, 1);
+        for (const s of data.staff) {
+          if (s.type !== 'nurse' && colToIdx(s.col) > delIdx) {
+            s.col = idxToCol(colToIdx(s.col) - 1);
+          }
+        }
+        saveStaff(data);
+        return { staff: data.staff };
+      });
+      if (saveResult.error) return res.status(saveResult.status).json({ error: saveResult.error });
+
+      auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
+      const result = { success: true, removed, staff: saveResult.staff };
+      if (sheetErrors.length > 0) {
+        result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。手動確認が必要です。`;
+        console.error('⚠️ スタッフ削除: 一部スプレッドシート反映失敗:', sheetErrors);
+      }
+      res.json(result);
+    } else {
+      // No column to delete (e.g., office/admin type)
+      const saveResult = atomicModify(() => {
+        const data = loadStaff();
+        const idx = data.staff.findIndex(s => s.id === req.params.id);
+        if (idx === -1) return { error: 'スタッフが見つかりません', status: 404 };
+        data.staff.splice(idx, 1);
+        saveStaff(data);
+        return { staff: data.staff };
+      });
+      if (saveResult.error) return res.status(saveResult.status).json({ error: saveResult.error });
+
+      auditLog(req, 'staff.delete', { type: 'staff', id: removed.id, label: removed.name });
+      res.json({ success: true, removed, staff: saveResult.staff });
     }
-    res.json(result);
   } catch (e) {
     console.error('❌ スタッフ削除エラー:', e);
     res.status(500).json({ error: 'スタッフの削除に失敗しました' });
