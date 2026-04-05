@@ -153,3 +153,61 @@ sqlite3 /data/visit-tracker.db "PRAGMA integrity_check;"
 ```
 
 監査ログのハッシュチェーン検証は管理画面の監査ログセクションから実行できます。
+
+---
+
+## 監査ログの別保管
+
+システムはすべての操作を監査ログに記録し、SQLite とは**別の追記専用 NDJSON ファイル**の両方に書き込みます。
+
+| 保管先 | パス | 用途 |
+|--------|------|------|
+| SQLite テーブル | `visit-tracker.db` 内 `audit_log` | 管理画面での検索・表示 |
+| NDJSON ファイル | `/data/audit-log.ndjson` | 別保管・外部バックアップ用 |
+
+NDJSON ファイルは**追記のみ**（既存行を書き換えない）のため、SQLite が破損・削除されても独立して残ります。
+
+### NDJSON ファイルの保存先変更
+
+環境変数 `AUDIT_LOG_NDJSON_PATH` で変更できます（Render.com では別ボリュームや外部ストレージを指定可能）:
+
+```
+AUDIT_LOG_NDJSON_PATH=/mnt/audit/audit-log.ndjson
+```
+
+### 監査ログのバックアップ
+
+```bash
+# NDJSON ファイルを日付付きでバックアップ（主要な保管先）
+cp /data/audit-log.ndjson /data/backup/audit-log-$(date +%Y%m%d).ndjson
+
+# 週次: 外部ストレージへコピー（Google Drive CLI 等）
+```
+
+### 監査ログの復旧・照合
+
+SQLite が失われた場合でも NDJSON から復旧できます:
+
+```bash
+# NDJSON を SQLite に再インポート（各行を audit_log テーブルへ）
+node -e "
+const fs  = require('fs');
+const { getDb } = require('./lib/db');
+const db  = getDb();
+const ins = db.prepare('INSERT OR IGNORE INTO audit_log (id, timestamp, prev_hash, data) VALUES (?, ?, ?, ?)');
+const lines = fs.readFileSync('/data/audit-log.ndjson', 'utf8').trim().split('\n');
+db.transaction(() => {
+  for (const line of lines) {
+    if (!line) continue;
+    const e = JSON.parse(line);
+    ins.run(e.id, e.timestamp, e.prevHash ?? '0', line);
+  }
+})();
+console.log('復旧完了:', lines.length, '件');
+"
+```
+
+### ハッシュチェーン検証
+
+管理画面の監査ログセクションからハッシュチェーンの整合性を確認できます。
+NDJSON から復旧した場合も同様に検証してください。

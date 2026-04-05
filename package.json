@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-leave.js",
+    "test": "node test-leave.js && node test-api.js",
+    "test:unit": "node test-leave.js",
+    "test:api": "node test-api.js",
     "security-check": "node scripts/security-check.js"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
     "express": "^4.18.2",
     "googleapis": "^140.0.0",
     "helmet": "^8.1.0",
+    "holiday-jp": "^1.0.0",
     "multer": "^2.1.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.4",
@@ -29,5 +32,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2"
   }
 }

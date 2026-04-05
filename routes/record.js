@@ -9,7 +9,7 @@ const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { DATA_START_ROW, WD, ALL_HOLIDAYS } = require('../lib/constants');
+const { DATA_START_ROW, WD } = require('../lib/constants');
 
 async function hasRecordForDate(staff, dateStr) {
   const d = new Date(dateStr + 'T00:00:00');

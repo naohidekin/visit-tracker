@@ -1,6 +1,17 @@
 // Service Worker（オフライン対応）
-const CACHE = 'visit-v4';
+const CACHE = 'visit-v5';
 const STATIC = ['/manifest.json', '/logo.png'];
+
+// 認証・管理系ページ: キャッシュ禁止、ネットワーク専用
+// 古い HTML が返ると認証状態・画面内容の不整合を引き起こすため
+const NO_CACHE_PATHS = new Set([
+  '/login', '/login.html',
+  '/admin', '/admin.html',
+  '/admin-manual', '/admin-manual.html',
+  '/change-password', '/change-password.html',
+  '/forgot-password', '/forgot-password.html',
+  '/reset-password', '/reset-password.html',
+]);
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
@@ -18,7 +29,15 @@ self.addEventListener('fetch', e => {
   // APIリクエストはキャッシュしない
   if (e.request.url.includes('/api/')) return;
 
-  // HTMLはネットワーク優先（常に最新を取得、失敗時のみキャッシュ）
+  const url = new URL(e.request.url);
+
+  // 認証・管理系ページはネットワーク専用（失敗してもキャッシュを返さない）
+  if (NO_CACHE_PATHS.has(url.pathname)) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  // その他のHTMLはネットワーク優先（成功時のみキャッシュ更新、失敗時はキャッシュ）
   if (e.request.headers.get('accept')?.includes('text/html')) {
     e.respondWith(
       fetch(e.request)
