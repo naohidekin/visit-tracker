@@ -11,11 +11,6 @@ const { auditLog } = require('../lib/audit');
 const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant } = require('../lib/leave-calc');
 const { STAFF_PATH, LEAVE_PATH, NOTICES_PATH } = require('../lib/constants');
 
-// 全職員対象のため制限なし
-function requireLeaveOncall(req, res, next) {
-  next();
-}
-
 // 有給通知ヘルパー（個人宛お知らせ）
 async function createStaffNotice(staffId, title, body) {
   return await withFileLock(NOTICES_PATH, async () => {
@@ -37,7 +32,7 @@ async function createStaffNotice(staffId, title, body) {
 }
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
-router.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) => {
+router.get('/api/leave/balance', requireStaff,(req, res) => {
   const data = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -98,7 +93,7 @@ router.get('/api/leave/balance', requireStaff, requireLeaveOncall, (req, res) =>
   });
 });
 
-router.get('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) => {
+router.get('/api/leave/requests', requireStaff,(req, res) => {
   const leaveData = loadLeave();
   const mine = leaveData.requests
     .filter(r => r.staffId === req.session.staffId)
@@ -106,7 +101,7 @@ router.get('/api/leave/requests', requireStaff, requireLeaveOncall, (req, res) =
   res.json({ requests: mine });
 });
 
-router.post('/api/leave/requests', requireStaff, requireLeaveOncall, lockedRoute(LEAVE_PATH, (req, res) => {
+router.post('/api/leave/requests', requireStaff,lockedRoute(LEAVE_PATH, (req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
@@ -216,7 +211,7 @@ router.post('/api/leave/requests', requireStaff, requireLeaveOncall, lockedRoute
   res.json({ ok: true, request });
 }));
 
-router.post('/api/leave/requests/:id/cancel', requireStaff, requireLeaveOncall, lockedRoute(LEAVE_PATH, (req, res) => {
+router.post('/api/leave/requests/:id/cancel', requireStaff,lockedRoute(LEAVE_PATH, (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
