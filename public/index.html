@@ -84,6 +84,12 @@
       z-index:50;
       box-shadow:0 -8px 24px rgba(0,0,0,.10);
     }
+    .picker-dropdown.drop-down{
+      bottom:auto;top:calc(100% - 1px);
+      border-bottom:1px solid var(--blue);border-top:none;
+      border-radius:0 0 12px 12px;
+      box-shadow:0 8px 24px rgba(0,0,0,.10);
+    }
     .picker-dropdown::-webkit-scrollbar{width:4px}
     .picker-dropdown::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
     .picker-item{
@@ -185,6 +191,8 @@
     .btn-cancel{background:#eef0f4;color:var(--muted)}
     .btn-ok{background:var(--blue);color:#fff}
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
+    .toast.show{opacity:1}
   </style>
 </head>
 <body>
@@ -362,6 +370,7 @@
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
 <script src="/vendor/api-fetch.js"></script>
 <script src="/vendor/common.js"></script>
 <script src="/vendor/simplewebauthn-browser.umd.min.js"></script>
@@ -412,8 +421,15 @@
     closeAllPickers();
     if (!isOpen) {
       buildList(name);
+      list.classList.remove('drop-down');
       list.style.display = 'block';
       btn.classList.add('open');
+      // 上向き展開で画面外に出る場合は下向きに切り替え
+      const rect = list.getBoundingClientRect();
+      if (rect.top < 0) {
+        list.classList.add('drop-down');
+        btn.style.borderRadius = '12px 12px 0 0';
+      }
     }
   }
 
@@ -421,8 +437,8 @@
     for (const n of ['kaigo', 'iryo', 'rehab']) {
       const l = document.getElementById(n + 'List');
       const b = document.getElementById(n + 'Btn');
-      if (l) { l.style.display = 'none'; }
-      if (b) { b.classList.remove('open'); }
+      if (l) { l.style.display = 'none'; l.classList.remove('drop-down'); }
+      if (b) { b.classList.remove('open'); b.style.borderRadius = ''; }
     }
   }
 
@@ -571,14 +587,14 @@
   // ── 送信処理 ─────────────────────────────────────────────
   async function handleSubmit() {
     const date = document.getElementById('dateInput').value;
-    if (!date) { alert('訪問日を入力してください'); return; }
+    if (!date) { showToast('訪問日を入力してください'); return; }
 
     if (currentUser.type === 'nurse') {
       if (pv.kaigo === null && pv.iryo === null) {
-        alert('介護か医療のどちらかを選択してください'); return;
+        showToast('介護か医療のどちらかを選択してください'); return;
       }
     } else {
-      if (pv.rehab === null) { alert('単位数を選択してください'); return; }
+      if (pv.rehab === null) { showToast('単位数を選択してください'); return; }
     }
 
     // 翌日 → 予定として登録
@@ -588,7 +604,7 @@
       return;
     }
 
-    if (date > toDateStr(new Date())) { alert('未来の日付は記録できません'); return; }
+    if (date > toDateStr(new Date())) { showToast('未来の日付は記録できません'); return; }
 
     // 上書きチェック
     try {
@@ -623,7 +639,7 @@
     const data = await res.json();
     btn.disabled = false; btn.textContent = '予定として登録する';
 
-    if (!data.success) { alert('エラー: ' + (data.error || '送信失敗')); return; }
+    if (!data.success) { showToast('エラー: ' + (data.error || '送信失敗')); return; }
 
     document.getElementById('formView').style.display   = 'none';
     document.getElementById('resultView').style.display = 'block';
@@ -673,7 +689,7 @@
     const data = await res.json();
     btn.disabled = false; btn.textContent = '記録する';
 
-    if (!data.success) { alert('エラー: ' + (data.error || '送信失敗')); return; }
+    if (!data.success) { showToast('エラー: ' + (data.error || '送信失敗')); return; }
     // 記録成功 → リマインダーバナー非表示
     const rb = document.getElementById('reminderBanner');
     if (rb) rb.style.display = 'none';
@@ -841,10 +857,10 @@
     const res  = await apiFetch(`/api/schedules/${id}/confirm`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      alert('確定しました');
+      showToast('確定しました');
       await loadPendingSchedules();
     } else {
-      alert('エラー: ' + (data.error || '確定失敗'));
+      showToast('エラー: ' + (data.error || '確定失敗'));
     }
   }
 
@@ -853,7 +869,7 @@
     const res  = await apiFetch(`/api/schedules/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) { await loadPendingSchedules(); }
-    else alert('エラー: ' + (data.error || '削除失敗'));
+    else showToast('エラー: ' + (data.error || '削除失敗'));
   }
 
   // ── 修正期間アラートバナー（毎月16〜20日のみ表示） ──
@@ -916,13 +932,13 @@
       if (result.success) {
         localStorage.setItem('faceid_prompt_dismissed', 'true');
         document.getElementById('faceIdPrompt').classList.remove('show');
-        alert('Face IDの設定が完了しました！\n次回からFace IDでログインできます。');
+        showToast('Face IDの設定が完了しました！次回からFace IDでログインできます。', 4000);
       } else {
         throw new Error(result.error || '登録に失敗しました');
       }
     } catch (e) {
       if (e.name !== 'NotAllowedError') {
-        alert('Face IDの設定に失敗しました: ' + (e.message || ''));
+        showToast('Face IDの設定に失敗しました: ' + (e.message || ''), 4000);
       }
     }
     btn.disabled = false; btn.textContent = '設定する';
