@@ -7,14 +7,14 @@ const bcrypt = require('bcryptjs');
 const { generateRegistrationOptions, verifyRegistrationResponse,
         generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
-const { loadStaff, saveStaff, loadResetTokens, saveResetTokens, generateResetToken } = require('../lib/data');
+const { loadStaff, saveStaff, loadResetTokens, saveResetTokens, generateResetToken, atomicModify } = require('../lib/data');
 const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
 const { checkRateLimit, asyncRoute, isValidDate, sanitizeStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { sendResetEmail } = require('../lib/mail');
 const { loadCredentials, saveCredential, updateCredentialCounter, deleteCredentials, hasCredentials,
         getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
-const { STAFF_PATH, APP_BASE_URL, RESET_TOKENS_PATH } = require('../lib/constants');
+const { APP_BASE_URL, RESET_TOKENS_PATH } = require('../lib/constants');
 
 // ─── API: パスワードリセット ────────────────────────────────────
 router.post('/api/forgot-password', (req, res) => {
@@ -88,18 +88,29 @@ router.post('/api/reset-password', asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'リセットリンクの有効期限が切れています。再度リクエストしてください' });
   }
 
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === entry.staffId);
-  if (!staff) return res.status(400).json({ error: 'スタッフが見つかりません' });
+  // hash計算を先に行い、その後アトミックに更新
+  const newHash = await bcrypt.hash(newPassword, 10);
 
-  staff.password_hash = await bcrypt.hash(newPassword, 10);
-  saveStaff(staffData);
+  const result = atomicModify(() => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === entry.staffId);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 400 };
 
-  // トークンを使用済みに
-  entry.used = true;
-  saveResetTokens(tokenData);
+    staff.password_hash = newHash;
+    saveStaff(staffData);
 
-  auditLog(req, 'auth.self_reset_password', { type: 'auth', id: staff.id, label: staff.name });
+    // トークンを使用済みに
+    const freshTokenData = loadResetTokens();
+    const freshEntry = freshTokenData.tokens.find(t => t.token === token);
+    if (freshEntry) {
+      freshEntry.used = true;
+      saveResetTokens(freshTokenData);
+    }
+    return { ok: true, staffId: staff.id, staffName: staff.name };
+  });
+
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'auth.self_reset_password', { type: 'auth', id: result.staffId, label: result.staffName });
   res.json({ success: true });
 }));
 
@@ -325,8 +336,15 @@ router.post('/api/change-password', requireStaff, asyncRoute(async (req, res) =>
   const ok = await bcrypt.compare(currentPassword, staff.password_hash);
   if (!ok) return res.status(401).json({ error: '現在のパスワードが正しくありません' });
 
-  staff.password_hash = await bcrypt.hash(newPassword, 10);
-  saveStaff(data);
+  const newHash = await bcrypt.hash(newPassword, 10);
+  atomicModify(() => {
+    const freshData = loadStaff();
+    const freshStaff = freshData.staff.find(s => s.id === req.session.staffId);
+    if (freshStaff) {
+      freshStaff.password_hash = newHash;
+      saveStaff(freshData);
+    }
+  });
   auditLog(req, 'auth.change_password', { type: 'auth', id: staff.id, label: staff.name });
   res.json({ success: true });
 }));

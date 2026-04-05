@@ -4,12 +4,12 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadSchedules, saveSchedules, getSpreadsheetIdForYear } = require('../lib/data');
+const { loadStaff, loadSchedules, saveSchedules, getSpreadsheetIdForYear, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, getTodayJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { SCHEDULES_PATH, DATA_START_ROW } = require('../lib/constants');
+const { DATA_START_ROW } = require('../lib/constants');
 
 // ─── API: 予定管理 ──────────────────────────────────────────────
 router.get('/api/schedules', requireStaff, (req, res) => {
@@ -26,37 +26,40 @@ router.post('/api/schedules', requireStaff, asyncRoute((req, res) => {
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
-  const data = loadSchedules();
-  // 同一スタッフ・同一日付の予定は上書き
-  data.schedules = data.schedules.filter(s => !(s.staffId === req.session.staffId && s.date === date));
+  const entry = atomicModify(() => {
+    const data = loadSchedules();
+    data.schedules = data.schedules.filter(s => !(s.staffId === req.session.staffId && s.date === date));
 
-  const id = `${req.session.staffId}-${date}-${Date.now()}`;
-  const entry = {
-    id,
-    staffId: req.session.staffId,
-    staffName: req.session.staffName,
-    jobType: staff.type,
-    date,
-    kaigo: null, iryo: null, units: null,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  };
-  if (staff.type === 'nurse') {
-    const { kaigo, iryo } = req.body;
-    entry.kaigo = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : null;
-    entry.iryo  = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : null;
-  } else {
-    const { value } = req.body;
-    entry.units = (value !== '' && value !== null && value !== undefined) ? Number(value) : null;
-  }
+    const id = `${req.session.staffId}-${date}-${Date.now()}`;
+    const e = {
+      id,
+      staffId: req.session.staffId,
+      staffName: req.session.staffName,
+      jobType: staff.type,
+      date,
+      kaigo: null, iryo: null, units: null,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    if (staff.type === 'nurse') {
+      const { kaigo, iryo } = req.body;
+      e.kaigo = (kaigo !== '' && kaigo !== null && kaigo !== undefined) ? Number(kaigo) : null;
+      e.iryo  = (iryo  !== '' && iryo  !== null && iryo  !== undefined) ? Number(iryo)  : null;
+    } else {
+      const { value } = req.body;
+      e.units = (value !== '' && value !== null && value !== undefined) ? Number(value) : null;
+    }
 
-  data.schedules.push(entry);
-  saveSchedules(data);
+    data.schedules.push(e);
+    saveSchedules(data);
+    return e;
+  });
   auditLog(req, 'schedule.create', { type: 'schedule', id: entry.id, label: `${req.session.staffName} ${date}` });
   res.json({ success: true, schedule: entry });
 }));
 
 router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, res) => {
+  // まずスケジュールデータを読んで検証（トランザクション外）
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -75,6 +78,7 @@ router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, r
   const sid   = getSpreadsheetIdForYear(year);
 
   try {
+    // Google Sheets API呼び出し（非同期）
     const api = await getSheets();
     if (staff.type === 'nurse') {
       const kVal = schedule.kaigo != null ? schedule.kaigo : '';
@@ -98,8 +102,15 @@ router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, r
         requestBody: { values: [[val]] },
       }));
     }
-    data.schedules.splice(idx, 1);
-    saveSchedules(data);
+    // Sheets書き込み成功後にアトミックに削除
+    atomicModify(() => {
+      const freshData = loadSchedules();
+      const freshIdx = freshData.schedules.findIndex(s => s.id === req.params.id);
+      if (freshIdx !== -1) {
+        freshData.schedules.splice(freshIdx, 1);
+        saveSchedules(freshData);
+      }
+    });
     auditLog(req, 'record.confirm_schedule', { type: 'schedule', id: req.params.id, label: `${schedule.staffName || req.session.staffName} ${schedule.date}` });
     res.json({ success: true });
   } catch (e) {
@@ -109,12 +120,16 @@ router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, r
 }));
 
 router.delete('/api/schedules/:id', requireStaff, asyncRoute((req, res) => {
-  const data = loadSchedules();
-  const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
-  if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
-  const removed = data.schedules[idx];
-  data.schedules.splice(idx, 1);
-  saveSchedules(data);
+  const removed = atomicModify(() => {
+    const data = loadSchedules();
+    const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
+    if (idx === -1) return null;
+    const r = data.schedules[idx];
+    data.schedules.splice(idx, 1);
+    saveSchedules(data);
+    return r;
+  });
+  if (!removed) return res.status(404).json({ error: '予定が見つかりません' });
   auditLog(req, 'schedule.delete', { type: 'schedule', id: req.params.id, label: `${req.session.staffName} ${removed.date}` });
   res.json({ success: true });
 }));
@@ -124,12 +139,16 @@ router.get('/api/admin/schedules', requireAdmin, (_req, res) => {
 });
 
 router.delete('/api/admin/schedules/:id', requireAdmin, asyncRoute((req, res) => {
-  const data = loadSchedules();
-  const idx = data.schedules.findIndex(s => s.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
-  const removed = data.schedules[idx];
-  data.schedules.splice(idx, 1);
-  saveSchedules(data);
+  const removed = atomicModify(() => {
+    const data = loadSchedules();
+    const idx = data.schedules.findIndex(s => s.id === req.params.id);
+    if (idx === -1) return null;
+    const r = data.schedules[idx];
+    data.schedules.splice(idx, 1);
+    saveSchedules(data);
+    return r;
+  });
+  if (!removed) return res.status(404).json({ error: '予定が見つかりません' });
   auditLog(req, 'schedule.admin_delete', { type: 'schedule', id: req.params.id, label: `${removed.staffName} ${removed.date}` });
   res.json({ success: true });
 }));

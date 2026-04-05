@@ -4,33 +4,33 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices } = require('../lib/data');
+const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant } = require('../lib/leave-calc');
-const { STAFF_PATH, LEAVE_PATH, NOTICES_PATH } = require('../lib/constants');
 
 // 有給通知ヘルパー（個人宛お知らせ）
-async function createStaffNotice(staffId, title, body) {
-  const data = loadNotices();
-  const now = getNowJST();
-  const notice = {
-    id: 'leave-' + Date.now(),
-    date: now.toISOString().slice(0, 10),
-    title,
-    body,
-    source: 'system',
-    targetStaffId: staffId,
-    createdAt: now.toISOString()
-  };
-  data.notices.push(notice);
-  saveNotices(data);
-  return notice;
+function createStaffNotice(staffId, title, body) {
+  atomicModify(() => {
+    const data = loadNotices();
+    const now = getNowJST();
+    const notice = {
+      id: 'leave-' + Date.now(),
+      date: now.toISOString().slice(0, 10),
+      title,
+      body,
+      source: 'system',
+      targetStaffId: staffId,
+      createdAt: now.toISOString()
+    };
+    data.notices.push(notice);
+    saveNotices(data);
+  });
 }
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
-router.get('/api/leave/balance', requireStaff,(req, res) => {
+router.get('/api/leave/balance', requireStaff, (req, res) => {
   const data = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -91,7 +91,7 @@ router.get('/api/leave/balance', requireStaff,(req, res) => {
   });
 });
 
-router.get('/api/leave/requests', requireStaff,(req, res) => {
+router.get('/api/leave/requests', requireStaff, (req, res) => {
   const leaveData = loadLeave();
   const mine = leaveData.requests
     .filter(r => r.staffId === req.session.staffId)
@@ -99,7 +99,7 @@ router.get('/api/leave/requests', requireStaff,(req, res) => {
   res.json({ requests: mine });
 });
 
-router.post('/api/leave/requests', requireStaff,asyncRoute((req, res) => {
+router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
@@ -122,106 +122,105 @@ router.post('/api/leave/requests', requireStaff,asyncRoute((req, res) => {
     d.setDate(d.getDate() + 1);
   }
 
-  // 残日数チェック
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === req.session.staffId);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  const leaveData = loadLeave();
+  // バリデーション後にアトミックに load-check-save
+  const result = atomicModify(() => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === req.session.staffId);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    const leaveData = loadLeave();
 
-  if (type === 'celebration') {
-    // お祝い休暇: 入職6ヶ月以内かチェック
-    if (!staff.hire_date) return res.status(400).json({ error: 'お祝い休暇は入職日が設定されている場合のみ利用できます' });
-    const hire = new Date(staff.hire_date);
-    const celebrationExpiry = new Date(hire);
-    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
-    const now = new Date(getTodayJST());
-    if (now >= celebrationExpiry) return res.status(400).json({ error: 'お祝い休暇の有効期限（入職から6ヶ月）が過ぎています' });
+    if (type === 'celebration') {
+      if (!staff.hire_date) return { error: 'お祝い休暇は入職日が設定されている場合のみ利用できます', status: 400 };
+      const hire = new Date(staff.hire_date);
+      const celebrationExpiry = new Date(hire);
+      celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+      const now = new Date(getTodayJST());
+      if (now >= celebrationExpiry) return { error: 'お祝い休暇の有効期限（入職から6ヶ月）が過ぎています', status: 400 };
 
-    // 残日数チェック（celebration は常に1日/date）
-    const celebrationDays = staff.celebration_days || 3;
-    const celebrationUsed = leaveData.requests.filter(r =>
-      r.staffId === staff.id && r.status === 'approved' && r.type === 'celebration'
-    ).reduce((sum, r) => sum + r.dates.length, 0);
-    const celebrationPending = leaveData.requests.filter(r =>
-      r.staffId === staff.id && r.status === 'pending' && r.type === 'celebration'
-    ).reduce((sum, r) => sum + r.dates.length, 0);
-    const celebrationRemaining = celebrationDays - celebrationUsed - celebrationPending;
-    if (celebrationRemaining < dates.length)
-      return res.status(400).json({ error: 'お祝い休暇の残日数が不足しています' });
-  } else {
-    const balance = calcLeaveBalance(staff);
-    const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
-    // pending 分も考慮（celebration以外のpending）
-    const pendingDays = leaveData.requests
-      .filter(r => r.staffId === staff.id && r.status === 'pending' && r.type !== 'celebration')
-      .reduce((sum, r) => {
-        const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-        return sum + r.dates.length * per;
-      }, 0);
-    if (balance - pendingDays < requestDays)
-      return res.status(400).json({ error: '有給残日数が不足しています' });
-  }
+      const celebrationDays = staff.celebration_days || 3;
+      const celebrationUsed = leaveData.requests.filter(r =>
+        r.staffId === staff.id && r.status === 'approved' && r.type === 'celebration'
+      ).reduce((sum, r) => sum + r.dates.length, 0);
+      const celebrationPending = leaveData.requests.filter(r =>
+        r.staffId === staff.id && r.status === 'pending' && r.type === 'celebration'
+      ).reduce((sum, r) => sum + r.dates.length, 0);
+      const celebrationRemaining = celebrationDays - celebrationUsed - celebrationPending;
+      if (celebrationRemaining < dates.length)
+        return { error: 'お祝い休暇の残日数が不足しています', status: 400 };
+    } else {
+      const balance = calcLeaveBalance(staff);
+      const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
+      const pendingDays = leaveData.requests
+        .filter(r => r.staffId === staff.id && r.status === 'pending' && r.type !== 'celebration')
+        .reduce((sum, r) => {
+          const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          return sum + r.dates.length * per;
+        }, 0);
+      if (balance - pendingDays < requestDays)
+        return { error: '有給残日数が不足しています', status: 400 };
+    }
 
-  // 重複チェック（同日の種別を考慮: 全日は常にNG、半日は同じ区分のみNG）
-  const existingByDate = {};   // { 'YYYY-MM-DD': Set<'full'|'half_am'|'half_pm'|'celebration'> }
-  for (const r of leaveData.requests) {
-    if (r.staffId === staff.id && (r.status === 'pending' || r.status === 'approved')) {
-      for (const dd of r.dates) {
-        if (!existingByDate[dd]) existingByDate[dd] = new Set();
-        existingByDate[dd].add(r.type);
+    // 重複チェック
+    const existingByDate = {};
+    for (const r of leaveData.requests) {
+      if (r.staffId === staff.id && (r.status === 'pending' || r.status === 'approved')) {
+        for (const dd of r.dates) {
+          if (!existingByDate[dd]) existingByDate[dd] = new Set();
+          existingByDate[dd].add(r.type);
+        }
       }
     }
-  }
-  for (const dd of dates) {
-    const ex = existingByDate[dd];
-    if (!ex) continue;
-    // 既に全日・お祝い休暇が入っていたら不可
-    if (ex.has('full') || ex.has('celebration'))
-      return res.status(400).json({ error: `${dd} は既に申請済みです` });
-    // 今回が全日・お祝い休暇なら、既存の半日とも衝突
-    if (type === 'full' || type === 'celebration')
-      return res.status(400).json({ error: `${dd} は既に半日休暇が申請済みのため、全日申請できません` });
-    // 半日同士: 同じ区分（午前/午前, 午後/午後）ならNG
-    if (ex.has(type))
-      return res.status(400).json({ error: `${dd} は既に同じ区分（${type === 'half_am' ? '午前' : '午後'}）で申請済みです` });
-    // 午前+午後で合計1日 → 残日数を追加消費するのでチェック
-    if ((type === 'half_am' && ex.has('half_pm')) || (type === 'half_pm' && ex.has('half_am'))) {
-      // 許可するが、合計1日分消費されることは残日数チェックで既に考慮済み
+    for (const dd of dates) {
+      const ex = existingByDate[dd];
+      if (!ex) continue;
+      if (ex.has('full') || ex.has('celebration'))
+        return { error: `${dd} は既に申請済みです`, status: 400 };
+      if (type === 'full' || type === 'celebration')
+        return { error: `${dd} は既に半日休暇が申請済みのため、全日申請できません`, status: 400 };
+      if (ex.has(type))
+        return { error: `${dd} は既に同じ区分（${type === 'half_am' ? '午前' : '午後'}）で申請済みです`, status: 400 };
     }
-  }
 
-  const request = {
-    id: `${staff.id}-${start}-${Date.now()}`,
-    staffId: staff.id,
-    staffName: staff.name,
-    type,
-    dates,
-    reason: reason || '',
-    status: 'pending',
-    adminComment: null,
-    createdAt: getNowJST().toISOString(),
-    reviewedAt: null,
-    cancelledAt: null,
-  };
-  leaveData.requests.push(request);
-  saveLeave(leaveData);
-  auditLog(req, 'leave.request', { type: 'leave', id: request.id, label: `${staff.name} ${start}` }, { type, dates });
-  res.json({ ok: true, request });
+    const request = {
+      id: `${staff.id}-${start}-${Date.now()}`,
+      staffId: staff.id,
+      staffName: staff.name,
+      type,
+      dates,
+      reason: reason || '',
+      status: 'pending',
+      adminComment: null,
+      createdAt: getNowJST().toISOString(),
+      reviewedAt: null,
+      cancelledAt: null,
+    };
+    leaveData.requests.push(request);
+    saveLeave(leaveData);
+    return { ok: true, request };
+  });
+
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'leave.request', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${startDate}` }, { type, dates });
+  res.json({ ok: true, request: result.request });
 }));
 
-router.post('/api/leave/requests/:id/cancel', requireStaff,asyncRoute((req, res) => {
-  const leaveData = loadLeave();
-  const request = leaveData.requests.find(r => r.id === req.params.id);
-  if (!request) return res.status(404).json({ error: '申請が見つかりません' });
-  if (request.staffId !== req.session.staffId)
-    return res.status(403).json({ error: '自分の申請のみ取消できます' });
-  if (request.status !== 'pending' && request.status !== 'approved')
-    return res.status(400).json({ error: 'この申請は取消できません' });
+router.post('/api/leave/requests/:id/cancel', requireStaff, asyncRoute((req, res) => {
+  const result = atomicModify(() => {
+    const leaveData = loadLeave();
+    const request = leaveData.requests.find(r => r.id === req.params.id);
+    if (!request) return { error: '申請が見つかりません', status: 404 };
+    if (request.staffId !== req.session.staffId)
+      return { error: '自分の申請のみ取消できます', status: 403 };
+    if (request.status !== 'pending' && request.status !== 'approved')
+      return { error: 'この申請は取消できません', status: 400 };
 
-  request.status = 'cancelled';
-  request.cancelledAt = getNowJST().toISOString();
-  saveLeave(leaveData);
-  auditLog(req, 'leave.cancel', { type: 'leave', id: request.id, label: `${request.staffName} ${request.dates[0]}` });
+    request.status = 'cancelled';
+    request.cancelledAt = getNowJST().toISOString();
+    saveLeave(leaveData);
+    return { ok: true, request };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'leave.cancel', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${result.request.dates[0]}` });
   res.json({ ok: true });
 }));
 
@@ -236,38 +235,42 @@ router.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
   res.json({ requests });
 });
 
-router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute(async (req, res) => {
-  const leaveData = loadLeave();
-  const request = leaveData.requests.find(r => r.id === req.params.id);
-  if (!request) return res.status(404).json({ error: '申請が見つかりません' });
-  if (request.status !== 'pending')
-    return res.status(400).json({ error: '承認待ちの申請のみ承認できます' });
+router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((req, res) => {
+  const result = atomicModify(() => {
+    const leaveData = loadLeave();
+    const request = leaveData.requests.find(r => r.id === req.params.id);
+    if (!request) return { error: '申請が見つかりません', status: 404 };
+    if (request.status !== 'pending')
+      return { error: '承認待ちの申請のみ承認できます', status: 400 };
 
-  // 残日数チェック
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === request.staffId);
-  if (staff) {
-    const balance = calcLeaveBalance(staff);
-    const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
-      ? request.dates.length * 0.5 : request.dates.length;
-    if (balance < requestDays)
-      return res.status(400).json({ error: '残日数が不足しています' });
-  }
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === request.staffId);
+    if (staff) {
+      const balance = calcLeaveBalance(staff);
+      const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
+        ? request.dates.length * 0.5 : request.dates.length;
+      if (balance < requestDays)
+        return { error: '残日数が不足しています', status: 400 };
+    }
 
-  request.status = 'approved';
-  request.adminComment = req.body.comment || null;
-  request.reviewedAt = getNowJST().toISOString();
-  saveLeave(leaveData);
-  auditLog(req, 'leave.approve', { type: 'leave', id: request.id, label: `${request.staffName} ${(request.dates || [])[0]}` });
+    request.status = 'approved';
+    request.adminComment = req.body.comment || null;
+    request.reviewedAt = getNowJST().toISOString();
+    saveLeave(leaveData);
+    return { ok: true, request };
+  });
 
-  // 通知を作成（失敗しても承認自体は確定済みなのでエラーを握りつぶす）
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'leave.approve', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${(result.request.dates || [])[0]}` });
+
   try {
+    const request = result.request;
     const dates    = request.dates || [];
     const dateStr  = dates.length === 0 ? '(日付不明)'
       : dates.length === 1 ? dates[0]
       : `${dates[0]}〜${dates[dates.length - 1]}`;
     const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-    await createStaffNotice(request.staffId,
+    createStaffNotice(request.staffId,
       '✅ 有給申請が承認されました',
       `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
     );
@@ -278,27 +281,32 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute(as
   res.json({ ok: true });
 }));
 
-router.post('/api/admin/leave/requests/:id/reject', requireAdmin, asyncRoute(async (req, res) => {
-  const leaveData = loadLeave();
-  const request = leaveData.requests.find(r => r.id === req.params.id);
-  if (!request) return res.status(404).json({ error: '申請が見つかりません' });
-  if (request.status !== 'pending')
-    return res.status(400).json({ error: '承認待ちの申請のみ却下できます' });
+router.post('/api/admin/leave/requests/:id/reject', requireAdmin, asyncRoute((req, res) => {
+  const result = atomicModify(() => {
+    const leaveData = loadLeave();
+    const request = leaveData.requests.find(r => r.id === req.params.id);
+    if (!request) return { error: '申請が見つかりません', status: 404 };
+    if (request.status !== 'pending')
+      return { error: '承認待ちの申請のみ却下できます', status: 400 };
 
-  request.status = 'rejected';
-  request.adminComment = req.body.comment || null;
-  request.reviewedAt = getNowJST().toISOString();
-  saveLeave(leaveData);
-  auditLog(req, 'leave.reject', { type: 'leave', id: request.id, label: `${request.staffName} ${(request.dates || [])[0]}` });
+    request.status = 'rejected';
+    request.adminComment = req.body.comment || null;
+    request.reviewedAt = getNowJST().toISOString();
+    saveLeave(leaveData);
+    return { ok: true, request };
+  });
 
-  // 通知を作成（失敗しても却下自体は確定済みなのでエラーを握りつぶす）
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'leave.reject', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${(result.request.dates || [])[0]}` });
+
   try {
+    const request = result.request;
     const dates    = request.dates || [];
     const dateStr  = dates.length === 0 ? '(日付不明)'
       : dates.length === 1 ? dates[0]
       : `${dates[0]}〜${dates[dates.length - 1]}`;
     const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
-    await createStaffNotice(request.staffId,
+    createStaffNotice(request.staffId,
       '❌ 有給申請が却下されました',
       `${dateStr}（${typeLabel}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
     );
@@ -337,7 +345,6 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
       const carriedOver  = s.leave_carried_over || 0;
       const manualAdj    = s.leave_manual_adjustment || 0;
       const oncallLeave  = s.oncall_leave_granted || 0;
-      // calcLeaveBalance と同じ計算式を使用（oncall_leave_granted を含む）
       const balance      = Math.round((granted + carriedOver + manualAdj + oncallLeave - usedDays) * 10) / 10;
       return {
         id: s.id,
@@ -359,55 +366,64 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
 });
 
 router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-
   const { granted, carried_over, manual_adjustment, grant_date } = req.body;
+  // バリデーション先行
   if (granted !== undefined) {
     const v = validateNum(granted, { min: 0, max: 365 });
     if (!v.valid) return res.status(400).json({ error: '付与日数が不正です（0〜365）' });
-    staff.leave_granted = v.value;
   }
   if (carried_over !== undefined) {
     const v = validateNum(carried_over, { min: 0, max: 365 });
     if (!v.valid) return res.status(400).json({ error: '繰越日数が不正です（0〜365）' });
-    staff.leave_carried_over = v.value;
   }
   if (manual_adjustment !== undefined) {
     const v = validateNum(manual_adjustment, { min: -365, max: 365 });
     if (!v.valid) return res.status(400).json({ error: '手動調整値が不正です（-365〜365）' });
-    staff.leave_manual_adjustment = v.value;
   }
   if (grant_date !== undefined) {
     if (grant_date !== null && grant_date !== '' && !isValidDate(grant_date))
       return res.status(400).json({ error: '付与日の形式が不正です' });
-    staff.leave_grant_date = grant_date || null;
   }
 
-  saveStaff(staffData);
-  auditLog(req, 'leave.balance_update', { type: 'leave', id: staff.id, label: staff.name }, { granted, carried_over, manual_adjustment, grant_date });
-  res.json({ ok: true, balance: calcLeaveBalance(staff) });
+  const result = atomicModify(() => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+
+    if (granted !== undefined) staff.leave_granted = validateNum(granted, { min: 0, max: 365 }).value;
+    if (carried_over !== undefined) staff.leave_carried_over = validateNum(carried_over, { min: 0, max: 365 }).value;
+    if (manual_adjustment !== undefined) staff.leave_manual_adjustment = validateNum(manual_adjustment, { min: -365, max: 365 }).value;
+    if (grant_date !== undefined) staff.leave_grant_date = grant_date || null;
+
+    saveStaff(staffData);
+    return { ok: true, balance: calcLeaveBalance(staff) };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'leave.balance_update', { type: 'leave', id: req.params.id, label: req.params.id }, { granted, carried_over, manual_adjustment, grant_date });
+  res.json({ ok: true, balance: result.balance });
 }));
 
 router.post('/api/admin/staff/:id/hire-date', requireAdmin, asyncRoute((req, res) => {
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-
   const { hire_date, auto_apply } = req.body;
   if (!hire_date) return res.status(400).json({ error: '入社日は必須です' });
   if (!isValidDate(hire_date)) return res.status(400).json({ error: '入社日の形式が不正です' });
 
-  staff.hire_date = hire_date;
-  // 自動計算を適用する場合
-  if (auto_apply) {
-    const autoGrant = calcLeaveGrantDays(hire_date);
-    staff.leave_granted = autoGrant;
-    staff.leave_grant_date = getTodayJST();
-  }
-  saveStaff(staffData);
-  auditLog(req, 'staff.hire_date_update', { type: 'staff', id: staff.id, label: staff.name }, { hire_date, auto_apply });
+  const result = atomicModify(() => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+
+    staff.hire_date = hire_date;
+    if (auto_apply) {
+      const autoGrant = calcLeaveGrantDays(hire_date);
+      staff.leave_granted = autoGrant;
+      staff.leave_grant_date = getTodayJST();
+    }
+    saveStaff(staffData);
+    return { ok: true };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'staff.hire_date_update', { type: 'staff', id: req.params.id, label: req.params.id }, { hire_date, auto_apply });
   res.json({ ok: true, auto_grant_days: calcLeaveGrantDays(hire_date) });
 }));
 

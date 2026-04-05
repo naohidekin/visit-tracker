@@ -13,7 +13,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 const {
   loadStaff, saveStaff, loadRegistry, loadExcelResults, saveExcelResults,
   loadStandby, saveStandby, loadLeave, loadOncall, loadAttendance, loadNotices, saveNotices,
-  getSpreadsheetIdForYear,
+  getSpreadsheetIdForYear, atomicModify,
 } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
@@ -390,50 +390,64 @@ router.post('/api/admin/incentive/defaults', requireAdmin, asyncRoute((req, res)
   const nrv = validateNum(nurse_rate, { min: 0, max: 100000 });
   const rrv = validateNum(rehab_rate, { min: 0, max: 100000 });
   if (!nrv.valid || !rrv.valid) return res.status(400).json({ error: '単価は0以上の数値で入力してください' });
-  const data = loadStaff();
-  const prev = data.incentive_defaults || {};
-  data.incentive_defaults = { nurse: nv.value, rehab: rv.value, nurse_rate: nrv.value, rehab_rate: rrv.value };
-  saveStaff(data);
+  atomicModify(() => {
+    const data = loadStaff();
+    const prev = data.incentive_defaults || {};
+    data.incentive_defaults = { nurse: nv.value, rehab: rv.value, nurse_rate: nrv.value, rehab_rate: rrv.value };
+    saveStaff(data);
+  });
   auditLog(req, 'incentive.defaults_update', { type: 'incentive' }, { nurse: nv.value, rehab: rv.value, nurse_rate: nrv.value, rehab_rate: rrv.value });
   res.json({ success: true });
 }));
 
 router.post('/api/admin/staff/:id/incentive', requireAdmin, asyncRoute((req, res) => {
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const { line } = req.body;
   const lv = validateNum(line, { min: 0, max: 100, allowNull: true });
   if (!lv.valid) return res.status(400).json({ error: 'インセンティブラインは0〜100の数値で入力してください' });
-  staff.incentive_line = lv.value;
-  saveStaff(data);
-  auditLog(req, 'incentive.staff_update', { type: 'incentive', id: staff.id, label: staff.name }, { line: staff.incentive_line });
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.incentive_line = lv.value;
+    saveStaff(data);
+    return { staffId: staff.id, staffName: staff.name, line: staff.incentive_line };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'incentive.staff_update', { type: 'incentive', id: result.staffId, label: result.staffName }, { line: result.line });
   res.json({ success: true });
 }));
 
 router.post('/api/admin/staff/:id/work-hours', requireAdmin, asyncRoute((req, res) => {
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const { work_hours } = req.body;
   const wv = validateNum(work_hours, { min: 0, max: 24, allowNull: true, allowEmpty: true });
   if (!wv.valid) return res.status(400).json({ error: '勤務時間は0〜24の数値で入力してください' });
-  staff.work_hours = wv.value;
-  saveStaff(data);
-  auditLog(req, 'staff.work_hours_update', { type: 'staff', id: staff.id, label: staff.name }, { work_hours: staff.work_hours });
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.work_hours = wv.value;
+    saveStaff(data);
+    return { staffId: staff.id, staffName: staff.name, work_hours: staff.work_hours };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'staff.work_hours_update', { type: 'staff', id: result.staffId, label: result.staffName }, { work_hours: result.work_hours });
   res.json({ success: true });
 }));
 
 router.post('/api/admin/staff/:id/incentive-rate', requireAdmin, asyncRoute((req, res) => {
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const { rate } = req.body;
   const rv = validateNum(rate, { min: 0, max: 100000, allowNull: true, allowEmpty: true });
   if (!rv.valid) return res.status(400).json({ error: '単価は0以上の数値で入力してください' });
-  staff.incentive_rate = rv.value;
-  saveStaff(data);
-  auditLog(req, 'incentive.rate_update', { type: 'incentive', id: staff.id, label: staff.name }, { rate: staff.incentive_rate });
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.incentive_rate = rv.value;
+    saveStaff(data);
+    return { staffId: staff.id, staffName: staff.name, rate: staff.incentive_rate };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'incentive.rate_update', { type: 'incentive', id: result.staffId, label: result.staffName }, { rate: result.rate });
   res.json({ success: true });
 }));
 
@@ -608,25 +622,34 @@ router.get('/api/admin/me', requireAdmin, (req, res) => {
 
 // 管理者権限付与
 router.post('/api/admin/staff/:id/grant-admin', requireAdmin, asyncRoute(async (req, res) => {
-  const data = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  if (staff.is_admin) return res.json({ success: true, message: '既に管理者です' });
-  staff.is_admin = true;
-  saveStaff(data);
-  auditLog(req, 'admin.grant_admin', { type: 'admin', id: req.params.id, label: `管理者権限付与: ${staff.name}`, by: req.session.adminStaffId });
+  const result = atomicModify(() => {
+    const data = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    if (staff.is_admin) return { alreadyAdmin: true };
+    staff.is_admin = true;
+    saveStaff(data);
+    return { staffName: staff.name };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  if (result.alreadyAdmin) return res.json({ success: true, message: '既に管理者です' });
+  auditLog(req, 'admin.grant_admin', { type: 'admin', id: req.params.id, label: `管理者権限付与: ${result.staffName}`, by: req.session.adminStaffId });
   res.json({ success: true });
 }));
 
 // 管理者権限剥奪
 router.post('/api/admin/staff/:id/revoke-admin', requireAdmin, asyncRoute(async (req, res) => {
-  const data = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   if (req.params.id === req.session.adminStaffId) return res.status(400).json({ error: '自分の管理者権限は削除できません' });
-  staff.is_admin = false;
-  saveStaff(data);
-  auditLog(req, 'admin.revoke_admin', { type: 'admin', id: req.params.id, label: `管理者権限剥奪: ${staff.name}`, by: req.session.adminStaffId });
+  const result = atomicModify(() => {
+    const data = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.is_admin = false;
+    saveStaff(data);
+    return { staffName: staff.name };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'admin.revoke_admin', { type: 'admin', id: req.params.id, label: `管理者権限剥奪: ${result.staffName}`, by: req.session.adminStaffId });
   res.json({ success: true });
 }));
 
@@ -651,14 +674,18 @@ router.get('/api/admin/staff', requireAdmin, (req, res) => {
 });
 
 router.patch('/api/admin/staff/:id/archive', requireAdmin, asyncRoute((req, res) => {
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  staff.archived = !staff.archived;
-  saveStaff(data);
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.archived = !staff.archived;
+    saveStaff(data);
+    return { staffId: staff.id, staffName: staff.name, archived: staff.archived, staff: data.staff };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
   // requireStaff が毎リクエストDBを確認するため、即時に無効化が反映される
-  auditLog(req, 'staff.archive_toggle', { type: 'staff', id: staff.id, label: staff.name }, { archived: staff.archived });
-  res.json({ success: true, archived: staff.archived, staff: data.staff });
+  auditLog(req, 'staff.archive_toggle', { type: 'staff', id: result.staffId, label: result.staffName }, { archived: result.archived });
+  res.json({ success: true, archived: result.archived, staff: result.staff });
 }));
 
 router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
@@ -910,9 +937,6 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
           operations.push({ action: 'spreadsheet_error', spreadsheetId: ssId, error: sheetErr.message });
         }
       }
-      for (const s of data.staff)
-        if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
-
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: 'nurse', kaigo_col: kaigoCol, iryo_col: iryoCol,
@@ -999,11 +1023,20 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: { col: newCol } });
     }
 
-    data.staff.push(newEntry);
-    saveStaff(data);
+    const isNurseType = type === 'nurse';
+    const savedData = atomicModify(() => {
+      const freshData = loadStaff();
+      if (isNurseType) {
+        for (const s of freshData.staff)
+          if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
+      }
+      freshData.staff.push(newEntry);
+      saveStaff(freshData);
+      return { staff: freshData.staff };
+    });
     operations.push({ action: 'staff_json_saved' });
     auditLog(req, 'staff.create', { type: 'staff', id: loginId, label: name }, { type, loginId });
-    const result = { success: true, staff: data.staff, operations };
+    const result = { success: true, staff: savedData.staff, operations };
     if (sheetErrors.length > 0) {
       result.warning = `${sheetErrors.length}件のスプレッドシートへの反映に失敗しました。管理者にお知らせください。`;
       console.error('⚠️ スタッフ追加: 一部スプレッドシート反映失敗:', sheetErrors);
@@ -1020,16 +1053,20 @@ router.patch('/api/admin/staff/:id', requireAdmin, asyncRoute((req, res) => {
   if (!name) return res.status(400).json({ error: '氏名は必須です' });
   if (email !== undefined && email !== null && email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: 'メールアドレスの形式が正しくありません' });
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  staff.name             = name;
-  staff.furigana_family  = furigana_family  ?? staff.furigana_family;
-  staff.furigana_given   = furigana_given   ?? staff.furigana_given;
-  if (email !== undefined) staff.email = email || null;
-  saveStaff(data);
-  auditLog(req, 'staff.update', { type: 'staff', id: staff.id, label: name });
-  res.json({ success: true, staff: data.staff });
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.name             = name;
+    staff.furigana_family  = furigana_family  ?? staff.furigana_family;
+    staff.furigana_given   = furigana_given   ?? staff.furigana_given;
+    if (email !== undefined) staff.email = email || null;
+    saveStaff(data);
+    return { staffId: staff.id, allStaff: data.staff };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'staff.update', { type: 'staff', id: result.staffId, label: name });
+  res.json({ success: true, staff: result.allStaff });
 }));
 
 router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) => {
@@ -1158,57 +1195,69 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
 }));
 
 router.post('/api/admin/staff/:id/reset-password', requireAdmin, asyncRoute(async (req, res) => {
-  const data  = loadStaff();
-  const staff = data.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  // First read to get initial_pw (read-only, outside atomicModify)
+  const preData = loadStaff();
+  const preStaff = preData.staff.find(s => s.id === req.params.id);
+  if (!preStaff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   // initial_pwがあればそれを使用、なければランダム4桁パスワードを生成
-  const newPw = staff.initial_pw || Math.random().toString(36).slice(-4).toUpperCase();
-  staff.password_hash = await bcrypt.hash(newPw, 10);
-  saveStaff(data);
-  auditLog(req, 'staff.reset_password', { type: 'staff', id: staff.id, label: staff.name });
+  const newPw = preStaff.initial_pw || Math.random().toString(36).slice(-4).toUpperCase();
+  const hash = await bcrypt.hash(newPw, 10);
+  const result = atomicModify(() => {
+    const data  = loadStaff();
+    const staff = data.staff.find(s => s.id === req.params.id);
+    if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
+    staff.password_hash = hash;
+    saveStaff(data);
+    return { staffId: staff.id, staffName: staff.name };
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  auditLog(req, 'staff.reset_password', { type: 'staff', id: result.staffId, label: result.staffName });
   res.json({ success: true, initial_pw: newPw });
 }));
 
 // ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
 router.post('/api/admin/fix-staff-columns', requireAdmin, asyncRoute((req, res) => {
   try {
-    const data = loadStaff();
-    const changes = [];
+    const result = atomicModify(() => {
+      const data = loadStaff();
+      const changes = [];
 
-    // PT の列を修正（既に正しい場合はスキップ）
-    const ptFixes = { nakashima05: 'O', ozawa06: 'P', ooe07: 'Q' };
-    for (const s of data.staff) {
-      if (ptFixes[s.id] && s.col !== ptFixes[s.id]) {
-        changes.push(`${s.name}: col ${s.col}→${ptFixes[s.id]}`);
-        s.col = ptFixes[s.id];
-      }
-    }
-
-    // 正規の森部・佐原エントリの列を確定（IDで特定）
-    const nurseFixes = {
-      moribe10: { kaigo_col: 'K', iryo_col: 'L' },
-      sahara11: { kaigo_col: 'M', iryo_col: 'N' },
-    };
-    for (const s of data.staff) {
-      if (nurseFixes[s.id]) {
-        const fix = nurseFixes[s.id];
-        if (s.kaigo_col !== fix.kaigo_col) {
-          changes.push(`${s.name}(${s.id}): kaigo_col ${s.kaigo_col}→${fix.kaigo_col}`);
-          s.kaigo_col = fix.kaigo_col;
-          s.iryo_col  = fix.iryo_col;
+      // PT の列を修正（既に正しい場合はスキップ）
+      const ptFixes = { nakashima05: 'O', ozawa06: 'P', ooe07: 'Q' };
+      for (const s of data.staff) {
+        if (ptFixes[s.id] && s.col !== ptFixes[s.id]) {
+          changes.push(`${s.name}: col ${s.col}→${ptFixes[s.id]}`);
+          s.col = ptFixes[s.id];
         }
       }
-    }
 
-    // 重複エントリ（morobe08/sahara09）をスタッフリストから削除（スプレッドシートは触らない）
-    const duplicateIds = ['morobe08', 'sahara09'];
-    const before = data.staff.length;
-    data.staff = data.staff.filter(s => !duplicateIds.includes(s.id));
-    const removedCount = before - data.staff.length;
-    if (removedCount > 0) changes.push(`重複エントリ削除: ${duplicateIds.join(', ')} (${removedCount}件)`);
+      // 正規の森部・佐原エントリの列を確定（IDで特定）
+      const nurseFixes = {
+        moribe10: { kaigo_col: 'K', iryo_col: 'L' },
+        sahara11: { kaigo_col: 'M', iryo_col: 'N' },
+      };
+      for (const s of data.staff) {
+        if (nurseFixes[s.id]) {
+          const fix = nurseFixes[s.id];
+          if (s.kaigo_col !== fix.kaigo_col) {
+            changes.push(`${s.name}(${s.id}): kaigo_col ${s.kaigo_col}→${fix.kaigo_col}`);
+            s.kaigo_col = fix.kaigo_col;
+            s.iryo_col  = fix.iryo_col;
+          }
+        }
+      }
 
-    saveStaff(data);
-    res.json({ success: true, changes, staff: data.staff });
+      // 重複エントリ（morobe08/sahara09）をスタッフリストから削除（スプレッドシートは触らない）
+      const duplicateIds = ['morobe08', 'sahara09'];
+      const before = data.staff.length;
+      data.staff = data.staff.filter(s => !duplicateIds.includes(s.id));
+      const removedCount = before - data.staff.length;
+      if (removedCount > 0) changes.push(`重複エントリ削除: ${duplicateIds.join(', ')} (${removedCount}件)`);
+
+      saveStaff(data);
+      return { changes, allStaff: data.staff };
+    });
+    res.json({ success: true, changes: result.changes, staff: result.allStaff });
   } catch (e) {
     console.error('❌ staff sync error:', e);
     res.status(500).json({ error: 'スタッフ同期に失敗しました' });
@@ -1488,31 +1537,37 @@ router.get('/api/admin/standby/records', requireAdmin, (req, res) => {
 router.post('/api/admin/standby/records', requireAdmin, asyncRoute((req, res) => {
   const { date, staffId } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
-  const data = loadStandby();
-  const idx = data.records.findIndex(r => r.date === date);
-  if (!staffId || staffId === '') {
-    if (idx >= 0) data.records.splice(idx, 1);
-  } else {
-    const now = new Date().toISOString();
-    if (idx >= 0) {
-      data.records[idx].staffId = staffId;
-      data.records[idx].updatedAt = now;
+  atomicModify(() => {
+    const data = loadStandby();
+    const idx = data.records.findIndex(r => r.date === date);
+    if (!staffId || staffId === '') {
+      if (idx >= 0) data.records.splice(idx, 1);
     } else {
-      data.records.push({ date, staffId, createdAt: now, updatedAt: now });
+      const now = new Date().toISOString();
+      if (idx >= 0) {
+        data.records[idx].staffId = staffId;
+        data.records[idx].updatedAt = now;
+      } else {
+        data.records.push({ date, staffId, createdAt: now, updatedAt: now });
+      }
     }
-  }
-  saveStandby(data);
+    saveStandby(data);
+  });
   auditLog(req, 'standby.upsert', { type: 'standby', id: date }, { date, staffId: staffId || '(削除)' });
   res.json({ ok: true });
 }));
 
 // 待機記録削除
 router.delete('/api/admin/standby/records/:date', requireAdmin, asyncRoute((req, res) => {
-  const data = loadStandby();
-  const idx = data.records.findIndex(r => r.date === req.params.date);
-  if (idx < 0) return res.status(404).json({ error: '記録が見つかりません' });
-  data.records.splice(idx, 1);
-  saveStandby(data);
+  const result = atomicModify(() => {
+    const data = loadStandby();
+    const idx = data.records.findIndex(r => r.date === req.params.date);
+    if (idx < 0) return { error: '記録が見つかりません', status: 404 };
+    data.records.splice(idx, 1);
+    saveStandby(data);
+    return {};
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
   auditLog(req, 'standby.delete', { type: 'standby', id: req.params.date }, {});
   res.json({ ok: true });
 }));
@@ -1560,11 +1615,14 @@ router.get('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
 router.post('/api/admin/standby/custom-holidays', requireAdmin, asyncRoute((req, res) => {
   const { dates } = req.body;
   if (!Array.isArray(dates)) return res.status(400).json({ error: 'dates は配列で指定してください' });
-  const data = loadStandby();
-  data.customHolidays = dates.sort();
-  saveStandby(data);
+  const result = atomicModify(() => {
+    const data = loadStandby();
+    data.customHolidays = dates.sort();
+    saveStandby(data);
+    return { customHolidays: data.customHolidays };
+  });
   auditLog(req, 'standby.custom_holidays', { type: 'standby', id: 'custom-holidays' }, { count: dates.length });
-  res.json({ ok: true, customHolidays: data.customHolidays });
+  res.json({ ok: true, customHolidays: result.customHolidays });
 }));
 
 // ─── API: 雨の日管理（管理者向け） ──────────────────────────────
@@ -1572,18 +1630,20 @@ router.post('/api/admin/standby/custom-holidays', requireAdmin, asyncRoute((req,
 router.post('/api/admin/rainy/toggle', requireAdmin, asyncRoute((req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
-  const data = loadStandby();
-  const idx = data.rainyDays.indexOf(date);
-  if (idx >= 0) {
-    data.rainyDays.splice(idx, 1);
-  } else {
-    data.rainyDays.push(date);
-    data.rainyDays.sort();
-  }
-  saveStandby(data);
-  const isRainy = data.rainyDays.includes(date);
-  auditLog(req, 'rainy.toggle', { type: 'rainy', id: date }, { rainy: isRainy });
-  res.json({ ok: true, rainy: isRainy });
+  const result = atomicModify(() => {
+    const data = loadStandby();
+    const idx = data.rainyDays.indexOf(date);
+    if (idx >= 0) {
+      data.rainyDays.splice(idx, 1);
+    } else {
+      data.rainyDays.push(date);
+      data.rainyDays.sort();
+    }
+    saveStandby(data);
+    return { isRainy: data.rainyDays.includes(date) };
+  });
+  auditLog(req, 'rainy.toggle', { type: 'rainy', id: date }, { rainy: result.isRainy });
+  res.json({ ok: true, rainy: result.isRainy });
 }));
 
 // 雨の日集計（16日〜15日締め、出勤判定付き）
