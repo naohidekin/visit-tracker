@@ -4,29 +4,29 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, saveStaff, loadOncall, saveOncall } = require('../lib/data');
+const { loadStaff, saveStaff, loadOncall, saveOncall, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, validateNum, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { STAFF_PATH, ONCALL_PATH } = require('../lib/constants');
 
 // オンコール累計時間から有給付与日数を再計算し、staffデータを更新
-async function updateOncallLeave(staffId) {
-  const data = loadOncall();
-  const allRecords = data.records.filter(r => r.staffId === staffId);
-  const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
-  const days = Math.floor(totalMinutes / 900); // 900分 = 15時間
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === staffId);
-  if (staff && staff.oncall_leave_granted !== days) {
-    staff.oncall_leave_granted = days;
-    saveStaff(staffData);
-  }
-  return { totalMinutes, days };
+function updateOncallLeave(staffId) {
+  atomicModify(() => {
+    const data = loadOncall();
+    const allRecords = data.records.filter(r => r.staffId === staffId);
+    const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
+    const days = Math.floor(totalMinutes / 900); // 900分 = 15時間
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === staffId);
+    if (staff && staff.oncall_leave_granted !== days) {
+      staff.oncall_leave_granted = days;
+      saveStaff(staffData);
+    }
+  });
 }
 
 // ─── API: オンコール（スタッフ向け） ─────────────────────────────
-router.get('/api/oncall/records', requireStaff,(req, res) => {
+router.get('/api/oncall/records', requireStaff, (req, res) => {
   const month = req.query.month;
   const data = loadOncall();
   let records = data.records.filter(r => r.staffId === req.session.staffId);
@@ -35,7 +35,7 @@ router.get('/api/oncall/records', requireStaff,(req, res) => {
   res.json({ records });
 });
 
-router.post('/api/oncall/records', requireStaff,asyncRoute(async (req, res) => {
+router.post('/api/oncall/records', requireStaff, asyncRoute(async (req, res) => {
   const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
@@ -45,7 +45,6 @@ router.post('/api/oncall/records', requireStaff,asyncRoute(async (req, res) => {
     return res.status(400).json({ error: '回数は0〜100の数値で入力してください' });
   const c = cv.value || 0;
   const tc = tcv.value || 0;
-  // totalHours（フロントエンド）→ totalMinutes に変換。totalMinutes直接指定も後方互換で対応
   let tm;
   if (totalHours != null) {
     const thv = validateNum(totalHours, { min: 0, max: 1440 });
@@ -57,59 +56,63 @@ router.post('/api/oncall/records', requireStaff,asyncRoute(async (req, res) => {
     tm = tmv.value || 0;
   }
 
-  const data = loadOncall();
-  const existing = data.records.find(r => r.staffId === req.session.staffId && r.date === date);
-  const now = getNowJST().toISOString();
+  atomicModify(() => {
+    const data = loadOncall();
+    const existing = data.records.find(r => r.staffId === req.session.staffId && r.date === date);
+    const now = getNowJST().toISOString();
 
-  if (existing) {
-    existing.count = c;
-    existing.totalMinutes = tm;
-    existing.transportCount = tc;
-    existing.updatedAt = now;
-  } else {
-    data.records.push({
-      id: `${req.session.staffId}-${date}-${Date.now()}`,
-      staffId: req.session.staffId,
-      date,
-      count: c,
-      totalMinutes: tm,
-      transportCount: tc,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-  saveOncall(data);
+    if (existing) {
+      existing.count = c;
+      existing.totalMinutes = tm;
+      existing.transportCount = tc;
+      existing.updatedAt = now;
+    } else {
+      data.records.push({
+        id: `${req.session.staffId}-${date}-${Date.now()}`,
+        staffId: req.session.staffId,
+        date,
+        count: c,
+        totalMinutes: tm,
+        transportCount: tc,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    saveOncall(data);
+  });
 
-  // オンコール有給を自動再計算
-  await updateOncallLeave(req.session.staffId);
+  updateOncallLeave(req.session.staffId);
 
   auditLog(req, 'oncall.upsert', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${date}` }, { date, count: c, totalMinutes: tm, transportCount: tc });
   res.json({ ok: true });
 }));
 
 router.delete('/api/oncall/records/:id', requireStaff, asyncRoute(async (req, res) => {
-  const data = loadOncall();
-  const idx = data.records.findIndex(r => r.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'レコードが見つかりません' });
-  if (data.records[idx].staffId !== req.session.staffId)
-    return res.status(403).json({ error: '自分のレコードのみ削除できます' });
-  const removed = data.records[idx];
-  data.records.splice(idx, 1);
-  saveOncall(data);
-  // 削除後も代休日数を再計算（登録時と同じ処理）
-  await updateOncallLeave(req.session.staffId);
+  const removed = atomicModify(() => {
+    const data = loadOncall();
+    const idx = data.records.findIndex(r => r.id === req.params.id);
+    if (idx === -1) return null;
+    if (data.records[idx].staffId !== req.session.staffId) return 'forbidden';
+    const r = data.records[idx];
+    data.records.splice(idx, 1);
+    saveOncall(data);
+    return r;
+  });
+  if (!removed) return res.status(404).json({ error: 'レコードが見つかりません' });
+  if (removed === 'forbidden') return res.status(403).json({ error: '自分のレコードのみ削除できます' });
+
+  updateOncallLeave(req.session.staffId);
   auditLog(req, 'oncall.delete', { type: 'oncall', id: req.session.staffId, label: `${req.session.staffName} ${removed.date}` });
   res.json({ ok: true });
 }));
 
-router.get('/api/oncall/monthly-summary', requireStaff,(req, res) => {
+router.get('/api/oncall/monthly-summary', requireStaff, (req, res) => {
   const month = req.query.month;
   if (!month) return res.status(400).json({ error: 'month パラメータが必要です' });
   const data = loadOncall();
   const myRecords = data.records.filter(r => r.staffId === req.session.staffId);
   const monthRecords = myRecords.filter(r => r.date.startsWith(month));
 
-  // 月次サマリー
   const summary = {
     totalCount: monthRecords.reduce((s, r) => s + (r.count || 0), 0),
     totalMinutes: monthRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0),
@@ -117,7 +120,6 @@ router.get('/api/oncall/monthly-summary', requireStaff,(req, res) => {
     recordDays: monthRecords.length,
   };
 
-  // 全期間通算（ゲージ用）
   const allTimeTotalMinutes = myRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
   const oncallLeaveDays = Math.floor(allTimeTotalMinutes / 900);
   const nextThresholdMinutes = (oncallLeaveDays + 1) * 900;
@@ -165,13 +167,15 @@ router.get('/api/admin/oncall/records', requireAdmin, (req, res) => {
 });
 
 router.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, asyncRoute((req, res) => {
-  const staffData = loadStaff();
-  const staff = staffData.staff.find(s => s.id === req.params.id);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  staff.oncall_eligible = !!req.body.oncall_eligible;
-  saveStaff(staffData);
-  auditLog(req, 'oncall.eligible_update', { type: 'staff', id: staff.id, label: staff.name }, { oncall_eligible: staff.oncall_eligible });
-  res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
+  atomicModify(() => {
+    const staffData = loadStaff();
+    const staff = staffData.staff.find(s => s.id === req.params.id);
+    if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+    staff.oncall_eligible = !!req.body.oncall_eligible;
+    saveStaff(staffData);
+    auditLog(req, 'oncall.eligible_update', { type: 'staff', id: staff.id, label: staff.name }, { oncall_eligible: staff.oncall_eligible });
+    res.json({ ok: true, oncall_eligible: staff.oncall_eligible });
+  });
 }));
 
 module.exports = router;

@@ -13,7 +13,7 @@ const helmet   = require('helmet');
 // ─── lib/ モジュール ────────────────────────────────────────────
 const C = require('./lib/constants');
 const { getTodayJST, getNowJST, isWorkday, cleanExpiredRateLimits } = require('./lib/helpers');
-const { loadNotices, saveNotices, loadAttendance, saveAttendance } = require('./lib/data');
+const { loadNotices, saveNotices, loadAttendance, saveAttendance, atomicModify } = require('./lib/data');
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
 const { ensureDataDir } = require('./lib/data');
@@ -176,37 +176,39 @@ app.use('/', adminRoutes);
 
 // ─── 運営お知らせ自動発信 ───────────────────────────────────────
 function createSystemNotice(title, body, target) {
-  const data = loadNotices();
-  const now = getNowJST();
-  const notice = {
-    id: 'sys-' + Date.now(),
-    date: now.toISOString().slice(0, 10),
-    title, body,
-    source: 'system',
-    createdAt: now.toISOString()
-  };
-  if (target === 'staff' || target === 'admin') notice.target = target;
-  data.notices.push(notice);
-  saveNotices(data);
+  atomicModify(() => {
+    const data = loadNotices();
+    const now = getNowJST();
+    const notice = {
+      id: 'sys-' + Date.now(),
+      date: now.toISOString().slice(0, 10),
+      title, body,
+      source: 'system',
+      createdAt: now.toISOString()
+    };
+    if (target === 'staff' || target === 'admin') notice.target = target;
+    data.notices.push(notice);
+    saveNotices(data);
+  });
   console.log(`[system] 運営お知らせ作成: ${title}`);
-  return notice;
 }
 
 // createStaffNotice（リマインダー用）
-async function createStaffNotice(staffId, title, body) {
-  const data = loadNotices();
-  const now = getNowJST();
-  const notice = {
-    id: `reminder-${staffId}-${getTodayJST()}`,
-    date: now.toISOString().slice(0, 10),
-    title, body,
-    source: 'system',
-    targetStaffId: staffId,
-    createdAt: now.toISOString()
-  };
-  data.notices.push(notice);
-  saveNotices(data);
-  return notice;
+function createStaffNotice(staffId, title, body) {
+  atomicModify(() => {
+    const data = loadNotices();
+    const now = getNowJST();
+    const notice = {
+      id: `reminder-${staffId}-${getTodayJST()}`,
+      date: now.toISOString().slice(0, 10),
+      title, body,
+      source: 'system',
+      targetStaffId: staffId,
+      createdAt: now.toISOString()
+    };
+    data.notices.push(notice);
+    saveNotices(data);
+  });
 }
 
 // ─── 起動 ──────────────────────────────────────────────────────
@@ -281,25 +283,27 @@ async function main() {
       }
 
       // 出勤自動確定
-      const attendanceData = loadAttendance();
-      if (!attendanceData.records[today]) attendanceData.records[today] = {};
-      for (const s of results.entered) {
-        if (!attendanceData.records[today][s.id]) {
-          attendanceData.records[today][s.id] = {
-            status: 'confirmed', source: 'auto',
-            updatedAt: new Date().toISOString(),
-          };
+      atomicModify(() => {
+        const attendanceData = loadAttendance();
+        if (!attendanceData.records[today]) attendanceData.records[today] = {};
+        for (const s of results.entered) {
+          if (!attendanceData.records[today][s.id]) {
+            attendanceData.records[today][s.id] = {
+              status: 'confirmed', source: 'auto',
+              updatedAt: new Date().toISOString(),
+            };
+          }
         }
-      }
-      for (const s of results.onLeave) {
-        if (!attendanceData.records[today][s.id]) {
-          attendanceData.records[today][s.id] = {
-            status: 'leave', source: 'auto',
-            updatedAt: new Date().toISOString(),
-          };
+        for (const s of results.onLeave) {
+          if (!attendanceData.records[today][s.id]) {
+            attendanceData.records[today][s.id] = {
+              status: 'leave', source: 'auto',
+              updatedAt: new Date().toISOString(),
+            };
+          }
         }
-      }
-      saveAttendance(attendanceData);
+        saveAttendance(attendanceData);
+      });
       console.log(`[cron] 出勤自動確定: confirmed=${results.entered.length}, leave=${results.onLeave.length}`);
     } catch (e) {
       console.error('[cron] リマインダーエラー:', e.message);
