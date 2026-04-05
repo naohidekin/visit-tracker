@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadNotices, saveNotices } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, getNowJST } = require('../lib/helpers');
+const { asyncRoute, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { NOTICES_PATH } = require('../lib/constants');
 
@@ -34,7 +34,7 @@ router.get('/api/notices/unread-count', requireStaff, (req, res) => {
   res.json({ count });
 });
 
-router.post('/api/notices/:id/read', requireStaff, lockedRoute(NOTICES_PATH, (req, res) => {
+router.post('/api/notices/:id/read', requireStaff, asyncRoute((req, res) => {
   const data = loadNotices();
   const staffId = req.session.staffId;
   if (!data.readStatus[staffId]) data.readStatus[staffId] = [];
@@ -62,7 +62,7 @@ router.get('/api/admin/notices/changelog', requireAdmin, (_req, res) => {
   res.json({ notices: adminNotices });
 });
 
-router.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
+router.post('/api/admin/notices', requireAdmin, asyncRoute((req, res) => {
   const { title, body, source, target } = req.body;
   if (!title || !body) return res.status(400).json({ error: 'タイトルと本文は必須です' });
   const data = loadNotices();
@@ -84,7 +84,7 @@ router.post('/api/admin/notices', requireAdmin, lockedRoute(NOTICES_PATH, (req, 
   res.json({ ok: true, notice });
 }));
 
-router.patch('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
+router.patch('/api/admin/notices/:id', requireAdmin, asyncRoute((req, res) => {
   const data = loadNotices();
   const notice = data.notices.find(n => n.id === req.params.id);
   if (!notice) return res.status(404).json({ error: 'お知らせが見つかりません' });
@@ -97,7 +97,7 @@ router.patch('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (
   res.json({ ok: true, notice });
 }));
 
-router.delete('/api/admin/notices/:id', requireAdmin, lockedRoute(NOTICES_PATH, (req, res) => {
+router.delete('/api/admin/notices/:id', requireAdmin, asyncRoute((req, res) => {
   const data = loadNotices();
   const idx = data.notices.findIndex(n => n.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'お知らせが見つかりません' });

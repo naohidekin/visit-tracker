@@ -136,7 +136,7 @@ visit-tracker/
 - **CSRF対策**: double-submit cookie 方式（setCsrfCookie / verifyCsrf）+ フロント側 apiFetch ラッパー
 - **XSS対策**: インラインイベントハンドラ全廃 → addEventListener / イベント委譲。innerHTML内ユーザーデータは esc() でエスケープ
 - **セキュリティヘッダー**: helmet（CSP, X-Frame-Options, X-Content-Type-Options 等）
-- **データ書き込み保護**: write-file-atomic による原子的書き込み + withFileLock / lockedRoute による排他制御
+- **データ書き込み保護**: SQLiteトランザクション + write-file-atomic による原子的書き込み
 - **ブルートフォース対策**: ログインAPI に IP単位の試行回数制限
 - **セッション管理**: スタッフアーカイブ時に既存セッションを即時無効化
 - **外部依存排除**: Chart.js / WebAuthn 等を vendor/ にローカル配信
@@ -145,5 +145,4 @@ visit-tracker/
 
 ## 既知の課題・TODO
 
-- lockedRoute/withFileLock はSQLite移行後も残存（無害だが将来的に除去可能）
 - Sheets APIのレート制限対応

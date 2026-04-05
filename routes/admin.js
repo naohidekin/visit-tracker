@@ -17,7 +17,7 @@ const {
 } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
-const { checkRateLimit, lockedRoute, isValidDate, validateUnitValue, validateNum, withFileLock, colToIdx, idxToCol, getTodayJST, getYearMonthJST, formatLocalDate, isWorkday, isOnLeaveToday, getStandbyFeeWithCustom } = require('../lib/helpers');
+const { checkRateLimit, asyncRoute, isValidDate, validateUnitValue, validateNum, colToIdx, idxToCol, getTodayJST, getYearMonthJST, formatLocalDate, isWorkday, isOnLeaveToday, getStandbyFeeWithCustom } = require('../lib/helpers');
 const { auditLog, loadAuditLog, verifyAuditChain } = require('../lib/audit');
 const { getSheets, sheetsRetry, createSpreadsheetForYear } = require('../lib/sheets');
 const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
@@ -382,7 +382,7 @@ router.get('/api/admin/incentive', requireAdmin, (_req, res) => {
   });
 });
 
-router.post('/api/admin/incentive/defaults', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/incentive/defaults', requireAdmin, asyncRoute((req, res) => {
   const { nurse, rehab, nurse_rate, rehab_rate } = req.body;
   const nv = validateNum(nurse, { min: 0, max: 100 });
   const rv = validateNum(rehab, { min: 0, max: 100 });
@@ -398,7 +398,7 @@ router.post('/api/admin/incentive/defaults', requireAdmin, lockedRoute(STAFF_PAT
   res.json({ success: true });
 }));
 
-router.post('/api/admin/staff/:id/incentive', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/incentive', requireAdmin, asyncRoute((req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -411,7 +411,7 @@ router.post('/api/admin/staff/:id/incentive', requireAdmin, lockedRoute(STAFF_PA
   res.json({ success: true });
 }));
 
-router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/work-hours', requireAdmin, asyncRoute((req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -424,7 +424,7 @@ router.post('/api/admin/staff/:id/work-hours', requireAdmin, lockedRoute(STAFF_P
   res.json({ success: true });
 }));
 
-router.post('/api/admin/staff/:id/incentive-rate', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/incentive-rate', requireAdmin, asyncRoute((req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -607,7 +607,7 @@ router.get('/api/admin/me', requireAdmin, (req, res) => {
 });
 
 // 管理者権限付与
-router.post('/api/admin/staff/:id/grant-admin', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/admin/staff/:id/grant-admin', requireAdmin, asyncRoute(async (req, res) => {
   const data = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -619,7 +619,7 @@ router.post('/api/admin/staff/:id/grant-admin', requireAdmin, lockedRoute(STAFF_
 }));
 
 // 管理者権限剥奪
-router.post('/api/admin/staff/:id/revoke-admin', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/admin/staff/:id/revoke-admin', requireAdmin, asyncRoute(async (req, res) => {
   const data = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -650,7 +650,7 @@ router.get('/api/admin/staff', requireAdmin, (req, res) => {
   res.json(safe);
 });
 
-router.patch('/api/admin/staff/:id/archive', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.patch('/api/admin/staff/:id/archive', requireAdmin, asyncRoute((req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -661,7 +661,7 @@ router.patch('/api/admin/staff/:id/archive', requireAdmin, lockedRoute(STAFF_PAT
   res.json({ success: true, archived: staff.archived, staff: data.staff });
 }));
 
-router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
   const { name, furigana_family, furigana_given, type, loginId, initialPw, hire_date, oncall, email } = req.body;
   if (!name || !type || !loginId || !initialPw)
     return res.status(400).json({ error: 'パラメータが不足しています' });
@@ -1015,7 +1015,7 @@ router.post('/api/admin/staff', requireAdmin, lockedRoute(STAFF_PATH, async (req
   }
 }));
 
-router.patch('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.patch('/api/admin/staff/:id', requireAdmin, asyncRoute((req, res) => {
   const { name, furigana_family, furigana_given, email } = req.body;
   if (!name) return res.status(400).json({ error: '氏名は必須です' });
   if (email !== undefined && email !== null && email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -1032,7 +1032,7 @@ router.patch('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, (req,
   res.json({ success: true, staff: data.staff });
 }));
 
-router.delete('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
+router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) => {
   const data = loadStaff();
   const idx  = data.staff.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -1157,7 +1157,7 @@ router.delete('/api/admin/staff/:id', requireAdmin, lockedRoute(STAFF_PATH, asyn
   }
 }));
 
-router.post('/api/admin/staff/:id/reset-password', requireAdmin, lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/admin/staff/:id/reset-password', requireAdmin, asyncRoute(async (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -1170,7 +1170,7 @@ router.post('/api/admin/staff/:id/reset-password', requireAdmin, lockedRoute(STA
 }));
 
 // ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
-router.post('/api/admin/fix-staff-columns', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/fix-staff-columns', requireAdmin, asyncRoute((req, res) => {
   try {
     const data = loadStaff();
     const changes = [];
@@ -1485,7 +1485,7 @@ router.get('/api/admin/standby/records', requireAdmin, (req, res) => {
 });
 
 // 待機者登録/更新
-router.post('/api/admin/standby/records', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
+router.post('/api/admin/standby/records', requireAdmin, asyncRoute((req, res) => {
   const { date, staffId } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
   const data = loadStandby();
@@ -1507,7 +1507,7 @@ router.post('/api/admin/standby/records', requireAdmin, lockedRoute(STANDBY_PATH
 }));
 
 // 待機記録削除
-router.delete('/api/admin/standby/records/:date', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
+router.delete('/api/admin/standby/records/:date', requireAdmin, asyncRoute((req, res) => {
   const data = loadStandby();
   const idx = data.records.findIndex(r => r.date === req.params.date);
   if (idx < 0) return res.status(404).json({ error: '記録が見つかりません' });
@@ -1557,7 +1557,7 @@ router.get('/api/admin/standby/custom-holidays', requireAdmin, (req, res) => {
 });
 
 // カスタム祝日設定
-router.post('/api/admin/standby/custom-holidays', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
+router.post('/api/admin/standby/custom-holidays', requireAdmin, asyncRoute((req, res) => {
   const { dates } = req.body;
   if (!Array.isArray(dates)) return res.status(400).json({ error: 'dates は配列で指定してください' });
   const data = loadStandby();
@@ -1569,7 +1569,7 @@ router.post('/api/admin/standby/custom-holidays', requireAdmin, lockedRoute(STAN
 
 // ─── API: 雨の日管理（管理者向け） ──────────────────────────────
 
-router.post('/api/admin/rainy/toggle', requireAdmin, lockedRoute(STANDBY_PATH, (req, res) => {
+router.post('/api/admin/rainy/toggle', requireAdmin, asyncRoute((req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
   const data = loadStandby();

@@ -6,27 +6,22 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadOncall, saveOncall } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, validateNum, withFileLock, getNowJST } = require('../lib/helpers');
+const { asyncRoute, validateNum, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { STAFF_PATH, ONCALL_PATH } = require('../lib/constants');
 
-// オンコール累計時間から有給付与日数を再計算し、staff.jsonを更新
-// 注: この関数は lockedRoute(ONCALL_PATH, ...) 内から呼ばれるため、
-//     oncallデータの読み取りはロック下で安全。staff.jsonは別途ロックする。
+// オンコール累計時間から有給付与日数を再計算し、staffデータを更新
 async function updateOncallLeave(staffId) {
-  // oncallデータは呼び出し元の lockedRoute で排他制御済み
   const data = loadOncall();
   const allRecords = data.records.filter(r => r.staffId === staffId);
   const totalMinutes = allRecords.reduce((s, r) => s + (r.totalMinutes || 0), 0);
   const days = Math.floor(totalMinutes / 900); // 900分 = 15時間
-  await withFileLock(STAFF_PATH, async () => {
-    const staffData = loadStaff();
-    const staff = staffData.staff.find(s => s.id === staffId);
-    if (staff && staff.oncall_leave_granted !== days) {
-      staff.oncall_leave_granted = days;
-      saveStaff(staffData);
-    }
-  });
+  const staffData = loadStaff();
+  const staff = staffData.staff.find(s => s.id === staffId);
+  if (staff && staff.oncall_leave_granted !== days) {
+    staff.oncall_leave_granted = days;
+    saveStaff(staffData);
+  }
   return { totalMinutes, days };
 }
 
@@ -40,7 +35,7 @@ router.get('/api/oncall/records', requireStaff,(req, res) => {
   res.json({ records });
 });
 
-router.post('/api/oncall/records', requireStaff,lockedRoute(ONCALL_PATH, async (req, res) => {
+router.post('/api/oncall/records', requireStaff,asyncRoute(async (req, res) => {
   const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
@@ -92,7 +87,7 @@ router.post('/api/oncall/records', requireStaff,lockedRoute(ONCALL_PATH, async (
   res.json({ ok: true });
 }));
 
-router.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, async (req, res) => {
+router.delete('/api/oncall/records/:id', requireStaff, asyncRoute(async (req, res) => {
   const data = loadOncall();
   const idx = data.records.findIndex(r => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'レコードが見つかりません' });
@@ -169,7 +164,7 @@ router.get('/api/admin/oncall/records', requireAdmin, (req, res) => {
   res.json({ records });
 });
 
-router.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/oncall-eligible', requireAdmin, asyncRoute((req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });

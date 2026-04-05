@@ -133,6 +133,4 @@ visit-tracker/
 
 ## 既知の課題・TODO
 
-- CSRF対策が未実装
-- JSONファイルの同時書き込み対策（将来的にSQLite移行を検討）
 - Sheets APIのレート制限対応

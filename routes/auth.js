@@ -9,7 +9,7 @@ const { generateRegistrationOptions, verifyRegistrationResponse,
 
 const { loadStaff, saveStaff, loadResetTokens, saveResetTokens, generateResetToken } = require('../lib/data');
 const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
-const { checkRateLimit, lockedRoute, isValidDate, sanitizeStr } = require('../lib/helpers');
+const { checkRateLimit, asyncRoute, isValidDate, sanitizeStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { sendResetEmail } = require('../lib/mail');
 const { loadCredentials, saveCredential, updateCredentialCounter, deleteCredentials, hasCredentials,
@@ -75,7 +75,7 @@ router.get('/api/reset-password/verify', (req, res) => {
   res.json({ valid: true });
 });
 
-router.post('/api/reset-password', lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/reset-password', asyncRoute(async (req, res) => {
   const { token, newPassword, confirmPassword } = req.body;
   if (!token || !newPassword) return res.status(400).json({ error: 'パラメータが不足しています' });
   if (newPassword !== confirmPassword) return res.status(400).json({ error: 'パスワードが一致しません' });
@@ -309,7 +309,7 @@ router.post('/api/webauthn/delete', requireStaff, async (req, res) => {
 });
 
 // ─── API: パスワード変更 ────────────────────────────────────────
-router.post('/api/change-password', requireStaff, lockedRoute(STAFF_PATH, async (req, res) => {
+router.post('/api/change-password', requireStaff, asyncRoute(async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
   if (!currentPassword || !newPassword)
     return res.status(400).json({ error: 'パラメータが不足しています' });
