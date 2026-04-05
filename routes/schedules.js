@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, loadSchedules, saveSchedules, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, getTodayJST } = require('../lib/helpers');
+const { asyncRoute, getTodayJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { SCHEDULES_PATH, DATA_START_ROW } = require('../lib/constants');
@@ -17,7 +17,7 @@ router.get('/api/schedules', requireStaff, (req, res) => {
   res.json(data.schedules.filter(s => s.staffId === req.session.staffId));
 });
 
-router.post('/api/schedules', requireStaff, lockedRoute(SCHEDULES_PATH, (req, res) => {
+router.post('/api/schedules', requireStaff, asyncRoute((req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
   if (date <= getTodayJST()) return res.status(400).json({ error: '予定登録は翌日以降の日付のみ可能です' });
@@ -56,7 +56,7 @@ router.post('/api/schedules', requireStaff, lockedRoute(SCHEDULES_PATH, (req, re
   res.json({ success: true, schedule: entry });
 }));
 
-router.post('/api/schedules/:id/confirm', requireStaff, lockedRoute(SCHEDULES_PATH, async (req, res) => {
+router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -108,7 +108,7 @@ router.post('/api/schedules/:id/confirm', requireStaff, lockedRoute(SCHEDULES_PA
   }
 }));
 
-router.delete('/api/schedules/:id', requireStaff, lockedRoute(SCHEDULES_PATH, (req, res) => {
+router.delete('/api/schedules/:id', requireStaff, asyncRoute((req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id && s.staffId === req.session.staffId);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });
@@ -123,7 +123,7 @@ router.get('/api/admin/schedules', requireAdmin, (_req, res) => {
   res.json(loadSchedules().schedules);
 });
 
-router.delete('/api/admin/schedules/:id', requireAdmin, lockedRoute(SCHEDULES_PATH, (req, res) => {
+router.delete('/api/admin/schedules/:id', requireAdmin, asyncRoute((req, res) => {
   const data = loadSchedules();
   const idx = data.schedules.findIndex(s => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '予定が見つかりません' });

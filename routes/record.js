@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
-const { validateUnitValue, lockedRoute, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday } = require('../lib/helpers');
+const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD, ALL_HOLIDAYS } = require('../lib/constants');

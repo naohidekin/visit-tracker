@@ -193,23 +193,20 @@ function createSystemNotice(title, body, target) {
 }
 
 // createStaffNotice（リマインダー用）
-const { withFileLock } = require('./lib/helpers');
 async function createStaffNotice(staffId, title, body) {
-  return await withFileLock(C.NOTICES_PATH, async () => {
-    const data = loadNotices();
-    const now = getNowJST();
-    const notice = {
-      id: `reminder-${staffId}-${getTodayJST()}`,
-      date: now.toISOString().slice(0, 10),
-      title, body,
-      source: 'system',
-      targetStaffId: staffId,
-      createdAt: now.toISOString()
-    };
-    data.notices.push(notice);
-    saveNotices(data);
-    return notice;
-  });
+  const data = loadNotices();
+  const now = getNowJST();
+  const notice = {
+    id: `reminder-${staffId}-${getTodayJST()}`,
+    date: now.toISOString().slice(0, 10),
+    title, body,
+    source: 'system',
+    targetStaffId: staffId,
+    createdAt: now.toISOString()
+  };
+  data.notices.push(notice);
+  saveNotices(data);
+  return notice;
 }
 
 // ─── 起動 ──────────────────────────────────────────────────────

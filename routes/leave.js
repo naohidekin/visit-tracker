@@ -6,29 +6,27 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { lockedRoute, isValidDate, validateNum, withFileLock, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
+const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant } = require('../lib/leave-calc');
 const { STAFF_PATH, LEAVE_PATH, NOTICES_PATH } = require('../lib/constants');
 
 // 有給通知ヘルパー（個人宛お知らせ）
 async function createStaffNotice(staffId, title, body) {
-  return await withFileLock(NOTICES_PATH, async () => {
-    const data = loadNotices();
-    const now = getNowJST();
-    const notice = {
-      id: 'leave-' + Date.now(),
-      date: now.toISOString().slice(0, 10),
-      title,
-      body,
-      source: 'system',
-      targetStaffId: staffId,
-      createdAt: now.toISOString()
-    };
-    data.notices.push(notice);
-    saveNotices(data);
-    return notice;
-  });
+  const data = loadNotices();
+  const now = getNowJST();
+  const notice = {
+    id: 'leave-' + Date.now(),
+    date: now.toISOString().slice(0, 10),
+    title,
+    body,
+    source: 'system',
+    targetStaffId: staffId,
+    createdAt: now.toISOString()
+  };
+  data.notices.push(notice);
+  saveNotices(data);
+  return notice;
 }
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
@@ -101,7 +99,7 @@ router.get('/api/leave/requests', requireStaff,(req, res) => {
   res.json({ requests: mine });
 });
 
-router.post('/api/leave/requests', requireStaff,lockedRoute(LEAVE_PATH, (req, res) => {
+router.post('/api/leave/requests', requireStaff,asyncRoute((req, res) => {
   const { type, startDate, endDate, reason } = req.body;
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
@@ -211,7 +209,7 @@ router.post('/api/leave/requests', requireStaff,lockedRoute(LEAVE_PATH, (req, re
   res.json({ ok: true, request });
 }));
 
-router.post('/api/leave/requests/:id/cancel', requireStaff,lockedRoute(LEAVE_PATH, (req, res) => {
+router.post('/api/leave/requests/:id/cancel', requireStaff,asyncRoute((req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -238,7 +236,7 @@ router.get('/api/admin/leave/requests', requireAdmin, (req, res) => {
   res.json({ requests });
 });
 
-router.post('/api/admin/leave/requests/:id/approve', requireAdmin, lockedRoute(LEAVE_PATH, async (req, res) => {
+router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute(async (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -280,7 +278,7 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, lockedRoute(L
   res.json({ ok: true });
 }));
 
-router.post('/api/admin/leave/requests/:id/reject', requireAdmin, lockedRoute(LEAVE_PATH, async (req, res) => {
+router.post('/api/admin/leave/requests/:id/reject', requireAdmin, asyncRoute(async (req, res) => {
   const leaveData = loadLeave();
   const request = leaveData.requests.find(r => r.id === req.params.id);
   if (!request) return res.status(404).json({ error: '申請が見つかりません' });
@@ -360,7 +358,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
   res.json({ summary });
 });
 
-router.post('/api/admin/staff/:id/leave-balance', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
@@ -392,7 +390,7 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, lockedRoute(STAF
   res.json({ ok: true, balance: calcLeaveBalance(staff) });
 }));
 
-router.post('/api/admin/staff/:id/hire-date', requireAdmin, lockedRoute(STAFF_PATH, (req, res) => {
+router.post('/api/admin/staff/:id/hire-date', requireAdmin, asyncRoute((req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.params.id);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });

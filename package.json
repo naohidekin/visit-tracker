@@ -4,8 +4,8 @@
   "description": "訪問看護ステーション 訪問件数管理Webアプリ",
   "main": "server.js",
   "scripts": {
-    "start": "NODE_OPTIONS=--openssl-legacy-provider node server.js",
-    "dev": "NODE_OPTIONS=--openssl-legacy-provider node --watch server.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
     "test": "node test-leave.js",
     "security-check": "node scripts/security-check.js"
   },
