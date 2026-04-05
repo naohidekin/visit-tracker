@@ -1,6 +1,5 @@
 // CSRF保護: double-submit cookie 方式で実装済み（setCsrfCookie / verifyCsrf）
-// データ整合性: write-file-atomic + withFileLock / lockedRoute で排他制御済み
-// TODO: スケール時はJSONファイルI/OをSQLiteに移行（複数インスタンス対応）
+// データ整合性: SQLiteトランザクション + write-file-atomic で排他制御済み
 'use strict';
 require('dotenv').config();
 
@@ -226,7 +225,7 @@ async function main() {
   syncLeaveFieldsFromSource();
   publishReleaseNotes();
 
-  // 毎年12/31 23:00に翌年スプレッドシートを自動作成
+  // 毎年12/31 23:00 JST に翌年スプレッドシートを自動作成
   cron.schedule('0 23 31 12 *', async () => {
     const nextYear = new Date().getFullYear() + 1;
     console.log(`[cron] ${nextYear}年スプレッドシートを自動作成します...`);
@@ -240,10 +239,10 @@ async function main() {
         console.error('[cron] ❌ エラー:', e.message);
       }
     }
-  });
+  }, { timezone: 'Asia/Tokyo' });
   console.log('📅 自動作成スケジュール: 毎年 12/31 23:00 に翌年スプレッドシートを作成');
 
-  // 毎月16日 8:00 に修正可能期間のお知らせを自動発信
+  // 毎月16日 8:00 JST に修正可能期間のお知らせを自動発信
   cron.schedule('0 8 16 * *', () => {
     const now = getNowJST();
     const m = now.getMonth() + 1;
@@ -253,11 +252,11 @@ async function main() {
       `${y}年${m}月の修正可能期間は ${m}月16日〜${m}月20日 です。\n\n締日（${m}月15日）以前のデータに修正がある方は、この期間内に修正をお願いします。\n20日を過ぎると修正できなくなりますのでご注意ください。`,
       'staff'
     );
-  });
+  }, { timezone: 'Asia/Tokyo' });
   console.log('📢 運営お知らせスケジュール: 毎月16日 8:00 に修正可能期間を自動通知');
 
-  // 毎日18:00（JST）平日のみ: 未入力リマインダーを自動送信
-  cron.schedule('0 9 * * 1-5', async () => {
+  // 毎日18:00 JST 平日のみ: 未入力リマインダーを自動送信
+  cron.schedule('0 18 * * 1-5', async () => {
     const today = getTodayJST();
     if (!isWorkday(today)) return;
 
@@ -308,11 +307,11 @@ async function main() {
     } catch (e) {
       console.error('[cron] リマインダーエラー:', e.message);
     }
-  });
+  }, { timezone: 'Asia/Tokyo' });
   console.log('📝 未入力リマインダー & 出勤自動確定: 毎日 18:00 (JST) 平日のみ');
 
-  // 毎日0:00 UTC: 期限切れリセットトークン・レート制限エントリを削除
-  cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); });
+  // 毎日0:00 JST: 期限切れリセットトークン・レート制限エントリを削除
+  cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); }, { timezone: 'Asia/Tokyo' });
 
   // 毎日 02:00 JST: システムヘルスチェック
   cron.schedule('0 2 * * *', () => {

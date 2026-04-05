@@ -10,11 +10,6 @@ const { lockedRoute, validateNum, withFileLock, getNowJST } = require('../lib/he
 const { auditLog } = require('../lib/audit');
 const { STAFF_PATH, ONCALL_PATH } = require('../lib/constants');
 
-// 全職員対象のため制限なし
-function requireLeaveOncall(req, res, next) {
-  next();
-}
-
 // オンコール累計時間から有給付与日数を再計算し、staff.jsonを更新
 // 注: この関数は lockedRoute(ONCALL_PATH, ...) 内から呼ばれるため、
 //     oncallデータの読み取りはロック下で安全。staff.jsonは別途ロックする。
@@ -36,7 +31,7 @@ async function updateOncallLeave(staffId) {
 }
 
 // ─── API: オンコール（スタッフ向け） ─────────────────────────────
-router.get('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) => {
+router.get('/api/oncall/records', requireStaff,(req, res) => {
   const month = req.query.month;
   const data = loadOncall();
   let records = data.records.filter(r => r.staffId === req.session.staffId);
@@ -45,7 +40,7 @@ router.get('/api/oncall/records', requireStaff, requireLeaveOncall, (req, res) =
   res.json({ records });
 });
 
-router.post('/api/oncall/records', requireStaff, requireLeaveOncall, lockedRoute(ONCALL_PATH, async (req, res) => {
+router.post('/api/oncall/records', requireStaff,lockedRoute(ONCALL_PATH, async (req, res) => {
   const { date, count, totalHours, totalMinutes, transportCount } = req.body;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
     return res.status(400).json({ error: '日付が不正です' });
@@ -112,7 +107,7 @@ router.delete('/api/oncall/records/:id', requireStaff, lockedRoute(ONCALL_PATH, 
   res.json({ ok: true });
 }));
 
-router.get('/api/oncall/monthly-summary', requireStaff, requireLeaveOncall, (req, res) => {
+router.get('/api/oncall/monthly-summary', requireStaff,(req, res) => {
   const month = req.query.month;
   if (!month) return res.status(400).json({ error: 'month パラメータが必要です' });
   const data = loadOncall();
