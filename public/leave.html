@@ -260,12 +260,14 @@
       }
     }
 
-    // 明日以降の日付をデフォルトに
+    // 本日以降の日付をデフォルトに
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-    document.getElementById('startDate').min = tomorrowStr;
-    document.getElementById('endDate').min = tomorrowStr;
+    document.getElementById('startDate').min = todayStr;
+    document.getElementById('endDate').min = todayStr;
     document.getElementById('startDate').value = tomorrowStr;
 
     document.getElementById('spinner').style.display = 'none';
@@ -406,9 +408,10 @@
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     selectedType = btn.dataset.type;
-    // 半休の場合は終了日を非表示
-    document.getElementById('endDateGroup').style.display =
-      selectedType === 'full' ? '' : 'none';
+    // 半休の場合は終了日を非表示＆値をリセット
+    const isFullDay = selectedType === 'full';
+    document.getElementById('endDateGroup').style.display = isFullDay ? '' : 'none';
+    if (!isFullDay) document.getElementById('endDate').value = '';
   }
 
   async function submitRequest() {

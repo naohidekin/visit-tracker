@@ -111,7 +111,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
   const start = startDate;
   const end   = endDate || startDate;
   if (start > end) return res.status(400).json({ error: '終了日は開始日以降にしてください' });
-  if (start <= today) return res.status(400).json({ error: '翌日以降の日付を指定してください' });
+  if (start < today) return res.status(400).json({ error: '本日以降の日付を指定してください' });
 
   // 日付配列を展開
   const dates = [];
