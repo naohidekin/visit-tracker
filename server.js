@@ -17,7 +17,7 @@ const { loadNotices, saveNotices, loadAttendance, saveAttendance, atomicModify }
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
 const { ensureDataDir } = require('./lib/data');
-const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, ensureAdminFields, ensureFirstAdmin, publishReleaseNotes } = require('./lib/startup');
+const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, ensureAdminFields, ensureInitialAdmins, publishReleaseNotes } = require('./lib/startup');
 const { createSpreadsheetForYear } = require('./lib/sheets');
 const { getAllStaffRecordStatus } = require('./lib/sheets');
 
@@ -217,7 +217,7 @@ async function main() {
   await ensurePasswordsHashed();
   ensureLeaveFields();
   ensureAdminFields();
-  ensureFirstAdmin();
+  ensureInitialAdmins();
   initMail();
   cleanExpiredTokens();
   await syncNewStaffFromSource();

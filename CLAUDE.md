@@ -65,7 +65,9 @@ visit-tracker/
 | `GOOGLE_CREDENTIALS` | はい | Google サービスアカウントのJSON（1行） |
 | `PORT` | いいえ | ポート番号（デフォルト: 3000） |
 | `APP_BASE_URL` | いいえ | アプリのベースURL |
-| `DATA_DIR` | いいえ | JSONファイルの保存先（デフォルト: プロジェクトルート） |
+| `DATA_DIR` | いいえ | SQLite DB とJSON補助ファイルの保存先（デフォルト: プロジェクトルート） |
+| `INITIAL_ADMIN_STAFF_IDS` | いいえ | 起動時に自動で管理者権限を付与するスタッフIDをカンマ区切りで指定（例: `ubukata01,sato02`）。毎起動で idempotent に union 追加。既存の管理者は剥奪しない |
+| `INITIAL_ADMIN_STAFF_ID` | いいえ | 後方互換用の単数版。`INITIAL_ADMIN_STAFF_IDS` と併用した場合はマージされる |
 
 ## アーキテクチャの重要ポイント
 

@@ -483,7 +483,7 @@ router.post('/api/admin/login', async (req, res) => {
       return res.status(400).json({ error: 'スタッフIDとパスワードを入力してください' });
     }
     if (password.length < 8) {
-      return res.status(400).json({ error: 'パスワードは8文字以上必要です。スタッフ画面でパスワードを変更してください' });
+      return res.status(400).json({ error: 'パスワードは8文字以上必要です。スタッフ画面でパスワードを変更してください', code: 'PASSWORD_TOO_SHORT' });
     }
 
     if (!checkRateLimit(`admin-login-id:${staffId}`, 5, 300000))

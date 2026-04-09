@@ -1504,7 +1504,11 @@
     err.style.display = 'block';
   }
   function hideLoginErr() {
-    document.getElementById('loginErr').style.display = 'none';
+    const err = document.getElementById('loginErr');
+    err.style.display = 'none';
+    // PASSWORD_TOO_SHORT 用の導線リンクが残っていれば消す
+    const link = document.getElementById('pwChangeLink');
+    if (link) link.remove();
   }
 
   // スタッフID入力後の自動判定（Face ID登録済み？）
@@ -1604,6 +1608,19 @@
       });
       const data = await res.json();
       if (data.success) { onLoginSuccess(); }
+      else if (data.code === 'PASSWORD_TOO_SHORT') {
+        showLoginErr(data.error || 'パスワードは8文字以上必要です');
+        // スタッフ画面でパスワードを変更する導線
+        const err = document.getElementById('loginErr');
+        if (err && !document.getElementById('pwChangeLink')) {
+          const link = document.createElement('a');
+          link.id = 'pwChangeLink';
+          link.href = '/login.html';
+          link.textContent = 'スタッフ画面でパスワードを変更する →';
+          link.style.cssText = 'display:block;margin-top:8px;color:#1F497D;font-weight:700;text-decoration:underline';
+          err.appendChild(link);
+        }
+      }
       else { showLoginErr(data.error || 'ログイン失敗'); }
     } catch {
       showLoginErr('サーバーに接続できません');
