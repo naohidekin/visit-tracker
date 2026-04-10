@@ -592,13 +592,7 @@
     const date = document.getElementById('dateInput').value;
     if (!date) { showToast('訪問日を入力してください'); return; }
 
-    if (currentUser.type === 'nurse') {
-      if (pv.kaigo === null && pv.iryo === null) {
-        showToast('介護か医療のどちらかを選択してください'); return;
-      }
-    } else {
-      if (pv.rehab === null) { showToast('単位数を選択してください'); return; }
-    }
+    // 空白＝0時間/0単位として送信可能（研修期間等）
 
     // 翌日 → 予定として登録
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
