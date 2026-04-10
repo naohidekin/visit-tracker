@@ -145,6 +145,22 @@ visit-tracker/
 - **機密データ分離**: staff.json 等のデータファイルを .gitignore で管理外に。本番は DATA_DIR=/data で分離
 - **再発防止**: `npm run security-check` で禁止パターン（inline handler, 外部CDN, eval等）を自動検出
 
+## リリースノート（スタッフ向けお知らせ）
+
+スタッフ向け画面（index.html, history.html, leave.html, oncall.html 等）の表示・操作に影響する変更をコミットする際は、`release-notes.json` にエントリを追加すること。内部リファクタやバグ修正でユーザー体験に変化がない場合は不要。
+
+追加するエントリの形式:
+```json
+{
+  "id": "vX.Y.Z",
+  "date": "YYYY-MM-DD",
+  "title": "変更タイトル（簡潔に）",
+  "body": "変更の概要。スタッフが理解できる平易な日本語で記述。\\n複数行可。"
+}
+```
+
+コミット前にエントリの内容をユーザーに確認してもらうこと。
+
 ## 既知の課題・TODO
 
 - Sheets APIのレート制限対応
