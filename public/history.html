@@ -287,7 +287,7 @@
       if (historyMode === 'billing') {
         let prevM = m - 1, prevY = y;
         if (prevM <= 0) { prevM = 12; prevY--; }
-        opt.textContent = `${y}年${m}月支給（${prevM}/16〜${m}/15）`;
+        opt.textContent = `${y}年${m}月月次（${prevM}/16〜${m}/15）`;
       } else {
         opt.textContent = i === 0 ? `${y}年${m}月（当月）` : `${y}年${m}月`;
       }

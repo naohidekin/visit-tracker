@@ -2218,7 +2218,7 @@
       if (adminDetailMode === 'billing') {
         let prevM = m - 1;
         if (prevM <= 0) prevM = 12;
-        opt.textContent = `${m}月支給（${prevM}/16〜${m}/15）`;
+        opt.textContent = `${m}月月次（${prevM}/16〜${m}/15）`;
       } else {
         opt.textContent = `${m}月`;
       }
@@ -4132,7 +4132,7 @@
       let label;
       if (attendanceMode === 'billing') {
         const prevM = m === 1 ? 12 : m - 1;
-        label = `${y}年${m}月支給（${prevM}/16〜${m}/15）`;
+        label = `${y}年${m}月月次（${prevM}/16〜${m}/15）`;
       } else {
         label = `${y}年${m}月`;
       }
