@@ -8,7 +8,7 @@ const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, at
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant } = require('../lib/leave-calc');
+const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
 
 // 有給通知ヘルパー（個人宛お知らせ）
 function createStaffNotice(staffId, title, body) {
@@ -49,6 +49,19 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
   const carriedOver = staff.leave_carried_over || 0;
   const manualAdj   = staff.leave_manual_adjustment || 0;
   const oncallLeave = staff.oncall_leave_granted || 0;
+  const oncallLeaveValid = calcValidOncallLeave(staff);
+  const oncallLeaveExpired = Math.max(0, oncallLeave - oncallLeaveValid);
+  // 期限内エントリのうち最も近い期限日を取得
+  let oncallLeaveExpiryDate = null;
+  const history = staff.oncall_leave_history || [];
+  const todayStr = getTodayJST();
+  for (const entry of history) {
+    if (entry.expiresAt && entry.expiresAt > todayStr) {
+      if (!oncallLeaveExpiryDate || entry.expiresAt < oncallLeaveExpiryDate) {
+        oncallLeaveExpiryDate = entry.expiresAt;
+      }
+    }
+  }
   const balance     = calcLeaveBalance(staff);
   const autoGrantDays = calcLeaveGrantDays(staff.hire_date);
 
@@ -81,6 +94,9 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
     carried_over: carriedOver,
     manual_adjustment: manualAdj,
     oncall_leave: oncallLeave,
+    oncall_leave_valid: oncallLeaveValid,
+    oncall_leave_expired: oncallLeaveExpired,
+    oncall_leave_expiry_date: oncallLeaveExpiryDate,
     used: usedDays,
     hire_date: staff.hire_date,
     auto_grant_days: autoGrantDays,
@@ -88,6 +104,7 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
     next_grant: nextGrant,
     celebration_days: celebrationDays,
     celebration_used: celebrationUsed,
+    celebration_remaining: Math.max(0, celebrationDays - celebrationUsed),
   });
 });
 
@@ -149,6 +166,8 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
         return { error: 'お祝い休暇の残日数が不足しています', status: 400 };
     } else {
       const balance = calcLeaveBalance(staff);
+      const celebrationRemaining = calcCelebrationRemaining(staff);
+      const totalAvailable = balance + celebrationRemaining;
       const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
       const pendingDays = leaveData.requests
         .filter(r => r.staffId === staff.id && r.status === 'pending' && r.type !== 'celebration')
@@ -156,7 +175,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
           const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
           return sum + r.dates.length * per;
         }, 0);
-      if (balance - pendingDays < requestDays)
+      if (totalAvailable - pendingDays < requestDays)
         return { error: '有給残日数が不足しています', status: 400 };
     }
 
@@ -247,9 +266,10 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
     const staff = staffData.staff.find(s => s.id === request.staffId);
     if (staff) {
       const balance = calcLeaveBalance(staff);
+      const celebrationRemaining = calcCelebrationRemaining(staff);
       const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
         ? request.dates.length * 0.5 : request.dates.length;
-      if (balance < requestDays)
+      if (balance + celebrationRemaining < requestDays)
         return { error: '残日数が不足しています', status: 400 };
     }
 

@@ -154,12 +154,13 @@
     <div class="balance-calc">
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op"></span><span class="balance-calc-label">年間付与</span></div><span class="balance-calc-val" id="balGranted">-</span></div>
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">前年繰越</span></div><span class="balance-calc-val" id="balCarried">-</span></div>
-      <div class="balance-calc-row" id="balOcRow" style="display:none"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">累積OC付与</span></div><span class="balance-calc-val" id="balOc">-</span></div>
+      <div class="balance-calc-row" id="balOcRow" style="display:none"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">OC有給</span></div><span class="balance-calc-val" id="balOc">-</span></div>
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">-</span><span class="balance-calc-label">使用済</span></div><span class="balance-calc-val" id="balUsed">-</span></div>
       <div class="balance-calc-row balance-calc-total"><div class="balance-calc-left"><span class="balance-calc-op">=</span><span class="balance-calc-label">残日数</span></div><span class="balance-calc-val" id="balTotal">-</span></div>
     </div>
     <div class="balance-carry-note" id="carryNote"><span>⏳</span><span>前年繰越 <span id="carryDays">-</span>日 は <span class="carry-date" id="carryExpiry">-</span> に期限切れ</span></div>
     <div class="balance-carry-note" id="celebNote" style="display:none"><span>🎉</span><span>お祝い休暇 <span class="carry-date" id="celebStatus">-</span></span></div>
+    <div class="balance-carry-note" id="ocExpiryNote" style="display:none"><span>⏳</span><span>OC有給 <span id="ocExpiryStatus">-</span></span></div>
   </div>
 
   <!-- 付与情報カード -->
@@ -295,10 +296,22 @@
         ? '残り ' + celebRemain + '日 / ' + celebDays + '日（有給から自動消化）'
         : '使用済（' + celebDays + '日）';
     }
-    const oncall = data.oncall_leave || 0;
-    if (oncall > 0) {
+    const oncallValid = data.oncall_leave_valid || 0;
+    const oncallExpired = data.oncall_leave_expired || 0;
+    const oncallTotal = data.oncall_leave || 0;
+    if (oncallTotal > 0) {
       document.getElementById('balOcRow').style.display = '';
-      document.getElementById('balOc').textContent = oncall + '日';
+      document.getElementById('balOc').textContent = oncallValid + '日';
+      if (oncallExpired > 0 || data.oncall_leave_expiry_date) {
+        document.getElementById('ocExpiryNote').style.display = 'flex';
+        var parts = [];
+        if (oncallExpired > 0) parts.push(oncallExpired + '日 期限切れ');
+        if (data.oncall_leave_expiry_date) {
+          var ed = new Date(data.oncall_leave_expiry_date);
+          parts.push('次の期限: ' + ed.getFullYear() + '年' + (ed.getMonth()+1) + '月' + ed.getDate() + '日');
+        }
+        document.getElementById('ocExpiryStatus').textContent = parts.join(' / ');
+      }
     }
     document.getElementById('balUsed').textContent = data.used + '日';
     document.getElementById('balTotal').textContent = data.balance + '日';

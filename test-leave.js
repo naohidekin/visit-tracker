@@ -13,6 +13,9 @@ const {
   hasReachedGrantDate,
   calcLeaveGrantDays,
   calcNextGrant,
+  calcCelebrationRemaining,
+  calcOncallLeaveExpiry,
+  calcValidOncallLeave,
   calcLeaveBalance,
 } = require('./lib/leave-calc');
 const { toDateStr } = require('./lib/helpers');
@@ -208,6 +211,192 @@ test('月末入社の付与日: 2024-08-31入社、6ヶ月後 → 2025-02-28 (or
   assert.strictEqual(calcLeaveGrantDays('2024-08-31', '2025-03-02'), 0);
   // 2025-03-03 以降で10日
   assert.strictEqual(calcLeaveGrantDays('2024-08-31', '2025-03-03'), 10);
+});
+
+// ─── calcCelebrationRemaining ───
+console.log('\n📌 calcCelebrationRemaining');
+
+test('hire_dateなし → 0', () => {
+  const staff = { celebration_days: 3, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 0);
+});
+
+test('有効期間内（入社3ヶ月）→ celebration_days - adj', () => {
+  const staff = { hire_date: '2025-10-01', celebration_days: 3, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 3);
+});
+
+test('有効期間内 + 手動調整1 → 2', () => {
+  const staff = { hire_date: '2025-10-01', celebration_days: 3, celebration_used_adj: 1 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 2);
+});
+
+test('期限切れ（入社6ヶ月以上）→ 0', () => {
+  const staff = { hire_date: '2025-04-01', celebration_days: 3, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2025-10-01'), 0);
+});
+
+test('期限ちょうど（入社6ヶ月当日）→ 0', () => {
+  const staff = { hire_date: '2025-04-01', celebration_days: 3, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2025-10-01'), 0);
+});
+
+test('期限前日 → 3', () => {
+  const staff = { hire_date: '2025-04-01', celebration_days: 3, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2025-09-30'), 3);
+});
+
+test('celebration_days未定義 → デフォルト3', () => {
+  const staff = { hire_date: '2025-10-01' };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 3);
+});
+
+// ─── お祝い休暇統合バリデーション ───
+console.log('\n📌 お祝い休暇統合バリデーション');
+
+test('celebration期間中（granted=0, celebration=3）→ 3日分申請可能', () => {
+  const staff = { hire_date: '2025-10-01', leave_granted: 0, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  const balance = calcLeaveBalance(staff, []);
+  const celebRemaining = calcCelebrationRemaining(staff, '2026-01-01');
+  assert.strictEqual(balance + celebRemaining, 3);
+});
+
+test('celebration期間中 + OC有給2 → 5日分申請可能', () => {
+  const staff = { hire_date: '2025-10-01', leave_granted: 0, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 2, celebration_days: 3, celebration_used_adj: 0 };
+  const balance = calcLeaveBalance(staff, []);
+  const celebRemaining = calcCelebrationRemaining(staff, '2026-01-01');
+  assert.strictEqual(balance + celebRemaining, 5);
+});
+
+test('celebration期間中に3日使用済み → OC2日のみ利用可能', () => {
+  const staff = { hire_date: '2025-10-01', leave_granted: 0, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 2, celebration_days: 3, celebration_used_adj: 0 };
+  const requests = [
+    { type: 'full', dates: ['2025-11-01', '2025-11-02', '2025-11-03'] },
+  ];
+  const balance = calcLeaveBalance(staff, requests);
+  const celebRemaining = calcCelebrationRemaining(staff, '2026-01-01');
+  assert.strictEqual(balance + celebRemaining, 2);
+});
+
+test('celebration期限切れ + 通常有給0 → 0（申請不可）', () => {
+  const staff = { hire_date: '2025-04-01', leave_granted: 0, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  const balance = calcLeaveBalance(staff, []);
+  const celebRemaining = calcCelebrationRemaining(staff, '2025-10-01');
+  assert.strictEqual(balance + celebRemaining, 0);
+});
+
+test('celebration期限切れ + 通常有給10 → 10', () => {
+  const staff = { hire_date: '2025-04-01', leave_granted: 10, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  const balance = calcLeaveBalance(staff, []);
+  const celebRemaining = calcCelebrationRemaining(staff, '2025-10-01');
+  assert.strictEqual(balance + celebRemaining, 10);
+});
+
+// ─── calcOncallLeaveExpiry ───
+console.log('\n📌 calcOncallLeaveExpiry');
+
+test('hire_dateなし → null', () => {
+  assert.strictEqual(calcOncallLeaveExpiry(null, '2026-01-01'), null);
+});
+
+test('入職3ヶ月で付与 → 18ヶ月時点が期限（次の次: 6→18）', () => {
+  // hire=2025-01-01, granted=2025-04-01 (3ヶ月)
+  // 次の付与: 6ヶ月(2025-07-01), 次の次: 18ヶ月(2026-07-01)
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2025-04-01');
+  assert.strictEqual(toDateStr(expiry), '2026-07-01');
+});
+
+test('入職6ヶ月ちょうどで付与 → 30ヶ月時点が期限（次の次: 18→30）', () => {
+  // hire=2025-01-01, granted=2025-07-01 (6ヶ月目、付与日当日)
+  // 6ヶ月の付与日は grantedAt と同日なので future ではない
+  // 次の付与: 18ヶ月, 次の次: 30ヶ月
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2025-07-01');
+  assert.strictEqual(toDateStr(expiry), '2027-07-01');
+});
+
+test('入職12ヶ月で付与 → 30ヶ月時点が期限（次の次: 18→30）', () => {
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2026-01-01');
+  assert.strictEqual(toDateStr(expiry), '2027-07-01');
+});
+
+test('入職54ヶ月で付与 → 78ヶ月時点が期限（次の次: 66→78）', () => {
+  // hire=2025-01-01, granted=2029-07-01 (54ヶ月目)
+  // 54ヶ月は付与日当日 → future ではない
+  // 次: 66ヶ月(2030-07-01), 次の次: 78ヶ月(2031-07-01)
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2029-07-01');
+  assert.strictEqual(toDateStr(expiry), '2031-07-01');
+});
+
+test('入職70ヶ月で付与（66超）→ 90ヶ月時点が期限（12ヶ月周期: 78→90）', () => {
+  // hire=2025-01-01, granted=2030-11-01 (70ヶ月)
+  // 次: 78ヶ月(2031-07-01), 次の次: 90ヶ月(2032-07-01)
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2030-11-01');
+  assert.strictEqual(toDateStr(expiry), '2032-07-01');
+});
+
+test('入職0ヶ月（入職日に付与）→ 18ヶ月時点が期限（次の次: 6→18）', () => {
+  const expiry = calcOncallLeaveExpiry('2025-01-01', '2025-01-01');
+  assert.strictEqual(toDateStr(expiry), '2026-07-01');
+});
+
+// ─── calcValidOncallLeave ───
+console.log('\n📌 calcValidOncallLeave');
+
+test('history未設定 → oncall_leave_granted にフォールバック', () => {
+  const staff = { oncall_leave_granted: 3 };
+  assert.strictEqual(calcValidOncallLeave(staff), 3);
+});
+
+test('history空配列 → oncall_leave_granted にフォールバック', () => {
+  const staff = { oncall_leave_granted: 2, oncall_leave_history: [] };
+  assert.strictEqual(calcValidOncallLeave(staff), 2);
+});
+
+test('全エントリ期限内 → 全日数合計', () => {
+  const staff = { oncall_leave_granted: 3, oncall_leave_history: [
+    { grantedAt: '2025-01-01', days: 1, expiresAt: '2027-01-01' },
+    { grantedAt: '2025-06-01', days: 2, expiresAt: '2028-01-01' },
+  ]};
+  assert.strictEqual(calcValidOncallLeave(staff, '2026-06-01'), 3);
+});
+
+test('全エントリ期限切れ → 0', () => {
+  const staff = { oncall_leave_granted: 2, oncall_leave_history: [
+    { grantedAt: '2025-01-01', days: 1, expiresAt: '2026-01-01' },
+    { grantedAt: '2025-06-01', days: 1, expiresAt: '2026-06-01' },
+  ]};
+  assert.strictEqual(calcValidOncallLeave(staff, '2026-06-01'), 0);
+});
+
+test('混在: 期限内1 + 期限切れ1 → 期限内のみ', () => {
+  const staff = { oncall_leave_granted: 3, oncall_leave_history: [
+    { grantedAt: '2025-01-01', days: 1, expiresAt: '2026-01-01' },
+    { grantedAt: '2025-06-01', days: 2, expiresAt: '2028-01-01' },
+  ]};
+  assert.strictEqual(calcValidOncallLeave(staff, '2026-06-01'), 2);
+});
+
+test('expiresAt が null → 期限なし扱い（有効）', () => {
+  const staff = { oncall_leave_granted: 1, oncall_leave_history: [
+    { grantedAt: '2025-01-01', days: 1, expiresAt: null },
+  ]};
+  assert.strictEqual(calcValidOncallLeave(staff, '2030-01-01'), 1);
+});
+
+test('calcLeaveBalance が期限切れOC有給を除外すること', () => {
+  const staff = { leave_granted: 10, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 3,
+    oncall_leave_history: [
+      { grantedAt: '2024-01-01', days: 1, expiresAt: '2025-01-01' },
+      { grantedAt: '2025-06-01', days: 2, expiresAt: '2030-01-01' },
+    ]};
+  // 期限切れ1日を除外 → validOC=2, balance=10+2=12
+  assert.strictEqual(calcLeaveBalance(staff, []), 12);
 });
 
 // ── 結果サマリー ────────────────────────────────────────────────

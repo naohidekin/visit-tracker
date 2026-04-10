@@ -6,8 +6,9 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadOncall, saveOncall, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { asyncRoute, validateNum, getNowJST } = require('../lib/helpers');
+const { asyncRoute, validateNum, getNowJST, getTodayJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
+const { calcOncallLeaveExpiry } = require('../lib/leave-calc');
 
 // オンコール累計時間から有給付与日数を再計算し、staffデータを更新
 function updateOncallLeave(staffId) {
@@ -19,7 +20,20 @@ function updateOncallLeave(staffId) {
     const staffData = loadStaff();
     const staff = staffData.staff.find(s => s.id === staffId);
     if (staff && staff.oncall_leave_granted !== days) {
+      const prevDays = staff.oncall_leave_granted || 0;
       staff.oncall_leave_granted = days;
+      // 累積日数が増加した場合、履歴にエントリを追加
+      if (days > prevDays) {
+        const delta = days - prevDays;
+        const today = getTodayJST();
+        const expiry = calcOncallLeaveExpiry(staff.hire_date, new Date(today));
+        if (!staff.oncall_leave_history) staff.oncall_leave_history = [];
+        staff.oncall_leave_history.push({
+          grantedAt: today,
+          days: delta,
+          expiresAt: expiry ? toDateStr(expiry) : null,
+        });
+      }
       saveStaff(staffData);
     }
   });
