@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
-const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays } = require('../lib/helpers');
+const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD } = require('../lib/constants');
@@ -391,7 +391,8 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
       const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline     = Math.round(rawLine * workRatio * 100) / 100;
-      const threshold     = iline * working_days;
+      const expectedDays = getExpectedWorkingDaysRange(staff.id, billingStart, billingEnd);
+      const threshold     = iline * expectedDays;
       const over_hours    = Math.max(0, total - threshold);
       const incentive_count  = Math.floor(over_hours / 0.5);
       const incentive_amount = incentive_count * 2000;
@@ -399,10 +400,11 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
       res.json({
         type: 'nurse', billing_start: billingStart, billing_end: billingEnd, pay_date: payDate,
         total, total_kaigo, total_iryo, working_days,
+        expected_working_days: expectedDays, target_total: Math.round(threshold * 10) / 10,
         incentive_line: iline, threshold: Math.round(threshold * 10) / 10,
         over_hours: Math.round(over_hours * 10) / 10,
-        incentive_amount, incentive_triggered: over_hours > 0,
-        days_remaining: daysRemaining, is_finalized: isFinalized,
+        incentive_amount, incentive_triggered: total >= threshold,
+        days_remaining: Math.max(0, expectedDays - working_days), is_finalized: isFinalized,
       });
     } else {
       let total_units = 0, working_days = 0, daysRemaining = 0;
@@ -427,17 +429,19 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
       const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
       const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline     = Math.round(rawLine * workRatio * 100) / 100;
-      const threshold       = iline * working_days;
+      const expectedDays = getExpectedWorkingDaysRange(staff.id, billingStart, billingEnd);
+      const threshold       = iline * expectedDays;
       const over_units      = Math.max(0, total_units - threshold);
       const incentive_amount = Math.floor(over_units) * 500;
 
       res.json({
         type: 'rehab', billing_start: billingStart, billing_end: billingEnd, pay_date: payDate,
         total_units, working_days,
+        expected_working_days: expectedDays, target_total: Math.round(threshold * 10) / 10,
         incentive_line: iline, threshold: Math.round(threshold * 10) / 10,
         over_units: Math.floor(over_units),
-        incentive_amount, incentive_triggered: over_units > 0,
-        days_remaining: daysRemaining, is_finalized: isFinalized,
+        incentive_amount, incentive_triggered: total_units >= threshold,
+        days_remaining: Math.max(0, expectedDays - working_days), is_finalized: isFinalized,
       });
     }
   } catch (e) {
