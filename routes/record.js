@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
-const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday } = require('../lib/helpers');
+const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD } = require('../lib/constants');
@@ -179,9 +179,12 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
       const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline     = Math.round(rawLine * workRatio * 100) / 100;
-      const avg = working_days > 0 ? (total_kaigo + total_iryo) / working_days : 0;
-      res.json({ total_kaigo, total_iryo, total: total_kaigo + total_iryo, working_days,
-                 incentive_line: iline, incentive_triggered: avg > iline,
+      const expectedDays = getExpectedWorkingDays(staff.id, Number(year), Number(month));
+      const targetTotal = Math.round(iline * expectedDays * 10) / 10;
+      const total = total_kaigo + total_iryo;
+      res.json({ total_kaigo, total_iryo, total, working_days,
+                 expected_working_days: expectedDays, target_total: targetTotal,
+                 incentive_line: iline, incentive_triggered: total >= targetTotal,
                  work_hours: staff.work_hours ?? null });
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
@@ -199,12 +202,13 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
       const rawLine2  = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
       const workRatio2 = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline2    = Math.round(rawLine2 * workRatio2 * 100) / 100;
-      const avg2      = working_days > 0 ? total_units / working_days : 0;
-      const threshold2     = iline2 * working_days;
-      const over_units2    = Math.max(0, total_units - threshold2);
+      const expectedDays2 = getExpectedWorkingDays(staff.id, Number(year), Number(month));
+      const targetTotal2 = Math.round(iline2 * expectedDays2 * 10) / 10;
+      const over_units2 = Math.max(0, total_units - targetTotal2);
       const incentive_amount2 = Math.floor(over_units2) * 500;
       res.json({ total_units, working_days,
-                 incentive_line: iline2, incentive_triggered: avg2 > iline2,
+                 expected_working_days: expectedDays2, target_total: targetTotal2,
+                 incentive_line: iline2, incentive_triggered: total_units >= targetTotal2,
                  over_units: Math.floor(over_units2), incentive_amount: incentive_amount2,
                  work_hours: staff.work_hours ?? null });
     }
@@ -254,14 +258,15 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
       const rawLineN   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatioN = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const ilineN     = Math.round(rawLineN * workRatioN * 100) / 100;
-      const avg = working_days > 0 ? total / working_days : 0;
-      const thresholdN     = ilineN * working_days;
-      const over_hoursN    = Math.max(0, total - thresholdN);
+      const expectedDaysN = getExpectedWorkingDays(staff.id, y, m);
+      const targetTotalN = Math.round(ilineN * expectedDaysN * 10) / 10;
+      const over_hoursN    = Math.max(0, total - targetTotalN);
       const incentive_countN  = Math.floor(over_hoursN / 0.5);
       const incentive_amountN = incentive_countN * 2000;
       res.json({ type: 'nurse', year: y, month: m, days,
         stats: { total_kaigo, total_iryo, total, working_days,
-                 incentive_line: ilineN, incentive_triggered: avg > ilineN,
+                 expected_working_days: expectedDaysN, target_total: targetTotalN,
+                 incentive_line: ilineN, incentive_triggered: total >= targetTotalN,
                  over_hours: Math.round(over_hoursN * 10) / 10,
                  incentive_amount: incentive_amountN,
                  work_hours: staff.work_hours ?? null } });
@@ -282,13 +287,14 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
       const rawLineR   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
       const workRatioR = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const ilineR     = Math.round(rawLineR * workRatioR * 100) / 100;
-      const avg = working_days > 0 ? total_units / working_days : 0;
-      const threshold        = ilineR * working_days;
-      const over_units       = Math.max(0, total_units - threshold);
+      const expectedDaysR = getExpectedWorkingDays(staff.id, y, m);
+      const targetTotalR = Math.round(ilineR * expectedDaysR * 10) / 10;
+      const over_units       = Math.max(0, total_units - targetTotalR);
       const incentive_amount = Math.floor(over_units) * 500;
       res.json({ type: 'rehab', year: y, month: m, days,
         stats: { total_units, working_days,
-                 incentive_line: ilineR, incentive_triggered: avg > ilineR,
+                 expected_working_days: expectedDaysR, target_total: targetTotalR,
+                 incentive_line: ilineR, incentive_triggered: total_units >= targetTotalR,
                  over_units: Math.floor(over_units), incentive_amount,
                  work_hours: staff.work_hours ?? null } });
     }

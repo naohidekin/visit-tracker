@@ -72,6 +72,9 @@
     .result-big-num{font-size:36px;font-weight:800;color:var(--text)}
     .result-card.incentive .result-big-num{color:#E24B4A}
     .result-incentive-msg{font-size:15px;font-weight:700;color:#E24B4A;text-align:center;margin-bottom:4px}
+    .result-diff-line{font-size:13px;font-weight:600;text-align:center;margin-bottom:8px}
+    .result-diff-line.remain{color:var(--muted)}
+    .result-diff-line.reached{color:#16a34a;font-weight:700;font-size:14px}
     .result-incentive-amount{font-size:13px;color:#555;text-align:center;margin-bottom:8px;background:#fff8e1;border-radius:6px;padding:6px 12px;border:1px solid #ffe082}
     .result-incentive-amount strong{font-size:17px;color:#E24B4A;font-weight:800}
     .result-sub-grid{display:grid;gap:8px;margin-top:14px}
@@ -345,11 +348,11 @@
       if (data.type === 'nurse') {
         const total = data.total || 0;
         const remain = Math.max(0, threshold - total);
-        remainHtml = `目安まであと ${remain.toFixed(1)}時間`;
+        remainHtml = `あと ${remain.toFixed(1)}時間`;
       } else {
         const total = data.total_units || 0;
         const remain = Math.max(0, threshold - total);
-        remainHtml = `目安まであと ${Math.ceil(remain)}単位`;
+        remainHtml = `あと ${Math.ceil(remain)}単位`;
       }
       bodyHtml = `
         <div class="incentive-not-reached">
@@ -385,15 +388,17 @@
     const s = data.stats;
     const isIncentive = !!s.incentive_triggered;
     const cls  = isIncentive ? ' incentive' : '';
-    const line = s.incentive_line ?? 0;
-    const days = s.working_days || 0;
+    const targetTotal = s.target_total ?? 0;
+    const worked = s.working_days || 0;
+    const expected = s.expected_working_days || 0;
+    const remainDays = Math.max(0, expected - worked);
 
-    let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml;
+    let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml, diffHtml;
 
     if (data.type === 'nurse') {
-      const target = (line * days).toFixed(1);
-      goalLine = `インセンティブ目安：${target}時間`;
-      bigLabel = '合計時間'; bigNum = (s.total || 0).toFixed(1); bigUnit = '時間';
+      const total = s.total || 0;
+      goalLine = `今月のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      bigLabel = '合計時間'; bigNum = total.toFixed(1); bigUnit = '時間';
       subCols  = 'cols-3';
       subHtml  = `
         <div class="result-sub-box">
@@ -406,12 +411,15 @@
         </div>
         <div class="result-sub-box">
           <div class="result-sub-label">稼働日数</div>
-          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+          <div class="result-sub-val">${worked}<span class="result-sub-unit">日</span></div>
         </div>`;
+      const diff = targetTotal - total;
+      diffHtml = diff > 0
+        ? `<p class="result-diff-line remain">目安時間まであと ${diff.toFixed(1)}時間（残${remainDays}日）</p>`
+        : '<p class="result-diff-line reached">インセンティブに到達しました 🎉</p>';
     } else {
       const actual = s.total_units || 0;
-      const target = (Math.round(line * days * 10) / 10).toFixed(1);
-      goalLine = `インセンティブ目安：${target}単位`;
+      goalLine = `今月のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
       bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
       subCols  = 'cols-2';
       subHtml  = `
@@ -421,27 +429,13 @@
         </div>
         <div class="result-sub-box">
           <div class="result-sub-label">稼働日数</div>
-          <div class="result-sub-val">${days}<span class="result-sub-unit">日</span></div>
+          <div class="result-sub-val">${worked}<span class="result-sub-unit">日</span></div>
         </div>`;
+      const diff = targetTotal - actual;
+      diffHtml = diff > 0
+        ? `<p class="result-diff-line remain">目安単位まであと ${Math.ceil(diff)}単位（残${remainDays}日）</p>`
+        : '<p class="result-diff-line reached">インセンティブに到達しました 🎉</p>';
     }
-
-    const incentiveMsg = isIncentive
-      ? (() => {
-          if (data.type === 'rehab' && s.incentive_amount != null) {
-            const overUnits = s.over_units || 0;
-            const amount    = s.incentive_amount.toLocaleString('ja-JP');
-            return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
-                    <p class="result-incentive-amount">超過 ${overUnits}単位 × 500円 ＝ <strong>¥${amount}</strong></p>`;
-          }
-          if (data.type === 'nurse' && s.incentive_amount != null) {
-            const overHours = s.over_hours || 0;
-            const amount    = s.incentive_amount.toLocaleString('ja-JP');
-            return `<p class="result-incentive-msg">インセンティブが発生しています💰</p>
-                    <p class="result-incentive-amount">超過 ${overHours}時間 × 4,000円 ＝ <strong>¥${amount}</strong></p>`;
-          }
-          return '<p class="result-incentive-msg">インセンティブが発生しています💰</p>';
-        })()
-      : '';
 
     document.getElementById('statsCard').innerHTML = `
       <div class="result-card${cls}">
@@ -451,7 +445,7 @@
           <span class="result-big-num">${bigNum}</span>
           <span class="result-big-label">${bigUnit}</span>
         </div>
-        ${incentiveMsg}
+        ${diffHtml}
         <div class="result-sub-grid ${subCols}">${subHtml}</div>
       </div>`;
   }
@@ -468,7 +462,7 @@
     const labels = days.map(d => String(d.day));
 
     // インセンティブラインのラベル
-    const iLabel = isNurse ? `目安 ${iline}h` : `目安 ${iline}単位`;
+    const iLabel = isNurse ? `ライン ${iline}h` : `ライン ${iline}単位`;
 
     let datasets;
     if (isNurse) {

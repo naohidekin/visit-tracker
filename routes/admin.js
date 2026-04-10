@@ -17,7 +17,7 @@ const {
 } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { requireStaff, setCsrfCookie } = require('../lib/auth-middleware');
-const { checkRateLimit, asyncRoute, isValidDate, validateUnitValue, validateNum, colToIdx, idxToCol, getTodayJST, getYearMonthJST, formatLocalDate, isWorkday, isOnLeaveToday, getStandbyFeeWithCustom } = require('../lib/helpers');
+const { checkRateLimit, asyncRoute, isValidDate, validateUnitValue, validateNum, colToIdx, idxToCol, getTodayJST, getYearMonthJST, formatLocalDate, isWorkday, isOnLeaveToday, getStandbyFeeWithCustom, getExpectedWorkingDays } = require('../lib/helpers');
 const { auditLog, loadAuditLog, verifyAuditChain } = require('../lib/audit');
 const { getSheets, sheetsRetry, createSpreadsheetForYear } = require('../lib/sheets');
 const { calcLeaveBalance, calcLeaveGrantDays } = require('../lib/leave-calc');
@@ -160,15 +160,16 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const rawLineAN   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatioAN = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const ilineAN     = Math.round(rawLineAN * workRatioAN * 100) / 100;
-      const avg = working_days > 0 ? total / working_days : 0;
-      const thresholdAN    = ilineAN * working_days;
-      const over_hoursAN   = Math.max(0, total - thresholdAN);
+      const expectedDaysAN = getExpectedWorkingDays(staff.id, y, m);
+      const targetTotalAN = Math.round(ilineAN * expectedDaysAN * 10) / 10;
+      const over_hoursAN   = Math.max(0, total - targetTotalAN);
       const rateAN = staff.incentive_rate ?? defNurseRate;
       const incentive_countAN  = Math.floor(over_hoursAN / 0.5);
       const incentive_amountAN = incentive_countAN * Math.round(rateAN / 2);
       res.json({ type: 'nurse', year: y, month: m, days,
         stats: { total_kaigo, total_iryo, total, working_days,
-                 incentive_line: ilineAN, incentive_triggered: avg > ilineAN,
+                 expected_working_days: expectedDaysAN, target_total: targetTotalAN,
+                 incentive_line: ilineAN, incentive_triggered: total >= targetTotalAN,
                  over_hours: Math.round(over_hoursAN * 10) / 10,
                  incentive_amount: incentive_amountAN,
                  incentive_rate: rateAN,
@@ -190,14 +191,15 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
       const rawLineAR   = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
       const workRatioAR = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const ilineAR     = Math.round(rawLineAR * workRatioAR * 100) / 100;
-      const avg = working_days > 0 ? total_units / working_days : 0;
-      const threshold        = ilineAR * working_days;
-      const over_units       = Math.max(0, total_units - threshold);
+      const expectedDaysAR = getExpectedWorkingDays(staff.id, y, m);
+      const targetTotalAR = Math.round(ilineAR * expectedDaysAR * 10) / 10;
+      const over_units       = Math.max(0, total_units - targetTotalAR);
       const rateAR = staff.incentive_rate ?? defRehabRate;
       const incentive_amount = Math.floor(over_units) * rateAR;
       res.json({ type: staff.type === 'nurse' ? 'nurse' : 'rehab', staffType: staff.type, year: y, month: m, days,
         stats: { total_units, working_days,
-                 incentive_line: ilineAR, incentive_triggered: avg > ilineAR,
+                 expected_working_days: expectedDaysAR, target_total: targetTotalAR,
+                 incentive_line: ilineAR, incentive_triggered: total_units >= targetTotalAR,
                  over_units: Math.floor(over_units), incentive_amount,
                  incentive_rate: rateAR,
                  work_hours: staff.work_hours ?? null } });
@@ -248,7 +250,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           const rawLine = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
           const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
           const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
-          const threshold = effectiveLine * working_days;
+          const expectedDays = getExpectedWorkingDays(staff.id, y, m);
+          const threshold = effectiveLine * expectedDays;
           const overHours = Math.max(0, total - threshold);
           const rate = staff.incentive_rate ?? defNurseRate;
           const amount = Math.floor(overHours / 0.5) * Math.round(rate / 2);
@@ -258,7 +261,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
             work_hours: staff.work_hours ?? null,
             incentive_line: rawLine, effective_line: effectiveLine,
             incentive_rate: rate,
-            working_days, threshold: Math.round(threshold * 100) / 100,
+            working_days, expected_working_days: expectedDays,
+            threshold: Math.round(threshold * 100) / 100,
             total: Math.round(total * 10) / 10,
             total_kaigo: Math.round(total_kaigo * 10) / 10,
             total_iryo: Math.round(total_iryo * 10) / 10,
@@ -280,7 +284,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           const rawLine = (staff.incentive_line != null) ? staff.incentive_line : iDef.rehab;
           const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
           const effectiveLine = Math.round(rawLine * workRatio * 100) / 100;
-          const threshold = effectiveLine * working_days;
+          const expectedDays = getExpectedWorkingDays(staff.id, y, m);
+          const threshold = effectiveLine * expectedDays;
           const overUnits = Math.max(0, total_units - threshold);
           const rate = staff.incentive_rate ?? defRehabRate;
           const amount = Math.floor(overUnits) * rate;
@@ -290,7 +295,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
             work_hours: staff.work_hours ?? null,
             incentive_line: rawLine, effective_line: effectiveLine,
             incentive_rate: rate,
-            working_days, threshold: Math.round(threshold * 100) / 100,
+            working_days, expected_working_days: expectedDays,
+            threshold: Math.round(threshold * 100) / 100,
             total: total_units,
             over: Math.floor(overUnits), amount
           });
