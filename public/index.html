@@ -712,9 +712,11 @@
     document.getElementById('scheduleReminder').style.display   = 'none';
 
     const d = new Date(date + 'T00:00:00');
-    const year = d.getFullYear(), month = d.getMonth() + 1;
+    let payY = d.getFullYear(), payM = d.getMonth() + 1;
+    if (d.getDate() >= 16) { payM++; if (payM > 12) { payM = 1; payY++; } }
+    const payMonth = payY + '-' + payM;
     try {
-      const r = await fetch(`/api/monthly-stats?year=${year}&month=${month}`);
+      const r = await fetch(`/api/incentive-estimate?payMonth=${payMonth}`);
       renderMonthlyStats(await r.json());
     } catch (_) {
       document.getElementById('resultLoadingCard').innerHTML =
@@ -728,15 +730,20 @@
     const cls = isIncentive ? ' incentive' : '';
     const targetTotal = Number(stats.target_total) || 0;
     const worked = Number(stats.working_days) || 0;
-    const expected = Number(stats.expected_working_days) || 0;
-    const remainDays = Math.max(0, expected - worked);
+    const remainDays = Math.max(0, Number(stats.days_remaining) || 0);
+
+    // billing period label (M/D〜M/D)
+    const fmtMD = (s) => { const p = String(s).split('-'); return Number(p[1]) + '/' + Number(p[2]); };
+    const periodLabel = (stats.billing_start && stats.billing_end)
+      ? fmtMD(stats.billing_start) + '〜' + fmtMD(stats.billing_end)
+      : '';
 
     // 安全な数値変換（XSS防止: API応答値をすべてNumber()経由で無害化）
     let goalLine, bigLabel, bigNum, bigUnit, subCols, subHtml, diffHtml;
 
-    if (currentUser.type === 'nurse') {
+    if (stats.type === 'nurse') {
       const total = Number(stats.total) || 0;
-      goalLine = '今月のインセンティブ目安時間：' + esc(targetTotal.toFixed(1)) + '時間';
+      goalLine = esc(periodLabel) + ' のインセンティブ目安時間：' + esc(targetTotal.toFixed(1)) + '時間';
       bigLabel = '合計時間';
       bigNum = esc(total.toFixed(1));
       bigUnit = '時間';
@@ -762,7 +769,7 @@
         : '<p class="result-diff-line reached">インセンティブに到達しました 🎉</p>';
     } else {
       const actual = Number(stats.total_units) || 0;
-      goalLine = '今月のインセンティブ目安単位：' + esc(targetTotal.toFixed(1)) + '単位';
+      goalLine = esc(periodLabel) + ' のインセンティブ目安単位：' + esc(targetTotal.toFixed(1)) + '単位';
       bigLabel = '合計単位数'; bigNum = esc(String(actual)); bigUnit = '単位';
       subCols  = 'cols-2';
       const actualE = esc(String(actual));

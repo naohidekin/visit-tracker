@@ -840,6 +840,10 @@
 
           <!-- 個別詳細モード -->
           <div id="monthlyDetailMode" style="display:none">
+            <div style="display:flex;gap:0;margin-bottom:12px" id="adminDetailModeToggle">
+              <button id="adminDetailModeBilling" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:8px 0 0 8px;font-size:14px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;transition:all .2s">締め期間</button>
+              <button id="adminDetailModeMonthly" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:0 8px 8px 0;font-size:14px;font-weight:700;cursor:pointer;background:#fff;color:var(--blue);font-family:inherit;transition:all .2s">月次</button>
+            </div>
             <div class="form-grid">
               <div class="field" style="grid-column:1/-1">
                 <label>スタッフ</label>
@@ -2195,11 +2199,49 @@
 
   // ── スタッフ月次実績 ──────────────────────────────────────────
   let currentAdminData = null;
+  let adminDetailMode = 'billing';
 
   function initAdminMonthlySelectors() {
     const now = new Date();
     document.getElementById('viewYear').value  = String(now.getFullYear());
+    repopulateAdminDetailMonth();
     document.getElementById('viewMonth').value = String(now.getMonth() + 1);
+  }
+
+  function repopulateAdminDetailMonth() {
+    const sel = document.getElementById('viewMonth');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    for (let m = 1; m <= 12; m++) {
+      const opt = document.createElement('option');
+      opt.value = String(m);
+      if (adminDetailMode === 'billing') {
+        let prevM = m - 1;
+        if (prevM <= 0) prevM = 12;
+        opt.textContent = `${m}月支給（${prevM}/16〜${m}/15）`;
+      } else {
+        opt.textContent = `${m}月`;
+      }
+      sel.appendChild(opt);
+    }
+    if (prev) sel.value = prev;
+  }
+
+  function switchAdminDetailMode(mode) {
+    if (adminDetailMode === mode) return;
+    adminDetailMode = mode;
+    const btnB = document.getElementById('adminDetailModeBilling');
+    const btnM = document.getElementById('adminDetailModeMonthly');
+    if (mode === 'billing') {
+      btnB.style.background = 'var(--blue)'; btnB.style.color = '#fff';
+      btnM.style.background = '#fff'; btnM.style.color = 'var(--blue)';
+    } else {
+      btnM.style.background = 'var(--blue)'; btnM.style.color = '#fff';
+      btnB.style.background = '#fff'; btnB.style.color = 'var(--blue)';
+    }
+    repopulateAdminDetailMonth();
+    const staffId = document.getElementById('viewStaff').value;
+    if (staffId) loadAdminMonthly();
   }
 
   function updateAdminStaffSelect() {
@@ -2227,15 +2269,20 @@
     document.getElementById('adminTableSection').style.display   = 'none';
 
     try {
-      const res = await fetch(`/api/admin/monthly-detail?staffId=${encodeURIComponent(staffId)}&year=${year}&month=${month}`);
+      const modeParam = adminDetailMode === 'billing' ? '&mode=billing' : '';
+      const res = await fetch(`/api/admin/monthly-detail?staffId=${encodeURIComponent(staffId)}&year=${year}&month=${month}${modeParam}`);
       if (!res.ok) throw new Error((await res.json()).error);
       currentAdminData = await res.json();
-      renderAdminMonthlyCard(currentAdminData);
       renderAdminTable(currentAdminData);
       document.getElementById('adminMonthlySpinner').style.display = 'none';
-      document.getElementById('adminStatsSection').style.display   = 'block';
       document.getElementById('adminTableSection').style.display   = 'block';
       document.getElementById('monthlyCSVBtn').style.display       = '';
+      if (adminDetailMode === 'billing') {
+        renderAdminMonthlyCard(currentAdminData);
+        document.getElementById('adminStatsSection').style.display = 'block';
+      } else {
+        document.getElementById('adminStatsSection').style.display = 'none';
+      }
     } catch (e) {
       document.getElementById('adminMonthlySpinner').textContent = 'エラー: ' + e.message;
     }
@@ -2254,7 +2301,14 @@
 
     if (data.type === 'nurse') {
       const total = s.total || 0;
-      goalLine = `今月のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      if (data.billing_start && data.billing_end) {
+        const bsM = new Date(data.billing_start + 'T00:00:00');
+        const beM = new Date(data.billing_end + 'T00:00:00');
+        const periodLabel = `${bsM.getMonth()+1}/${bsM.getDate()}〜${beM.getMonth()+1}/${beM.getDate()}`;
+        goalLine = `${periodLabel} のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      } else {
+        goalLine = `今月のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      }
       bigLabel = '合計時間'; bigNum = total.toFixed(1); bigUnit = '時間';
       subCols  = 'cols-3';
       subHtml  = `
@@ -2276,7 +2330,14 @@
         : '<p class="result-diff-line reached">インセンティブに到達しました 🎉</p>';
     } else {
       const actual = s.total_units || 0;
-      goalLine = `今月のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      if (data.billing_start && data.billing_end) {
+        const bsM = new Date(data.billing_start + 'T00:00:00');
+        const beM = new Date(data.billing_end + 'T00:00:00');
+        const periodLabel = `${bsM.getMonth()+1}/${bsM.getDate()}〜${beM.getMonth()+1}/${beM.getDate()}`;
+        goalLine = `${periodLabel} のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      } else {
+        goalLine = `今月のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      }
       bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
       subCols  = 'cols-2';
       subHtml  = `
@@ -2330,7 +2391,8 @@
 
   function buildAdminRowHtml(d, data, dateStr, isEdit) {
     const wdClass = d.weekday === '土' ? 'sat-a' : d.weekday === '日' ? 'sun-a' : '';
-    const dateCell = `<td class="date-cell-a"><span class="${wdClass}">${data.month}/${d.day}（${d.weekday}）</span></td>`;
+    const dm = d.month != null ? d.month : data.month;
+    const dateCell = `<td class="date-cell-a"><span class="${wdClass}">${dm}/${d.day}（${d.weekday}）</span></td>`;
     if (isEdit) {
       const saveBtns = `<div class="td-btns">
         <button class="btn btn-sm btn-blue" data-action="save-admin-row" data-day="${d.day}" data-date="${esc(dateStr)}">保存</button>
@@ -2371,7 +2433,10 @@
       head.innerHTML = '<tr><th>日付</th><th>単位数</th><th></th></tr>';
     }
     for (const d of data.days) {
-      const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
+      const dm = d.month != null ? d.month : data.month;
+      let dy = data.year;
+      if (d.month != null && d.month > data.month) dy = data.year - 1;
+      const dateStr = `${dy}-${String(dm).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
       const tr = document.createElement('tr');
       tr.id = `aRow_${d.day}`;
       tr.innerHTML = buildAdminRowHtml(d, data, dateStr, false);
@@ -2391,12 +2456,18 @@
 
   function editAdminRow(day) {
     const d = currentAdminData.days.find(x => x.day === day);
-    const dateStr = `${currentAdminData.year}-${String(currentAdminData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dm = d.month != null ? d.month : currentAdminData.month;
+    let dy = currentAdminData.year;
+    if (d.month != null && d.month > currentAdminData.month) dy = currentAdminData.year - 1;
+    const dateStr = `${dy}-${String(dm).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     document.getElementById(`aRow_${day}`).innerHTML = buildAdminRowHtml(d, currentAdminData, dateStr, true);
   }
   function cancelAdminEdit(day) {
     const d = currentAdminData.days.find(x => x.day === day);
-    const dateStr = `${currentAdminData.year}-${String(currentAdminData.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dm = d.month != null ? d.month : currentAdminData.month;
+    let dy = currentAdminData.year;
+    if (d.month != null && d.month > currentAdminData.month) dy = currentAdminData.year - 1;
+    const dateStr = `${dy}-${String(dm).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     document.getElementById(`aRow_${day}`).innerHTML = buildAdminRowHtml(d, currentAdminData, dateStr, false);
   }
   async function saveAdminRow(day, dateStr) {
@@ -3565,19 +3636,21 @@
     const staffName = document.getElementById('viewStaff').selectedOptions[0]?.textContent || '';
     const y = document.getElementById('viewYear').value;
     const m = document.getElementById('viewMonth').value;
+    const dayLabel = r => r.month != null ? `${r.month}/${r.day}` : String(r.day);
     let headers, rows;
     if (d.type === 'nurse') {
-      headers = ['日', '曜日', '介護', '医療', '合計'];
-      rows = d.days.map(r => [r.day, r.weekday, r.kaigo ?? '', r.iryo ?? '', r.total ?? '']);
+      headers = ['日付', '曜日', '介護', '医療', '合計'];
+      rows = d.days.map(r => [dayLabel(r), r.weekday, r.kaigo ?? '', r.iryo ?? '', r.total ?? '']);
       rows.push(['合計', '', d.stats.total_kaigo, d.stats.total_iryo, d.stats.total]);
       rows.push(['稼働日数', d.stats.working_days, '', '', '']);
     } else {
-      headers = ['日', '曜日', '単位数'];
-      rows = d.days.map(r => [r.day, r.weekday, r.value ?? '']);
+      headers = ['日付', '曜日', '単位数'];
+      rows = d.days.map(r => [dayLabel(r), r.weekday, r.value ?? '']);
       rows.push(['合計', '', d.stats.total_units]);
       rows.push(['稼働日数', d.stats.working_days, '']);
     }
-    downloadCSV(headers, rows, `月次実績_${staffName}_${y}年${m}月.csv`);
+    const suffix = adminDetailMode === 'billing' ? `_締め期間` : '';
+    downloadCSV(headers, rows, `月次実績_${staffName}_${y}年${m}月${suffix}.csv`);
   }
 
   // 3) 有給残日数
@@ -4296,6 +4369,8 @@
   // Monthly detail view
   document.getElementById('adminMonthlyBtn').addEventListener('click', loadAdminMonthly);
   document.getElementById('monthlyCSVBtn').addEventListener('click', exportMonthlyCSV);
+  document.getElementById('adminDetailModeBilling').addEventListener('click', () => switchAdminDetailMode('billing'));
+  document.getElementById('adminDetailModeMonthly').addEventListener('click', () => switchAdminDetailMode('monthly'));
 
   // Excel history
   document.getElementById('excelHistoryBtn').addEventListener('click', loadExcelHistory);

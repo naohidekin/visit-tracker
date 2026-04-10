@@ -170,6 +170,10 @@
     <div class="select-wrap">
       <select id="monthSelect"></select>
     </div>
+    <div style="display:flex;gap:0;margin-top:10px" id="histModeToggle">
+      <button id="histModeBilling" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:8px 0 0 8px;font-size:14px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;transition:all .2s">締め期間</button>
+      <button id="histModeMonthly" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:0 8px 8px 0;font-size:14px;font-weight:700;cursor:pointer;background:#fff;color:var(--blue);font-family:inherit;transition:all .2s">月次</button>
+    </div>
   </div>
 
   <div id="loadingView" class="loading" style="display:none">集計中...</div>
@@ -219,6 +223,7 @@
   initCommonUI();
   const WEEKDAYS = ['日','月','火','水','木','金','土'];
   let currentUser = null;
+  let historyMode = 'billing';
 
   // 締日ルール：毎月15日締め → 修正可能開始日を返す
   // 1〜20日：前月16日、21日〜末日：当月16日
@@ -270,6 +275,8 @@
 
   function buildMonthSelector() {
     const sel = document.getElementById('monthSelect');
+    const prev = sel.value;
+    sel.innerHTML = '';
     const now = new Date();
     const cy = now.getFullYear(), cm = now.getMonth() + 1;
     for (let i = 0; i <= 12; i++) {
@@ -277,9 +284,16 @@
       while (m <= 0) { m += 12; y--; }
       const opt = document.createElement('option');
       opt.value = `${y}-${m}`;
-      opt.textContent = i === 0 ? `${y}年${m}月（当月）` : `${y}年${m}月`;
+      if (historyMode === 'billing') {
+        let prevM = m - 1, prevY = y;
+        if (prevM <= 0) { prevM = 12; prevY--; }
+        opt.textContent = `${y}年${m}月支給（${prevM}/16〜${m}/15）`;
+      } else {
+        opt.textContent = i === 0 ? `${y}年${m}月（当月）` : `${y}年${m}月`;
+      }
       sel.appendChild(opt);
     }
+    if (prev) sel.value = prev;
   }
 
   async function loadHistory() {
@@ -291,18 +305,23 @@
     document.getElementById('tableSection').style.display    = 'none';
 
     try {
-      const res = await fetch(`/api/monthly-detail?year=${year}&month=${month}`);
+      const modeParam = historyMode === 'billing' ? '&mode=billing' : '';
+      const res = await fetch(`/api/monthly-detail?year=${year}&month=${month}${modeParam}`);
       if (!res.ok) throw new Error((await res.json()).error);
       const data = await res.json();
-      renderStatsCard(data);
       renderChart(data);
       renderTable(data);
       document.getElementById('loadingView').style.display    = 'none';
-      document.getElementById('statsCardSection').style.display = 'block';
       document.getElementById('chartSection').style.display    = 'block';
       document.getElementById('tableSection').style.display    = 'block';
-      // インセンティブ見込を非同期で読み込み
-      loadIncentiveEstimate(year, month);
+      if (historyMode === 'billing') {
+        renderStatsCard(data);
+        document.getElementById('statsCardSection').style.display = 'block';
+        loadIncentiveEstimate(year, month);
+      } else {
+        document.getElementById('statsCardSection').style.display = 'none';
+        document.getElementById('incentiveSection').style.display = 'none';
+      }
     } catch (e) {
       document.getElementById('loadingView').textContent = '読み込みに失敗しました: ' + e.message;
     }
@@ -397,7 +416,14 @@
 
     if (data.type === 'nurse') {
       const total = s.total || 0;
-      goalLine = `今月のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      if (data.billing_start && data.billing_end) {
+        const bsM = new Date(data.billing_start + 'T00:00:00');
+        const beM = new Date(data.billing_end + 'T00:00:00');
+        const periodLabel = `${bsM.getMonth()+1}/${bsM.getDate()}〜${beM.getMonth()+1}/${beM.getDate()}`;
+        goalLine = `${periodLabel} のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      } else {
+        goalLine = `今月のインセンティブ目安時間：${targetTotal.toFixed(1)}時間`;
+      }
       bigLabel = '合計時間'; bigNum = total.toFixed(1); bigUnit = '時間';
       subCols  = 'cols-3';
       subHtml  = `
@@ -419,7 +445,14 @@
         : '<p class="result-diff-line reached">インセンティブに到達しました 🎉</p>';
     } else {
       const actual = s.total_units || 0;
-      goalLine = `今月のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      if (data.billing_start && data.billing_end) {
+        const bsM = new Date(data.billing_start + 'T00:00:00');
+        const beM = new Date(data.billing_end + 'T00:00:00');
+        const periodLabel = `${bsM.getMonth()+1}/${bsM.getDate()}〜${beM.getMonth()+1}/${beM.getDate()}`;
+        goalLine = `${periodLabel} のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      } else {
+        goalLine = `今月のインセンティブ目安単位：${targetTotal.toFixed(1)}単位`;
+      }
       bigLabel = '合計単位数'; bigNum = String(actual); bigUnit = '単位';
       subCols  = 'cols-2';
       subHtml  = `
@@ -459,7 +492,7 @@
     const iline = data.stats.incentive_line ?? 0;
     const isNurse = data.type === 'nurse';
     const days = data.days;
-    const labels = days.map(d => String(d.day));
+    const labels = days.map(d => d.month != null ? `${d.month}/${d.day}` : String(d.day));
 
     // インセンティブラインのラベル
     const iLabel = isNurse ? `ライン ${iline}h` : `ライン ${iline}単位`;
@@ -573,7 +606,9 @@
     if (data.type === 'nurse') {
       head.innerHTML = '<tr><th>日付</th><th><span class="badge-kaigo">介護</span></th><th><span class="badge-iryo">医療</span></th><th>合計</th><th></th></tr>';
       for (const d of data.days) {
-        const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
+        const dm = d.month != null ? d.month : data.month;
+        const dy = d.year != null ? d.year : data.year;
+        const dateStr = `${dy}-${String(dm).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
         const isFuture  = dateStr > todayStr;
         const isClosed  = !isFuture && dateStr < editableFrom;
         const hasData   = d.kaigo != null || d.iryo != null;
@@ -586,8 +621,9 @@
             : `<button class="btn-edit active" data-action="edit-date" data-date="${esc(dateStr)}">修正</button>`;
         const tr = document.createElement('tr');
         if (trClass) tr.className = trClass;
+        const dateLabel = d.month != null ? `${d.month}/${d.day}（${d.weekday}）` : `${data.month}/${d.day}（${d.weekday}）`;
         tr.innerHTML = `
-          <td class="date-cell"><span class="${wdClass}">${data.month}/${d.day}（${d.weekday}）</span></td>
+          <td class="date-cell"><span class="${wdClass}">${dateLabel}</span></td>
           <td>${d.kaigo != null ? d.kaigo.toFixed(1) : '—'}</td>
           <td>${d.iryo  != null ? d.iryo.toFixed(1)  : '—'}</td>
           <td>${d.total != null ? d.total.toFixed(1) : '—'}</td>
@@ -597,7 +633,9 @@
     } else {
       head.innerHTML = '<tr><th>日付</th><th>単位数</th><th></th></tr>';
       for (const d of data.days) {
-        const dateStr = `${data.year}-${String(data.month).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
+        const dm = d.month != null ? d.month : data.month;
+        const dy = d.year != null ? d.year : data.year;
+        const dateStr = `${dy}-${String(dm).padStart(2,'0')}-${String(d.day).padStart(2,'0')}`;
         const isFuture = dateStr > todayStr;
         const isClosed = !isFuture && dateStr < editableFrom;
         const wdClass  = d.weekday === '土' ? 'sat' : d.weekday === '日' ? 'sun' : '';
@@ -609,8 +647,9 @@
             : `<button class="btn-edit active" data-action="edit-date" data-date="${esc(dateStr)}">修正</button>`;
         const tr = document.createElement('tr');
         if (trClass) tr.className = trClass;
+        const dateLabel = d.month != null ? `${d.month}/${d.day}（${d.weekday}）` : `${data.month}/${d.day}（${d.weekday}）`;
         tr.innerHTML = `
-          <td class="date-cell"><span class="${wdClass}">${data.month}/${d.day}（${d.weekday}）</span></td>
+          <td class="date-cell"><span class="${wdClass}">${dateLabel}</span></td>
           <td>${d.value != null ? d.value : '—'}</td>
           <td>${editBtn}</td>`;
         body.appendChild(tr);
@@ -644,9 +683,27 @@
     arrow.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
   }
 
+  function switchHistoryMode(mode) {
+    if (historyMode === mode) return;
+    historyMode = mode;
+    const btnB = document.getElementById('histModeBilling');
+    const btnM = document.getElementById('histModeMonthly');
+    if (mode === 'billing') {
+      btnB.style.background = 'var(--blue)'; btnB.style.color = '#fff';
+      btnM.style.background = '#fff'; btnM.style.color = 'var(--blue)';
+    } else {
+      btnM.style.background = 'var(--blue)'; btnM.style.color = '#fff';
+      btnB.style.background = '#fff'; btnB.style.color = 'var(--blue)';
+    }
+    buildMonthSelector();
+    loadHistory();
+  }
+
   // ── addEventListener bindings ──
   document.getElementById('monthSelect').addEventListener('change', loadHistory);
   document.getElementById('chartToggle').addEventListener('click', toggleChart);
+  document.getElementById('histModeBilling').addEventListener('click', () => switchHistoryMode('billing'));
+  document.getElementById('histModeMonthly').addEventListener('click', () => switchHistoryMode('monthly'));
 
   init();
 </script>
