@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="にこっと">
   <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -196,6 +197,20 @@
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
     .toast.show{opacity:1}
+    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
+    .menu-unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 5px}
+    .total-unit-label{font-size:14px;opacity:.75;margin-left:4px}
+    .picker-wrap-mb{margin-bottom:14px}
+    .rehab-btn-lg{font-size:20px;color:var(--blue-dark)}
+    .rehab-display-hint{font-size:14px;font-weight:400}
+    .submit-wrap{padding:0 0 16px}
+    .faceid-prompt-body{text-align:center}
+    .faceid-prompt-icon{font-size:48px;margin-bottom:12px}
+    .faceid-prompt-title{color:var(--blue-dark);font-size:16px;margin-bottom:8px}
+    .faceid-prompt-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+    .faceid-prompt-btns{flex-direction:column;gap:8px}
+    .faceid-prompt-ok{background:var(--blue);color:#fff;border-radius:10px;padding:14px;font-size:16px}
+    .faceid-prompt-dismiss{background:none;border:none;color:var(--muted);font-size:14px;padding:12px;cursor:pointer}
   </style>
 </head>
 <body>
@@ -218,7 +233,7 @@
     <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span class="menu-unread-badge" id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="menu-unread-badge" id="menuBadge"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -228,7 +243,7 @@
 </header>
 
 <!-- ── 未入力リマインダー ── -->
-<div class="reminder-banner" id="reminderBanner" style="display:none">
+<div class="reminder-banner d-none" id="reminderBanner">
   <div class="reminder-banner-icon">📝</div>
   <div>
     <div class="reminder-banner-title">今日の記録がまだです</div>
@@ -237,7 +252,7 @@
 </div>
 
 <!-- ── 修正期間アラート（毎月16〜20日のみ表示） ── -->
-<div class="alert-banner" id="alertBanner" style="display:none">
+<div class="alert-banner d-none" id="alertBanner">
   <div class="alert-banner-icon">⚠️</div>
   <div>
     <div class="alert-banner-title">前月分の修正期間中です</div>
@@ -246,10 +261,10 @@
 </div>
 
 <!-- ── 入力フォームビュー ── -->
-<div id="formView" class="container" style="display:none">
+<div id="formView" class="container d-none">
 
   <!-- 未確定の予定 -->
-  <div class="card" id="pendingSchedulesCard" style="display:none">
+  <div class="card d-none" id="pendingSchedulesCard">
     <div class="card-title">📋 未確定の予定</div>
     <div id="pendingSchedulesList"></div>
   </div>
@@ -261,7 +276,7 @@
   </div>
 
   <!-- 看護師 -->
-  <div class="card" id="nurseCard" style="display:none">
+  <div class="card d-none" id="nurseCard">
     <div class="card-title">💉 合計訪問時間</div>
     <div class="nurse-grid">
       <div class="nurse-col kaigo">
@@ -271,7 +286,7 @@
             <span id="kaigoDisplay" class="val-empty">空白</span>
             <span class="chevron">▼</span>
           </button>
-          <div class="picker-dropdown" id="kaigoList" style="display:none"></div>
+          <div class="picker-dropdown d-none" id="kaigoList"></div>
         </div>
       </div>
       <div class="nurse-col iryo">
@@ -281,13 +296,13 @@
             <span id="iryoDisplay" class="val-empty">空白</span>
             <span class="chevron">▼</span>
           </button>
-          <div class="picker-dropdown" id="iryoList" style="display:none"></div>
+          <div class="picker-dropdown d-none" id="iryoList"></div>
         </div>
       </div>
     </div>
     <div class="total-bar">
       <span id="totalBarLabel">本日の合計</span>
-      <div><strong id="totalVal">0.0</strong><span style="font-size:14px;opacity:.75;margin-left:4px">時間</span></div>
+      <div><strong id="totalVal">0.0</strong><span class="total-unit-label">時間</span></div>
     </div>
     <div class="notes">
       <p>※ 30分＝0.5時間/60分＝1.0時間/90分＝1.5時間で計算</p>
@@ -297,15 +312,14 @@
   </div>
 
   <!-- リハビリ -->
-  <div class="card" id="rehabCard" style="display:none">
+  <div class="card d-none" id="rehabCard">
     <div class="card-title">🏃 訪問単位数</div>
-    <div class="picker-wrap" style="margin-bottom:14px">
-      <button type="button" class="picker-btn" id="rehabBtn"
-              style="font-size:20px;color:var(--blue-dark)">
-        <span id="rehabDisplay" class="val-empty" style="font-size:14px;font-weight:400">例：360分の場合、36単位と入力</span>
+    <div class="picker-wrap picker-wrap-mb">
+      <button type="button" class="picker-btn rehab-btn-lg" id="rehabBtn">
+        <span id="rehabDisplay" class="val-empty rehab-display-hint">例：360分の場合、36単位と入力</span>
         <span class="chevron">▼</span>
       </button>
-      <div class="picker-dropdown" id="rehabList" style="display:none"></div>
+      <div class="picker-dropdown d-none" id="rehabList"></div>
     </div>
     <div class="notes">
       <p>※ 10分を「1」単位として計算した単位数を入力</p>
@@ -313,14 +327,14 @@
     </div>
   </div>
 
-  <div style="padding:0 0 16px">
+  <div class="submit-wrap">
     <button class="submit-btn" id="submitBtn">記録する</button>
   </div>
 
 </div>
 
 <!-- ── 送信結果ビュー ── -->
-<div id="resultView" class="container" style="display:none">
+<div id="resultView" class="container d-none">
   <div class="card">
     <div class="result-header">
       <div class="check">✅</div>
@@ -330,7 +344,7 @@
   </div>
 
   <!-- 実績カード（JS で構築） -->
-  <div id="resultStatsCard" style="display:none"></div>
+  <div id="resultStatsCard" class="d-none"></div>
 
   <!-- ローディング -->
   <div class="card" id="resultLoadingCard">
@@ -338,11 +352,11 @@
   </div>
 
   <!-- 予定登録リマインダー -->
-  <div class="card" id="scheduleReminder" style="display:none">
+  <div class="card d-none" id="scheduleReminder">
     <div class="schedule-reminder">予定として登録しました。<br>翌日に確定してください。</div>
   </div>
 
-  <div style="padding:0 0 16px">
+  <div class="submit-wrap">
     <button class="continue-btn" id="continueBtn">続けて入力する</button>
   </div>
 </div>
@@ -360,15 +374,15 @@
 </div>
 
 <div class="modal-overlay" id="faceIdPrompt">
-  <div class="modal" style="text-align:center">
-    <div style="font-size:48px;margin-bottom:12px">🔐</div>
-    <h2 style="color:var(--blue-dark);font-size:16px;margin-bottom:8px">Face IDを設定しますか？</h2>
-    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px">
+  <div class="modal faceid-prompt-body">
+    <div class="faceid-prompt-icon">🔐</div>
+    <h2 class="faceid-prompt-title">Face IDを設定しますか？</h2>
+    <p class="faceid-prompt-desc">
       次回からパスワードなしで<br>ログインできるようになります
     </p>
-    <div class="modal-btns" style="flex-direction:column;gap:8px">
-      <button class="btn-ok" id="regFaceIdBtn" style="background:var(--blue);color:#fff;border-radius:10px;padding:14px;font-size:16px">設定する</button>
-      <button class="btn-cancel" id="dismissFaceIdBtn" style="background:none;border:none;color:var(--muted);font-size:14px;padding:12px;cursor:pointer">あとで</button>
+    <div class="modal-btns faceid-prompt-btns">
+      <button class="btn-ok faceid-prompt-ok" id="regFaceIdBtn">設定する</button>
+      <button class="btn-cancel faceid-prompt-dismiss" id="dismissFaceIdBtn">あとで</button>
     </div>
   </div>
 </div>

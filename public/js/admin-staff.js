@@ -47,11 +47,11 @@ function buildStaffRowHtml(s, badge, colInfo, furi) {
   const ocBtn = s.type === 'nurse'
     ? `<button class="btn-xs ${s.oncall_eligible ? 'btn-green' : 'btn-reset'}" data-action="toggle-oncall" data-id="${esc(s.id)}" data-eligible="${s.oncall_eligible ? 'true' : 'false'}" title="オンコール対象">${s.oncall_eligible ? 'OC有' : 'OC無'}</button>`
     : '';
-  const adminBadge = s.is_admin ? '<span style="background:#e53935;color:#fff;font-size:11px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:700">管</span>' : '';
+  const adminBadge = s.is_admin ? '<span class="admin-badge">管</span>' : '';
   const adminBtn = s.is_admin
     ? `<button class="btn-xs btn-danger revoke-admin-btn" data-id="${esc(s.id)}" title="管理者権限剥奪">管理者解除</button>`
     : `<button class="btn-xs btn-green grant-admin-btn" data-id="${esc(s.id)}" title="管理者権限付与">管理者付与</button>`;
-  const emailIcon = s.email ? `<span title="${esc(s.email)}" style="font-size:13px;cursor:help">✉️</span>` : `<span style="font-size:14px;color:#ccc" title="メール未登録">✉️</span>`;
+  const emailIcon = s.email ? `<span title="${esc(s.email)}" class="email-icon-set">✉️</span>` : `<span class="email-icon-unset" title="メール未登録">✉️</span>`;
   return `
     <td>
       <div class="name-furi">${esc(furi)} ${emailIcon}</div>
@@ -128,12 +128,12 @@ function editStaffRow(id) {
   const email  = s.email || '';
   tr.innerHTML = `
     <td>
-      <input class="edit-input" id="edit-name-${esc(id)}" value="${esc(s.name)}" placeholder="フルネーム" style="margin-bottom:4px">
-      <input class="edit-input" id="edit-furi-f-${esc(id)}" value="${esc(furi_f)}" placeholder="姓ふりがな" style="margin-bottom:4px">
-      <input class="edit-input" id="edit-furi-g-${esc(id)}" value="${esc(furi_g)}" placeholder="名ふりがな" style="margin-bottom:4px">
-      <input class="edit-input" id="edit-email-${esc(id)}" value="${esc(email)}" placeholder="メールアドレス" type="email" style="font-size:14px">
+      <input class="edit-input mb-4" id="edit-name-${esc(id)}" value="${esc(s.name)}" placeholder="フルネーム">
+      <input class="edit-input mb-4" id="edit-furi-f-${esc(id)}" value="${esc(furi_f)}" placeholder="姓ふりがな">
+      <input class="edit-input mb-4" id="edit-furi-g-${esc(id)}" value="${esc(furi_g)}" placeholder="名ふりがな">
+      <input class="edit-input fs-14" id="edit-email-${esc(id)}" value="${esc(email)}" placeholder="メールアドレス" type="email">
     </td>
-    <td style="font-size:13px;color:var(--muted)">変更不可</td>
+    <td class="edit-nochange">変更不可</td>
     <td>
       <div class="td-btns">
         <button class="btn-xs btn-green" data-action="save-staff" data-id="${esc(id)}">保存</button>
@@ -193,7 +193,8 @@ function autoGenerate() {
   }
   // 看護師のみオンコール欄を表示
   const type = document.getElementById('newType').value;
-  document.getElementById('oncallField').style.display = type === 'nurse' ? '' : 'none';
+  if (type === 'nurse') document.getElementById('oncallField').classList.remove('d-none');
+  else document.getElementById('oncallField').classList.add('d-none');
 }
 
 async function addStaff() {
@@ -238,7 +239,7 @@ async function addStaff() {
     document.getElementById('idAutoLabel').textContent = '';
     document.getElementById('pwAutoLabel').textContent = '';
     document.getElementById('newOncall').value = '無';
-    document.getElementById('oncallField').style.display = 'none';
+    document.getElementById('oncallField').classList.add('d-none');
     showToast(`✅ ${name} を追加しました`);
   } else {
     btn.disabled = false; btn.textContent = '追加する';

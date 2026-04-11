@@ -50,8 +50,8 @@
 
     if (nurses.length) {
       nurseBody.innerHTML = nurses.map(n =>
-        `<tr><td>${esc(n.staffName)}</td><td style="text-align:right">${n.visitCount}回</td><td style="text-align:right;font-weight:700">${n.totalHours}時間</td></tr>`
-      ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td style="text-align:right;font-weight:700">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
+        `<tr><td>${esc(n.staffName)}</td><td class="excel-td-right">${n.visitCount}回</td><td class="excel-td-right-bold">${n.totalHours}時間</td></tr>`
+      ).join('') + `<tr class="excel-foot-row"><td class="excel-foot-label">合計</td><td class="excel-td-right-bold">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td class="excel-td-right-bold">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
       nurseSection.style.display = 'block';
     } else {
       nurseSection.style.display = 'none';
@@ -59,8 +59,8 @@
 
     if (rehabs.length) {
       rehabBody.innerHTML = rehabs.map(r =>
-        `<tr><td>${esc(r.staffName)}</td><td style="text-align:right">${esc(r.qualification)}</td><td style="text-align:right">${r.visitCount}回</td><td style="text-align:right;font-weight:700">${r.totalUnits}単位</td></tr>`
-      ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td></td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
+        `<tr><td>${esc(r.staffName)}</td><td class="excel-td-right">${esc(r.qualification)}</td><td class="excel-td-right">${r.visitCount}回</td><td class="excel-td-right-bold">${r.totalUnits}単位</td></tr>`
+      ).join('') + `<tr class="excel-foot-row"><td class="excel-foot-label">合計</td><td></td><td class="excel-td-right-bold">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td class="excel-td-right-bold">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
       rehabSection.style.display = 'block';
     } else {
       rehabSection.style.display = 'none';
@@ -120,8 +120,8 @@ function renderHistoryResult(entry, ym) {
   const nurseBody = document.getElementById('histNurseBody');
   if (nurses.length) {
     nurseBody.innerHTML = nurses.map(n =>
-      `<tr><td>${esc(n.staffName)}</td><td style="text-align:right">${n.visitCount}回</td><td style="text-align:right;font-weight:700">${n.totalHours}時間</td></tr>`
-    ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td style="text-align:right;font-weight:700">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
+      `<tr><td>${esc(n.staffName)}</td><td class="excel-td-right">${n.visitCount}回</td><td class="excel-td-right-bold">${n.totalHours}時間</td></tr>`
+    ).join('') + `<tr class="excel-foot-row"><td class="excel-foot-label">合計</td><td class="excel-td-right-bold">${nurses.reduce((s,n)=>s+n.visitCount,0)}回</td><td class="excel-td-right-bold">${Math.round(nurses.reduce((s,n)=>s+n.totalMinutes,0)/60*10)/10}時間</td></tr>`;
     nurseSection.style.display = 'block';
   } else {
     nurseSection.style.display = 'none';
@@ -131,8 +131,8 @@ function renderHistoryResult(entry, ym) {
   const rehabBody = document.getElementById('histRehabBody');
   if (rehabs.length) {
     rehabBody.innerHTML = rehabs.map(r =>
-      `<tr><td>${esc(r.staffName)}</td><td style="text-align:right">${esc(r.qualification)}</td><td style="text-align:right">${r.visitCount}回</td><td style="text-align:right;font-weight:700">${r.totalUnits}単位</td></tr>`
-    ).join('') + `<tr style="border-top:2px solid var(--blue-dark)"><td style="font-weight:700">合計</td><td></td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td style="text-align:right;font-weight:700">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
+      `<tr><td>${esc(r.staffName)}</td><td class="excel-td-right">${esc(r.qualification)}</td><td class="excel-td-right">${r.visitCount}回</td><td class="excel-td-right-bold">${r.totalUnits}単位</td></tr>`
+    ).join('') + `<tr class="excel-foot-row"><td class="excel-foot-label">合計</td><td></td><td class="excel-td-right-bold">${rehabs.reduce((s,r)=>s+r.visitCount,0)}回</td><td class="excel-td-right-bold">${rehabs.reduce((s,r)=>s+r.totalUnits,0)}単位</td></tr>`;
     rehabSection.style.display = 'block';
   } else {
     rehabSection.style.display = 'none';

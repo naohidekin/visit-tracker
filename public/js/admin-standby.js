@@ -48,9 +48,9 @@ function getDateCategory(dateStr, customHols) {
 async function loadStandbyData() {
   const month = document.getElementById('standbyMonth').value;
   if (!month) return;
-  document.getElementById('standbySpinner').style.display = '';
-  document.getElementById('standbyContent').style.display = 'none';
-  document.getElementById('standbyEmpty').style.display = 'none';
+  document.getElementById('standbySpinner').classList.remove('d-none');
+  document.getElementById('standbyContent').classList.add('d-none');
+  document.getElementById('standbyEmpty').classList.add('d-none');
   try {
     const [staffRes, recRes] = await Promise.all([
       fetch('/api/admin/standby/eligible-staff').then(r => r.json()),
@@ -69,7 +69,7 @@ async function loadStandbyData() {
     console.error('standby load error:', e);
     showToast('待機データの読み込みに失敗しました');
   }
-  document.getElementById('standbySpinner').style.display = 'none';
+  document.getElementById('standbySpinner').classList.add('d-none');
 }
 
 function renderStandbyTable() {
@@ -88,11 +88,11 @@ function renderStandbyTable() {
     const selectedStaff = recordMap[dateStr] || '';
     const isRainy = rainySet.has(dateStr);
 
-    let rowBg = '';
-    if (category === '日曜' || category === '祝日') rowBg = 'background:#fff0f0;';
-    else if (category === '土曜') rowBg = 'background:#f0f4ff;';
+    let rowClass = '';
+    if (category === '日曜' || category === '祝日') rowClass = 'standby-row-holiday';
+    else if (category === '土曜') rowClass = 'standby-row-saturday';
 
-    const dowColor = dow === 0 || category === '祝日' ? 'color:#c0392b;' : dow === 6 ? 'color:#2E75B6;' : '';
+    const dowClass = dow === 0 || category === '祝日' ? 'dow-red' : dow === 6 ? 'dow-blue' : '';
 
     let optionsHtml = '<option value="">--</option>';
     for (const s of standbyEligibleStaff) {
@@ -103,24 +103,24 @@ function renderStandbyTable() {
     const displayDate = (d.getMonth() + 1) + '/' + d.getDate();
     const feeDisplay = selectedStaff ? '¥' + fee.toLocaleString() : '-';
 
-    html += `<tr style="${rowBg}">
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;font-size:14px;white-space:nowrap">${displayDate}</td>
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center;${dowColor}font-weight:600">${dowName}</td>
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center;font-size:13px">${category}</td>
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4">
-        <select data-action="standby-select" data-date="${dateStr}" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:inherit">
+    html += `<tr class="${rowClass}">
+      <td class="standby-td-date">${displayDate}</td>
+      <td class="standby-td-dow ${dowClass}">${dowName}</td>
+      <td class="standby-td-cat">${category}</td>
+      <td class="standby-td">
+        <select data-action="standby-select" data-date="${dateStr}" class="standby-select">
           ${optionsHtml}
         </select>
       </td>
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:right;font-size:14px;font-weight:600">${feeDisplay}</td>
-      <td style="padding:5px 6px;border-bottom:1px solid #eef0f4;text-align:center">
-        <span data-action="rainy-toggle" data-date="${dateStr}" data-rainy="${isRainy ? '1' : '0'}" style="cursor:pointer;font-size:18px;user-select:none;line-height:1">${isRainy ? '✅' : '⬜'}</span>
+      <td class="standby-td-fee">${feeDisplay}</td>
+      <td class="standby-td-rainy">
+        <span data-action="rainy-toggle" data-date="${dateStr}" data-rainy="${isRainy ? '1' : '0'}" class="rainy-toggle">${isRainy ? '✅' : '⬜'}</span>
       </td>
     </tr>`;
   }
   document.getElementById('standbyBody').innerHTML = html;
-  document.getElementById('standbyContent').style.display = '';
-  document.getElementById('standbyCSVBtn').style.display = '';
+  document.getElementById('standbyContent').classList.remove('d-none');
+  document.getElementById('standbyCSVBtn').classList.remove('d-none');
 
   // 雨の日集計を読み込み
   const month = document.getElementById('standbyMonth').value;
@@ -197,17 +197,17 @@ async function loadStandbySummary(month) {
     const summaryBody = document.getElementById('standbySummaryBody');
     const summaryFoot = document.getElementById('standbySummaryFoot');
     if (!data.summary || data.summary.length === 0) {
-      summaryBody.innerHTML = '<tr><td colspan="5" style="padding:8px;text-align:center;color:#999">待機記録なし</td></tr>';
+      summaryBody.innerHTML = '<tr><td colspan="5" class="empty-msg">待機記録なし</td></tr>';
       summaryFoot.innerHTML = '';
       return;
     }
     summaryBody.innerHTML = data.summary.map(s => `
       <tr>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;font-weight:600">${esc(s.name)}</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.weekday}日</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.saturday}日</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.sundayHoliday}日</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:right;font-weight:700">¥${s.total.toLocaleString()}</td>
+        <td class="summary-td-name">${esc(s.name)}</td>
+        <td class="summary-td-center">${s.weekday}日</td>
+        <td class="summary-td-center">${s.saturday}日</td>
+        <td class="summary-td-center">${s.sundayHoliday}日</td>
+        <td class="summary-td-right">¥${s.total.toLocaleString()}</td>
       </tr>
     `).join('');
     const totals = data.summary.reduce((a, s) => ({
@@ -217,12 +217,12 @@ async function loadStandbySummary(month) {
       total: a.total + s.total,
     }), { weekday: 0, saturday: 0, sundayHoliday: 0, total: 0 });
     summaryFoot.innerHTML = `
-      <tr style="background:#f0f4f8;font-weight:800">
-        <td style="padding:6px;border-top:2px solid var(--border)">合計</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.weekday}日</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.saturday}日</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totals.sundayHoliday}日</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:right">¥${totals.total.toLocaleString()}</td>
+      <tr class="summary-foot-row">
+        <td class="td-foot">合計</td>
+        <td class="td-foot">${totals.weekday}日</td>
+        <td class="td-foot">${totals.saturday}日</td>
+        <td class="td-foot">${totals.sundayHoliday}日</td>
+        <td class="td-foot-right">¥${totals.total.toLocaleString()}</td>
       </tr>
     `;
   } catch (e) {
@@ -238,58 +238,58 @@ async function loadRainySummary(month) {
   const foot = document.getElementById('rainySummaryFoot');
 
   if (lastRainyDays.length === 0) {
-    table.style.display = 'none';
-    loading.style.display = 'none';
-    empty.style.display = '';
+    table.classList.add('d-none');
+    loading.classList.add('d-none');
+    empty.classList.remove('d-none');
     return;
   }
 
-  empty.style.display = 'none';
-  table.style.display = 'none';
-  loading.style.display = '';
+  empty.classList.add('d-none');
+  table.classList.add('d-none');
+  loading.classList.remove('d-none');
 
   try {
     const res = await fetch('/api/admin/rainy/summary?month=' + month);
     const data = await res.json();
-    loading.style.display = 'none';
+    loading.classList.add('d-none');
 
     if (!data.summary || data.summary.length === 0) {
-      body.innerHTML = '<tr><td colspan="3" style="padding:8px;text-align:center;color:#999">出勤者データなし（雨の日: ' + data.rainyDayCount + '日）</td></tr>';
+      body.innerHTML = '<tr><td colspan="3" class="empty-msg">出勤者データなし（雨の日: ' + data.rainyDayCount + '日）</td></tr>';
       foot.innerHTML = '';
-      table.style.display = '';
+      table.classList.remove('d-none');
       return;
     }
 
     body.innerHTML = data.summary.map(s => `
       <tr>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;font-weight:600">${esc(s.name)}</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:center">${s.days}日</td>
-        <td style="padding:6px;border-bottom:1px solid #eef0f4;text-align:right;font-weight:700">¥${s.amount.toLocaleString()}</td>
+        <td class="summary-td-name">${esc(s.name)}</td>
+        <td class="summary-td-center">${s.days}日</td>
+        <td class="summary-td-right">¥${s.amount.toLocaleString()}</td>
       </tr>
     `).join('');
 
     const totalDays = data.summary.reduce((a, s) => a + s.days, 0);
     const totalAmount = data.summary.reduce((a, s) => a + s.amount, 0);
     foot.innerHTML = `
-      <tr style="background:#f0f4f8;font-weight:800">
-        <td style="padding:6px;border-top:2px solid var(--border)">合計（雨の日: ${data.rainyDayCount}日）</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:center">${totalDays}日</td>
-        <td style="padding:6px;border-top:2px solid var(--border);text-align:right">¥${totalAmount.toLocaleString()}</td>
+      <tr class="summary-foot-row">
+        <td class="td-foot">合計（雨の日: ${data.rainyDayCount}日）</td>
+        <td class="td-foot">${totalDays}日</td>
+        <td class="td-foot-right">¥${totalAmount.toLocaleString()}</td>
       </tr>
     `;
-    table.style.display = '';
+    table.classList.remove('d-none');
   } catch (e) {
-    loading.style.display = 'none';
+    loading.classList.add('d-none');
     empty.textContent = '雨の日集計の取得に失敗しました';
-    empty.style.display = '';
+    empty.classList.remove('d-none');
     console.error('rainy summary error:', e);
   }
 }
 
 function toggleCustomHolidays() {
   const sec = document.getElementById('customHolidaySection');
-  sec.style.display = sec.style.display === 'none' ? '' : 'none';
-  if (sec.style.display !== 'none') renderCustomHolidays();
+  sec.classList.toggle('d-none');
+  if (!sec.classList.contains('d-none')) renderCustomHolidays();
 }
 
 async function renderCustomHolidays() {
@@ -299,13 +299,13 @@ async function renderCustomHolidays() {
     lastCustomHolidays = data.customHolidays || [];
     const list = document.getElementById('customHolidayList');
     if (lastCustomHolidays.length === 0) {
-      list.innerHTML = '<span style="color:#999">追加祝日なし</span>';
+      list.innerHTML = '<span class="color-999">追加祝日なし</span>';
       return;
     }
     list.innerHTML = lastCustomHolidays.map(d => {
       const dt = new Date(d + 'T00:00:00');
       const label = (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + DOW_NAMES[dt.getDay()] + ')';
-      return `<span style="display:inline-block;background:#fff;border:1px solid #d4b84a;border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:14px">${label} <span data-action="remove-holiday" data-date="${esc(d)}" style="color:#c0392b;cursor:pointer;font-weight:700;margin-left:4px">&times;</span></span>`;
+      return `<span class="custom-holiday-tag">${label} <span data-action="remove-holiday" data-date="${esc(d)}" class="custom-holiday-remove">&times;</span></span>`;
     }).join('');
   } catch (e) {
     console.error('custom holidays error:', e);

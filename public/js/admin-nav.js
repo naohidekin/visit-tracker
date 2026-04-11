@@ -118,8 +118,8 @@ async function loadDashboard() {
       const pending = Array.isArray(schedules) ? schedules.filter(s => !s.confirmed).length : 0;
       document.getElementById('dashSchedules').textContent = pending;
       const badge = document.getElementById('badgeSchedules');
-      if (pending > 0) { badge.textContent = pending; badge.style.display = ''; }
-      else { badge.style.display = 'none'; }
+      if (pending > 0) { badge.textContent = pending; badge.classList.remove('d-none'); }
+      else { badge.classList.add('d-none'); }
     }
   } catch {}
   try {
@@ -131,8 +131,8 @@ async function loadDashboard() {
         ? leave.filter(r => r.status === 'pending').length : 0;
       document.getElementById('dashLeave').textContent = pendingLeave;
       const badge = document.getElementById('badgeLeave');
-      if (pendingLeave > 0) { badge.textContent = pendingLeave; badge.style.display = ''; }
-      else { badge.style.display = 'none'; }
+      if (pendingLeave > 0) { badge.textContent = pendingLeave; badge.classList.remove('d-none'); }
+      else { badge.classList.add('d-none'); }
     }
   } catch {}
   // スタッフ数
@@ -170,21 +170,21 @@ async function loadDashChangelog() {
     const data = await res.json();
     const notices = data.notices || [];
     if (!notices.length) {
-      el.innerHTML = '<div style="color:var(--muted);font-size:13px">管理者向けの仕様変更お知らせはありません</div>';
+      el.innerHTML = '<div class="changelog-fallback">管理者向けの仕様変更お知らせはありません</div>';
       return;
     }
     el.innerHTML = notices.map(n => {
       const d = n.date || '';
       const m = d ? `${parseInt(d.slice(5,7))}月${parseInt(d.slice(8,10))}日` : '';
-      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-weight:600;font-size:14px">${esc(n.title)}</span>
-          <span style="font-size:12px;color:var(--muted);white-space:nowrap;margin-left:8px">${m}</span>
+      return `<div class="changelog-item">
+        <div class="changelog-header">
+          <span class="changelog-title">${esc(n.title)}</span>
+          <span class="changelog-date">${m}</span>
         </div>
-        <div style="font-size:13px;color:#555;white-space:pre-wrap;line-height:1.5">${esc(n.body)}</div>
+        <div class="changelog-body">${esc(n.body)}</div>
       </div>`;
     }).join('');
   } catch {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px">読み込みに失敗しました</div>';
+    el.innerHTML = '<div class="changelog-fallback">読み込みに失敗しました</div>';
   }
 }

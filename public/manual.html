@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>使い方 | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
+  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--radius:16px;--shadow:0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.08)}
@@ -82,6 +83,8 @@
     .sub-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:8px}
 
     .copyright{font-size:11px;color:#b0b8cc;text-align:center;padding:20px 16px;letter-spacing:.02em}
+    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
+    .unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 5px}
   </style>
 </head>
 <body>
@@ -103,7 +106,7 @@
       <div class="menu-drawer" id="menuDrawer">
         <a href="/">入力画面</a>
         <a href="/history">月次実績</a>
-        <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
+        <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge"></span></span></a>
         <a href="/change-password">PW変更</a>
         <a href="/manual">使い方</a>
         <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -212,7 +215,7 @@
     <div class="section-card" id="sec-nurse">
       <div class="section-head"><span class="icon">💉</span><h2>看護師の入力方法</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:10px">「介護」「医療」それぞれの<b>合計訪問時間（時間単位）</b>を選択します。</div>
+        <div class="step-desc mb-10">「介護」「医療」それぞれの<b>合計訪問時間（時間単位）</b>を選択します。</div>
         <table class="calc-table">
           <tr><th>訪問時間</th><th>入力する値</th></tr>
           <tr><td>30分</td><td>0.5</td></tr>
@@ -228,8 +231,8 @@
     <div class="section-card" id="sec-rehab">
       <div class="section-head"><span class="icon">🏃</span><h2>リハビリの入力方法</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:6px"><b>「介護」は10分を「1単位」</b>として単位数を入力します。</div>
-        <div class="step-desc" style="margin-bottom:10px"><b>「医療」は1件「4単位」</b>として計算してください。</div>
+        <div class="step-desc mb-6"><b>「介護」は10分を「1単位」</b>として単位数を入力します。</div>
+        <div class="step-desc mb-10"><b>「医療」は1件「4単位」</b>として計算してください。</div>
         <div class="point-box"><p>例）介護280分 + 医療1件の場合：28単位 + 4単位 ＝ 32単位と入力</p></div>
       </div>
     </div>
@@ -238,7 +241,7 @@
     <div class="section-card" id="sec-schedule">
       <div class="section-head"><span class="icon">📝</span><h2>予定の登録・確定</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録できます。</div>
+        <div class="step-desc mb-12">翌日の予定訪問件数が決まっている場合、前日のうちに「予定」として登録できます。</div>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
@@ -262,7 +265,7 @@
     <div class="section-card" id="sec-history">
       <div class="section-head"><span class="icon">📊</span><h2>月次実績の確認</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">メニューの「月次実績」から、月ごとの訪問記録を確認できます。</div>
+        <div class="step-desc mb-12">メニューの「月次実績」から、月ごとの訪問記録を確認できます。</div>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
@@ -325,10 +328,10 @@
     <div class="section-card" id="sec-leave">
       <div class="section-head"><span class="icon">🌴</span><h2>有給管理</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">メニューの「有給管理」から、有給残日数の確認や休暇申請ができます。</div>
+        <div class="step-desc mb-12">メニューの「有給管理」から、有給残日数の確認や休暇申請ができます。</div>
 
         <div class="sub-title">残日数の確認</div>
-        <div class="step-desc" style="margin-bottom:10px">画面上部に現在の有給残日数が大きく表示されます。内訳として年間付与・前年繰越・使用済み日数なども確認できます。</div>
+        <div class="step-desc mb-10">画面上部に現在の有給残日数が大きく表示されます。内訳として年間付与・前年繰越・使用済み日数なども確認できます。</div>
 
         <div class="sub-section">
           <div class="sub-title">休暇を申請する</div>
@@ -387,7 +390,7 @@
     <div class="section-card" id="sec-oncall">
       <div class="section-head"><span class="icon">📞</span><h2>オンコール記録</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">オンコール対象のスタッフはメニューに「オンコール」が表示されます。当番の記録を入力・管理できます。</div>
+        <div class="step-desc mb-12">オンコール対象のスタッフはメニューに「オンコール」が表示されます。当番の記録を入力・管理できます。</div>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
@@ -427,7 +430,7 @@
     <div class="section-card" id="sec-notices">
       <div class="section-head"><span class="icon">📢</span><h2>お知らせ</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">管理者からのお知らせやシステム通知を確認できます。</div>
+        <div class="step-desc mb-12">管理者からのお知らせやシステム通知を確認できます。</div>
         <div class="step">
           <div class="step-num">1</div>
           <div class="step-content">
@@ -468,7 +471,7 @@
 
         <div class="sub-section">
           <div class="sub-title">Face ID を設定する</div>
-          <div class="step-desc" style="margin-bottom:10px">パスワード変更画面の上部に「Face ID」セクションがあります。</div>
+          <div class="step-desc mb-10">パスワード変更画面の上部に「Face ID」セクションがあります。</div>
           <div class="step">
             <div class="step-num">1</div>
             <div class="step-content">
@@ -493,7 +496,7 @@
     <div class="section-card" id="sec-pwa">
       <div class="section-head"><span class="icon">📱</span><h2>ホーム画面に追加</h2></div>
       <div class="section-body">
-        <div class="step-desc" style="margin-bottom:12px">このアプリはホーム画面に追加すると、アプリのように使えます。</div>
+        <div class="step-desc mb-12">このアプリはホーム画面に追加すると、アプリのように使えます。</div>
 
         <div class="sub-title">iPhone（Safari）の場合</div>
         <div class="step">

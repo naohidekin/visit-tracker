@@ -8,8 +8,7 @@ function renderHealthResult(result) {
   const lastRun = document.getElementById('healthLastRun');
 
   badge.textContent = result.ok ? '✅ 正常' : '❌ 異常あり';
-  badge.style.background = result.ok ? '#d4edda' : '#f8d7da';
-  badge.style.color       = result.ok ? '#155724' : '#721c24';
+  badge.className = result.ok ? 'health-badge-ok' : 'health-badge-fail';
 
   if (result.checkedAt) {
     const dt = new Date(result.checkedAt);
@@ -17,10 +16,10 @@ function renderHealthResult(result) {
   }
 
   body.innerHTML = (result.checks || []).map(c => `
-    <tr style="border-bottom:1px solid #f0f4f8">
-      <td style="padding:7px 10px">${esc(c.name)}</td>
-      <td style="padding:7px 10px;text-align:center">${c.ok ? '✅' : '❌'}</td>
-      <td style="padding:7px 10px;color:${c.ok ? 'var(--muted)' : '#c0392b'}">${esc(c.detail)}</td>
+    <tr class="health-row">
+      <td class="health-td">${esc(c.name)}</td>
+      <td class="health-td-center">${c.ok ? '✅' : '❌'}</td>
+      <td class="health-td ${c.ok ? 'color-muted' : 'color-danger'}">${esc(c.detail)}</td>
     </tr>`).join('');
 
   panel.style.display = 'block';
@@ -108,7 +107,7 @@ function loadAuditLog(page) {
     .then(data => {
       const tbody = document.getElementById('auditLogBody');
       if (data.entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--muted)">ログがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-msg">ログがありません</td></tr>';
       } else {
         tbody.innerHTML = data.entries.map(e => {
           const dt = new Date(e.timestamp);
@@ -117,10 +116,10 @@ function loadAuditLog(page) {
           const actionLabel = esc(AUDIT_ACTION_LABELS[e.action] || e.action);
           const targetStr = esc(e.target?.label || '');
           return `<tr>
-            <td style="padding:5px 6px;white-space:nowrap">${timeStr}</td>
-            <td style="padding:5px 6px;white-space:nowrap">${actorStr}</td>
-            <td style="padding:5px 6px;white-space:nowrap">${actionLabel}</td>
-            <td style="padding:5px 6px">${targetStr}</td>
+            <td class="audit-td-nowrap">${timeStr}</td>
+            <td class="audit-td-nowrap">${actorStr}</td>
+            <td class="audit-td-nowrap">${actionLabel}</td>
+            <td class="audit-td">${targetStr}</td>
           </tr>`;
         }).join('');
       }
@@ -141,9 +140,9 @@ function verifyAuditChain() {
     .then(data => {
       const el = document.getElementById('auditVerifyResult');
       if (data.valid) {
-        el.innerHTML = `<span style="color:var(--ok)">✅ 整合性OK (${data.entries}件)</span>`;
+        el.innerHTML = `<span class="verify-ok">✅ 整合性OK (${data.entries}件)</span>`;
       } else {
-        el.innerHTML = `<span style="color:var(--danger)">❌ 不整合 ${data.errors.length}件検出</span>`;
+        el.innerHTML = `<span class="verify-fail">❌ 不整合 ${data.errors.length}件検出</span>`;
       }
     });
 }
