@@ -106,16 +106,29 @@ app.use((req, res, next) => {
     const cookieHeader = req.headers.cookie || '';
     cookieHeader.split(';').forEach(c => {
       const [k, ...v] = c.trim().split('=');
-      if (k) req.cookies[k] = v.join('=');
+      const key = k ? k.trim() : '';
+      if (!key) return;
+      const raw = v.join('=');
+      if (raw.length > 4096) return;
+      try {
+        req.cookies[key] = decodeURIComponent(raw);
+      } catch {
+        req.cookies[key] = raw;
+      }
     });
   }
   next();
 });
 const CSRF_EXEMPT = new Set([
+  // ログイン系: セッション未確立のためCSRFトークンが存在しない
   '/api/login', '/api/admin/login', '/api/admin/check',
+  // WebAuthn認証: ログインフローの一部でセッション未確立
   '/api/admin/webauthn/login-options', '/api/admin/webauthn/login-verify',
+  // パスワードリセット: 未認証ユーザーが使用するためトークン不在
   '/api/forgot-password', '/api/reset-password',
+  // WebAuthn（スタッフ側）: ログインフローの一部
   '/api/webauthn/login-options', '/api/webauthn/login-verify',
+  // WebAuthn登録オプション: challenge生成のみ（register-verifyはCSRF必須）
   '/api/webauthn/register-options',
 ]);
 app.use((req, res, next) => {

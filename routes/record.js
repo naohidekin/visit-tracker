@@ -6,7 +6,7 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
-const { validateUnitValue, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
+const { validateUnitValue, validateNum, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
 const { DATA_START_ROW, WD } = require('../lib/constants');
@@ -150,10 +150,13 @@ router.post('/api/record', requireStaff, async (req, res) => {
 router.get('/api/monthly-stats', requireStaff, async (req, res) => {
   const { year, month } = req.query;
   if (!year || !month) return res.status(400).json({ error: 'パラメータが不足しています' });
+  const yv = validateNum(year, { min: 2020, max: 2100 });
+  const mv = validateNum(month, { min: 1, max: 12 });
+  if (!yv.valid || !mv.valid) return res.status(400).json({ error: '年月の値が不正です' });
 
-  const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+  const daysInMonth = new Date(yv.value, mv.value, 0).getDate();
   const endRow      = DATA_START_ROW + daysInMonth - 1;
-  const sid         = getSpreadsheetIdForYear(Number(year));
+  const sid         = getSpreadsheetIdForYear(yv.value);
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -164,7 +167,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
     if (staff.type === 'nurse') {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
-        range: `${month}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
+        range: `${mv.value}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
       }));
       const rows = resp.data.values ?? [];
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
@@ -179,7 +182,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
       const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline     = Math.round(rawLine * workRatio * 100) / 100;
-      const expectedDays = getExpectedWorkingDays(staff.id, Number(year), Number(month));
+      const expectedDays = getExpectedWorkingDays(staff.id, yv.value, mv.value);
       const targetTotal = Math.round(iline * expectedDays * 10) / 10;
       const total = total_kaigo + total_iryo;
       res.json({ total_kaigo, total_iryo, total, working_days,
@@ -189,7 +192,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
     } else {
       const resp = await sheetsRetry(() => api.spreadsheets.values.get({
         spreadsheetId: sid,
-        range: `${month}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
+        range: `${mv.value}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
       }));
       const rows = resp.data.values ?? [];
       let total_units = 0, working_days = 0;
@@ -202,7 +205,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
       const rawLine2  = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
       const workRatio2 = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline2    = Math.round(rawLine2 * workRatio2 * 100) / 100;
-      const expectedDays2 = getExpectedWorkingDays(staff.id, Number(year), Number(month));
+      const expectedDays2 = getExpectedWorkingDays(staff.id, yv.value, mv.value);
       const targetTotal2 = Math.round(iline2 * expectedDays2 * 10) / 10;
       const over_units2 = Math.max(0, total_units - targetTotal2);
       const incentive_amount2 = Math.floor(over_units2) * 500;
@@ -220,7 +223,10 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
 
 // ─── 締め期間（16日〜15日）日別明細 ─────────────────────────────
 async function handleBillingDetail(req, res) {
-  const y = Number(req.query.year), m = Number(req.query.month);
+  const yv = validateNum(req.query.year, { min: 2020, max: 2100 });
+  const mv = validateNum(req.query.month, { min: 1, max: 12 });
+  if (!yv.valid || !mv.valid) return res.status(400).json({ error: '年月の値が不正です' });
+  const y = yv.value, m = mv.value;
   const prevM = m === 1 ? 12 : m - 1;
   const prevYear = m === 1 ? y - 1 : y;
   const daysInPrev = new Date(prevYear, prevM, 0).getDate();
@@ -340,8 +346,10 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
 
   if (mode === 'billing') return handleBillingDetail(req, res);
 
-
-  const y   = Number(year), m = Number(month);
+  const yv = validateNum(year, { min: 2020, max: 2100 });
+  const mv = validateNum(month, { min: 1, max: 12 });
+  if (!yv.valid || !mv.valid) return res.status(400).json({ error: '年月の値が不正です' });
+  const y = yv.value, m = mv.value;
   const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;

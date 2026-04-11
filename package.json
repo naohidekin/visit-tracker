@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test-leave.js && node test-admin-init.js && node test-api.js",
+    "test": "node test-leave.js && node test-admin-init.js && node test-api.js && node test-regression.js",
     "test:unit": "node test-leave.js && node test-admin-init.js",
     "test:api": "node test-api.js",
     "security-check": "node scripts/security-check.js"
