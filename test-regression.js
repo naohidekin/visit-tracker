@@ -177,6 +177,75 @@ async function runTests(app) {
       .send({ date: '2026-04-01', staffId: 't_nurse', kaigo: 1 });
     assert.strictEqual(res.status, 401);
   });
+
+  clearRateLimits();
+  // ────────────────────────────────────────────────────────────
+  console.log('\n📌 権限境界テスト');
+
+  await test('スタッフが他人の有給を承認できない', async () => {
+    const { agent, csrfToken } = await loginAs(app, 't_nurse', 'nurse123');
+    const res = await agent.post('/api/admin/leave/requests/nonexistent/approve')
+      .set('x-csrf-token', csrfToken)
+      .send({ comment: 'test' });
+    assert.strictEqual(res.status, 401);
+  });
+
+  await test('重複スタッフID作成 → 400', async () => {
+    const { agent, csrfToken } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const res = await agent.post('/api/admin/staff')
+      .set('x-csrf-token', csrfToken)
+      .send({ name: '重複テスト', type: 'office', loginId: 't_nurse', initialPw: 'password123' });
+    assert.strictEqual(res.status, 400);
+    assert.ok(res.body.error.includes('既に使用'), `エラーに「既に使用」を含む: ${res.body.error}`);
+  });
+
+  await test('存在しないスタッフの更新 → 404', async () => {
+    const { agent, csrfToken } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const res = await agent.patch('/api/admin/staff/nonexistent')
+      .set('x-csrf-token', csrfToken)
+      .send({ name: 'テスト' });
+    assert.strictEqual(res.status, 404);
+  });
+
+  await test('存在しないスタッフのアーカイブ → 404', async () => {
+    const { agent, csrfToken } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const res = await agent.patch('/api/admin/staff/nonexistent/archive')
+      .set('x-csrf-token', csrfToken);
+    assert.strictEqual(res.status, 404);
+  });
+
+  clearRateLimits();
+  // ────────────────────────────────────────────────────────────
+  console.log('\n📌 例外系テスト');
+
+  await test('不正なmonthパラメータ → 400', async () => {
+    const { agent } = await loginAs(app, 't_nurse', 'nurse123');
+    const res = await agent.get('/api/monthly-stats?year=2026&month=13');
+    assert.strictEqual(res.status, 400);
+  });
+
+  await test('不正なyearパラメータ → 400', async () => {
+    const { agent } = await loginAs(app, 't_nurse', 'nurse123');
+    const res = await agent.get('/api/monthly-stats?year=abc&month=4');
+    assert.strictEqual(res.status, 400);
+  });
+
+  clearRateLimits();
+  // ────────────────────────────────────────────────────────────
+  console.log('\n📌 WebAuthn DB層テスト');
+
+  await test('WebAuthn credential保存・取得', async () => {
+    const { loadWebAuthnData, saveWebAuthnData } = require('./lib/data');
+    const testCred = { credentialID: 'test-cred-001', staffId: 't_nurse', id: 'test-id', publicKey: 'pk', counter: 0 };
+    saveWebAuthnData({ credentials: [testCred] });
+    const loaded = loadWebAuthnData();
+    assert.strictEqual(loaded.credentials.length, 1);
+    assert.strictEqual(loaded.credentials[0].credentialID, 'test-cred-001');
+    // cleanup
+    saveWebAuthnData({ credentials: [] });
+    const empty = loadWebAuthnData();
+    assert.strictEqual(empty.credentials.length, 0);
+  });
 }
 
 // ── メイン ────────────────────────────────────────────────────────

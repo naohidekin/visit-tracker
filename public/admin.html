@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>にこっとweb App管理ポータル | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
   <link rel="stylesheet" href="/css/utilities.css">
@@ -1306,14 +1306,14 @@
       if (!confirm('このスタッフに管理者権限を付与しますか？')) return;
       const res = await apiFetch(`/api/admin/staff/${id}/grant-admin`, { method: 'POST' });
       const data = await res.json();
-      if (data.success) { loadStaff(); } else { alert(data.error); }
+      if (data.success) { loadStaff(); } else { showToast(data.error); }
     }
     if (e.target.closest('.revoke-admin-btn')) {
       const id = e.target.closest('.revoke-admin-btn').dataset.id;
       if (!confirm('このスタッフの管理者権限を剥奪しますか？')) return;
       const res = await apiFetch(`/api/admin/staff/${id}/revoke-admin`, { method: 'POST' });
       const data = await res.json();
-      if (data.success) { loadStaff(); } else { alert(data.error); }
+      if (data.success) { loadStaff(); } else { showToast(data.error); }
     }
   });
 

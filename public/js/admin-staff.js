@@ -157,14 +157,14 @@ async function saveStaffRow(id) {
   const furi_f  = document.getElementById(`edit-furi-f-${id}`).value.trim();
   const furi_g  = document.getElementById(`edit-furi-g-${id}`).value.trim();
   const email   = document.getElementById(`edit-email-${id}`).value.trim();
-  if (!name) { alert('氏名を入力してください'); return; }
+  if (!name) { showToast('氏名を入力してください'); return; }
   const res  = await apiFetch(`/api/admin/staff/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, furigana_family: furi_f, furigana_given: furi_g, email: email || null }),
   });
   const data = await res.json();
-  if (!data.success) { alert(data.error || '保存に失敗しました'); return; }
+  if (!data.success) { showToast(data.error || '保存に失敗しました'); return; }
   staffList = data.staff;
   renderTable();
 }
