@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>オンコール | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -100,21 +99,6 @@
 
     .picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .picker-col-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-align:center}
-    .summary-main{text-align:center;margin-bottom:4px}
-    .summary-total-label{font-size:14px;font-weight:600;opacity:.8}
-    .summary-total-num{font-size:32px;font-weight:900;line-height:1;margin-left:4px}
-    .summary-total-unit{font-size:14px;font-weight:600;margin-left:3px}
-    .summary-details{display:flex;justify-content:center;gap:20px}
-    .summary-detail-item{text-align:center}
-    .summary-detail-label{font-size:10px;opacity:.7}
-    .summary-detail-val{font-size:13px;font-weight:700;margin-left:3px}
-    .summary-detail-unit{font-size:10px;opacity:.8}
-    .picker-unit-label{font-size:12px;font-weight:500;color:var(--muted);margin-left:3px}
-    .picker-btn-compact{padding:10px 12px;font-size:16px}
-    .form-input-compact{padding:8px 12px;font-size:14px}
-    .btn-submit-compact{margin-top:10px;padding:12px}
-    .gauge-bar-init{width:0%}
-    .gauge-bike-init{left:8%}
   </style>
 </head>
 <body>
@@ -136,7 +120,7 @@
     <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge d-none" id="menuBadge"></span></span></a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -148,27 +132,27 @@
 <div class="container">
   <div class="spinner" id="spinner">読み込み中...</div>
 
-  <div class="month-selector d-none" id="monthSelector">
+  <div class="month-selector" id="monthSelector" style="display:none">
     <select id="monthSelect"></select>
   </div>
 
-  <div class="summary-card d-none" id="summaryCard">
+  <div class="summary-card" id="summaryCard" style="display:none">
     <div class="summary-title">月間オンコール実績</div>
-    <div class="summary-main">
-      <span class="summary-total-label">合計</span><span class="summary-total-num" id="sumTime">0.0</span><span class="summary-total-unit">時間</span>
+    <div style="text-align:center;margin-bottom:4px">
+      <span style="font-size:14px;font-weight:600;opacity:.8">合計</span><span style="font-size:32px;font-weight:900;line-height:1;margin-left:4px" id="sumTime">0.0</span><span style="font-size:14px;font-weight:600;margin-left:3px">時間</span>
     </div>
-    <div class="summary-details">
-      <div class="summary-detail-item"><span class="summary-detail-label">交通費</span><span class="summary-detail-val" id="sumTransport">0</span><span class="summary-detail-unit">件</span></div>
-      <div class="summary-detail-item"><span class="summary-detail-label">担当日数</span><span class="summary-detail-val" id="sumDays">0</span><span class="summary-detail-unit">日</span></div>
+    <div style="display:flex;justify-content:center;gap:20px">
+      <div style="text-align:center"><span style="font-size:10px;opacity:.7">交通費</span><span style="font-size:13px;font-weight:700;margin-left:3px" id="sumTransport">0</span><span style="font-size:10px;opacity:.8">件</span></div>
+      <div style="text-align:center"><span style="font-size:10px;opacity:.7">担当日数</span><span style="font-size:13px;font-weight:700;margin-left:3px" id="sumDays">0</span><span style="font-size:10px;opacity:.8">日</span></div>
     </div>
   </div>
 
-  <div class="card d-none" id="gaugeCard">
+  <div class="card" id="gaugeCard" style="display:none">
     <div class="card-title">オンコール累計時間</div>
     <div class="gauge-wrap">
       <div class="gauge-bar-track">
-        <div class="gauge-bar-fill gauge-bar-init" id="gaugeBar"></div>
-        <div class="gauge-bike gauge-bike-init" id="gaugeBike">
+        <div class="gauge-bar-fill" id="gaugeBar" style="width:0%"></div>
+        <div class="gauge-bike" id="gaugeBike" style="left:8%">
           <svg viewBox="0 0 40 28" fill="none" xmlns="http://www.w3.org/2000/svg">
             <!-- 後輪 -->
             <circle cx="9" cy="19" r="7.5" stroke="#1F497D" stroke-width="2" fill="none"/>
@@ -190,40 +174,40 @@
     </div>
   </div>
 
-  <div class="card d-none" id="formCard">
+  <div class="card" id="formCard" style="display:none">
     <div class="card-title">オンコール入力</div>
-    <div class="mb-8">
-      <input type="date" class="form-input form-input-compact" id="inputDate">
+    <div style="margin-bottom:8px">
+      <input type="date" class="form-input" id="inputDate" style="padding:8px 12px;font-size:14px">
     </div>
     <div class="picker-grid">
       <div>
         <div class="picker-col-label">合計時間</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn picker-btn-compact" id="timeBtn">
-            <span><span id="timeDisplay" class="val-empty">0.0</span><span class="picker-unit-label">時間</span></span>
+          <button type="button" class="picker-btn" id="timeBtn" style="padding:10px 12px;font-size:16px">
+            <span><span id="timeDisplay" class="val-empty">0.0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">時間</span></span>
             <span class="chevron">▼</span>
           </button>
-          <div class="picker-dropdown d-none" id="timeList"></div>
+          <div class="picker-dropdown" id="timeList" style="display:none"></div>
         </div>
       </div>
       <div>
         <div class="picker-col-label">交通費</div>
         <div class="picker-wrap">
-          <button type="button" class="picker-btn picker-btn-compact" id="transportBtn">
-            <span><span id="transportDisplay" class="val-empty">0</span><span class="picker-unit-label">件</span></span>
+          <button type="button" class="picker-btn" id="transportBtn" style="padding:10px 12px;font-size:16px">
+            <span><span id="transportDisplay" class="val-empty">0</span><span style="font-size:12px;font-weight:500;color:var(--muted);margin-left:3px">件</span></span>
             <span class="chevron">▼</span>
           </button>
-          <div class="picker-dropdown d-none" id="transportList"></div>
+          <div class="picker-dropdown" id="transportList" style="display:none"></div>
         </div>
       </div>
     </div>
-    <button class="btn-submit btn-submit-compact" id="submitBtn">登録する</button>
+    <button class="btn-submit" id="submitBtn" style="margin-top:10px;padding:12px">登録する</button>
   </div>
 
-  <div class="card d-none" id="historyCard">
+  <div class="card" id="historyCard" style="display:none">
     <div class="card-title">入力履歴</div>
     <div id="recordsList"></div>
-    <div class="empty-msg d-none" id="emptyMsg">この月のオンコール記録はありません</div>
+    <div class="empty-msg" id="emptyMsg" style="display:none">この月のオンコール記録はありません</div>
   </div>
 </div>
 </div>

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>月次実績 | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -130,11 +129,6 @@
     .incentive-note{font-size:10px;color:#a16207;text-align:center;margin-top:6px;padding-top:6px;border-top:1px dashed #e5b94e}
     .collapsible-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease;max-height:300px;opacity:1}
     .collapsible-body.collapsed{max-height:0;opacity:0}
-    .menu-link-wrap{display:flex;align-items:center;justify-content:space-between}
-    .unread-badge{background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 5px}
-    .hist-mode-toggle{display:flex;gap:0;margin-top:10px}
-    .chart-toggle-wrap{cursor:pointer;display:flex;align-items:center;justify-content:space-between;-webkit-tap-highlight-color:transparent}
-    .chart-arrow{font-size:11px;color:var(--muted)}
   </style>
   <script src="/vendor/chart.umd.js"></script>
   <script src="/vendor/chartjs-plugin-annotation.min.js"></script>
@@ -159,7 +153,7 @@
     <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge"></span></span></a>
+      <a href="/notices"><span style="display:flex;align-items:center;justify-content:space-between">お知らせ<span id="menuBadge" style="display:none;background:#e74c3c;color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;align-items:center;justify-content:center;padding:0 5px"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -168,7 +162,7 @@
   </div>
 </header>
 
-<div id="mainContent" class="container d-none">
+<div id="mainContent" class="container" style="display:none">
 
   <!-- 月選択 -->
   <div class="card">
@@ -176,29 +170,29 @@
     <div class="select-wrap">
       <select id="monthSelect"></select>
     </div>
-    <div class="hist-mode-toggle" id="histModeToggle">
-      <button id="histModeBilling" type="button" class="tab-active">締め期間</button>
-      <button id="histModeMonthly" type="button" class="tab-inactive">月次</button>
+    <div style="display:flex;gap:0;margin-top:10px" id="histModeToggle">
+      <button id="histModeBilling" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:8px 0 0 8px;font-size:14px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;font-family:inherit;transition:all .2s">締め期間</button>
+      <button id="histModeMonthly" type="button" style="flex:1;padding:8px 0;border:2px solid var(--blue);border-radius:0 8px 8px 0;font-size:14px;font-weight:700;cursor:pointer;background:#fff;color:var(--blue);font-family:inherit;transition:all .2s">月次</button>
     </div>
   </div>
 
-  <div id="loadingView" class="loading d-none">集計中...</div>
+  <div id="loadingView" class="loading" style="display:none">集計中...</div>
 
   <!-- 月次実績カード -->
-  <div id="statsCardSection" class="d-none">
+  <div id="statsCardSection" style="display:none">
     <div id="statsCard"></div>
   </div>
 
   <!-- インセンティブ見込カード -->
-  <div id="incentiveSection" class="d-none">
+  <div id="incentiveSection" style="display:none">
     <div id="incentiveCard"></div>
   </div>
 
   <!-- 月次グラフ -->
-  <div class="card d-none" id="chartSection">
-    <div class="section-title chart-toggle-wrap" id="chartToggle">
+  <div class="card" id="chartSection" style="display:none">
+    <div class="section-title" id="chartToggle" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;-webkit-tap-highlight-color:transparent">
       📊 日別訪問グラフ
-      <span id="chartArrow" class="chart-arrow">▼</span>
+      <span id="chartArrow" style="font-size:11px;color:var(--muted)">▼</span>
     </div>
     <div id="chartBody" class="collapsible-body collapsed">
       <div class="chart-container">
@@ -208,9 +202,9 @@
   </div>
 
   <!-- 日別明細 -->
-  <div class="card d-none" id="tableSection">
+  <div class="card" id="tableSection" style="display:none">
     <div class="section-title">日別明細</div>
-    <div class="prev-notice d-none" id="prevNotice">
+    <div class="prev-notice" id="prevNotice" style="display:none">
       ※ 締日（15日）以前の行は修正できません（締済）
     </div>
     <div class="table-wrap">

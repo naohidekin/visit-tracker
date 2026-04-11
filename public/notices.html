@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>お知らせ | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -63,7 +62,6 @@
     .source-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;margin-right:6px;vertical-align:middle}
     .source-badge.system{background:#fff3cd;color:#856404;border:1px solid #ffc107}
     .source-badge.admin{background:#e8f4fd;color:#1565c0;border:1px solid #90caf9}
-    .notice-title-wrap{flex:1;min-width:0}
 
     .empty-msg{text-align:center;color:var(--muted);font-size:14px;padding:40px 0}
     .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
@@ -88,7 +86,7 @@
     <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge d-none" id="menuBadge"></span></span></a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -100,7 +98,7 @@
 <div class="container">
   <div class="spinner" id="spinner">読み込み中...</div>
   <div id="noticesList"></div>
-  <div class="empty-msg d-none" id="emptyMsg">お知らせはありません</div>
+  <div class="empty-msg" id="emptyMsg" style="display:none">お知らせはありません</div>
 </div>
 </div>
 
@@ -154,7 +152,7 @@
       <div class="notice-card ${n.isRead ? '' : 'unread'}" data-id="${esc(n.id)}" data-read="${n.isRead ? 'true' : 'false'}">
         <div class="notice-header">
           ${n.isRead ? '<div class="read-dot"></div>' : '<div class="unread-dot"></div>'}
-          <div class="notice-title-wrap">
+          <div style="flex:1;min-width:0">
             <div class="notice-title">${n.source === 'system' ? '<span class="source-badge system">運営</span>' : ''}${esc(n.title)}</div>
           </div>
           <span class="notice-date">${formatDate(n.date)}</span>

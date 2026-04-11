@@ -34,10 +34,10 @@ async function loadAdminSchedules() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><strong>${esc(s.staffName)}</strong></td>
-        <td class="schedule-td-date">${fmtDateJP(s.date)}</td>
+        <td style="white-space:nowrap">${fmtDateJP(s.date)}</td>
         <td>${staffTypeBadge(s.jobType)}</td>
-        <td class="schedule-td-val">${valText}</td>
-        <td class="schedule-td-meta">${createdAt}</td>
+        <td style="font-size:14px">${valText}</td>
+        <td style="font-size:13px;color:var(--muted);white-space:nowrap">${createdAt}</td>
         <td><button class="btn btn-sm btn-danger" data-action="delete-schedule" data-id="${esc(s.id)}" data-name="${esc(s.staffName)}" data-date="${esc(s.date)}">削除</button></td>`;
       tbody.appendChild(tr);
     }
@@ -87,17 +87,17 @@ async function loadAdminNotices() {
   body.innerHTML = noticesCache.map(n => {
     const isSystem = n.source === 'system';
     const badge = isSystem
-      ? '<span class="notice-badge-system">運営</span>'
-      : '<span class="notice-badge-admin">管理者</span>';
-    const targetLabel = n.target === 'admin' ? '<span class="notice-target-admin">管理者</span>'
-      : n.target === 'staff' ? '<span class="notice-target-staff">スタッフ</span>'
-      : '<span class="notice-target-all">全員</span>';
+      ? '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fff3cd;color:#856404;border:1px solid #ffc107">運営</span>'
+      : '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f4fd;color:#1565c0;border:1px solid #90caf9">管理者</span>';
+    const targetLabel = n.target === 'admin' ? '<span style="font-size:12px;color:#7b1fa2">管理者</span>'
+      : n.target === 'staff' ? '<span style="font-size:12px;color:#1565c0">スタッフ</span>'
+      : '<span style="font-size:12px;color:#666">全員</span>';
     const btns = `<button class="btn-xs btn-edit" data-action="edit-notice" data-id="${esc(n.id)}">編集</button><button class="btn-xs btn-danger" data-action="delete-notice" data-id="${esc(n.id)}">削除</button>`;
     return `<tr>
       <td>${badge}</td>
       <td>${targetLabel}</td>
-      <td class="notice-title-cell">${esc(n.title)}</td>
-      <td class="notice-date-cell">${n.date || ''}</td>
+      <td style="font-size:13px;font-weight:600">${esc(n.title)}</td>
+      <td style="white-space:nowrap;font-size:14px;color:var(--muted)">${n.date || ''}</td>
       <td class="td-btns">${btns}</td>
     </tr>`;
   }).join('');

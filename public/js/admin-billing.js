@@ -79,7 +79,7 @@ async function loadAdminMonthly() {
     renderAdminTable(currentAdminData);
     document.getElementById('adminMonthlySpinner').style.display = 'none';
     document.getElementById('adminTableSection').style.display   = 'block';
-    document.getElementById('monthlyCSVBtn').classList.remove('d-none');
+    document.getElementById('monthlyCSVBtn').style.display       = '';
     if (adminDetailMode === 'billing') {
       renderAdminMonthlyCard(currentAdminData);
       document.getElementById('adminStatsSection').style.display = 'block';
@@ -199,7 +199,7 @@ function buildAdminRowHtml(d, data, dateStr, isEdit) {
   if (isEdit) {
     const saveBtns = `<div class="td-btns">
       <button class="btn btn-sm btn-blue" data-action="save-admin-row" data-day="${d.day}" data-date="${esc(dateStr)}">保存</button>
-      <button class="btn btn-sm btn-cancel-edit" data-action="cancel-admin-edit" data-day="${d.day}">×</button>
+      <button class="btn btn-sm" style="background:#eef0f4;color:var(--muted)" data-action="cancel-admin-edit" data-day="${d.day}">×</button>
     </div>`;
     if (data.type === 'nurse') {
       return dateCell +
@@ -231,7 +231,7 @@ function renderAdminTable(data) {
   const body = document.getElementById('adminTableBody');
   body.innerHTML = '';
   if (data.type === 'nurse') {
-    head.innerHTML = '<tr><th>日付</th><th><span class="badge badge-nurse fs-14">介護</span></th><th><span class="badge badge-iryo">医療</span></th><th>合計</th><th></th></tr>';
+    head.innerHTML = '<tr><th>日付</th><th><span class="badge badge-nurse" style="font-size:14px">介護</span></th><th><span class="badge" style="background:#fef3c7;color:#9a3412;font-size:14px">医療</span></th><th>合計</th><th></th></tr>';
   } else {
     head.innerHTML = '<tr><th>日付</th><th>単位数</th><th></th></tr>';
   }
@@ -383,7 +383,8 @@ function updateEffectiveLabel(staffId) {
   const rawLine = lineEl ? parseFloat(lineEl.value) : 0;
   const isDiff = Math.abs(eff - rawLine) > 0.001;
   el.textContent = '実効ライン: ' + eff + ' ' + unitLabel;
-  el.className = isDiff ? 'iline-eff-diff' : 'iline-eff-ok';
+  el.style.color = isDiff ? '#cf222e' : '#1a7f37';
+  el.style.fontWeight = isDiff ? '600' : '400';
 }
 
 function buildStaffRateOpts(type, selected) {
@@ -425,29 +426,29 @@ function renderIncentiveTable(nurseOpts, rehabOpts) {
         <div class="name-kanji">${esc(s.name)}</div>
       </div>
       <div class="iline-type">${badge}</div>
-      <div class="iline-col-wrap">
-        <div class="iline-field-row">
-          <span class="iline-label">目安ライン</span>
-          <select class="iline-select flex-1" id="iline_${esc(s.id)}" data-action-change="update-effective" data-id="${esc(s.id)}">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;color:var(--muted);white-space:nowrap">目安ライン</span>
+          <select class="iline-select" id="iline_${esc(s.id)}" style="flex:1" data-action-change="update-effective" data-id="${esc(s.id)}">
             ${buildSelectHtml(opts, effective, unit)}
           </select>
           <button class="btn-save" data-action="save-incentive" data-id="${esc(s.id)}">保存</button>
         </div>
-        <div class="iline-field-row">
-          <span class="iline-label">時短勤務</span>
-          <select class="iline-select flex-1" id="whours_${esc(s.id)}" data-action-change="update-effective" data-id="${esc(s.id)}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;color:var(--muted);white-space:nowrap">時短勤務</span>
+          <select class="iline-select" id="whours_${esc(s.id)}" style="flex:1" data-action-change="update-effective" data-id="${esc(s.id)}">
             ${buildWorkHoursOpts(s.work_hours)}
           </select>
           <button class="btn-save" data-action="save-workhours" data-id="${esc(s.id)}">保存</button>
         </div>
-        <div class="iline-field-row">
-          <span class="iline-label">インセンティブ単価</span>
-          <select class="iline-select flex-1" id="irate_${esc(s.id)}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;color:var(--muted);white-space:nowrap">インセンティブ単価</span>
+          <select class="iline-select" id="irate_${esc(s.id)}" style="flex:1">
             ${buildStaffRateOpts(s.type, s.incentive_rate)}
           </select>
           <button class="btn-save" data-action="save-rate" data-id="${esc(s.id)}">保存</button>
         </div>
-        <div id="eff_${esc(s.id)}" class="${isDiff ? 'iline-eff-diff' : 'iline-eff-ok'}">実効ライン: ${effLine} ${unitLabel}</div>
+        <div id="eff_${esc(s.id)}" style="font-size:13px;padding:2px 0 0 0;${isDiff ? 'color:#cf222e;font-weight:600' : 'color:#1a7f37'}">実効ライン: ${effLine} ${unitLabel}</div>
       </div>`;
     container.appendChild(row);
   }
@@ -542,11 +543,11 @@ function switchMonthlyTab(tab) {
   if (tab === 'list') {
     listBtn.style.background = 'var(--blue)'; listBtn.style.color = '#fff';
     detailBtn.style.background = '#fff'; detailBtn.style.color = 'var(--blue)';
-    listMode.style.display = ''; detailMode.classList.add('d-none');
+    listMode.style.display = ''; detailMode.style.display = 'none';
   } else {
     detailBtn.style.background = 'var(--blue)'; detailBtn.style.color = '#fff';
     listBtn.style.background = '#fff'; listBtn.style.color = 'var(--blue)';
-    listMode.style.display = 'none'; detailMode.classList.remove('d-none');
+    listMode.style.display = 'none'; detailMode.style.display = '';
   }
 }
 
@@ -568,10 +569,10 @@ async function loadMonthlyList() {
   if (!sel.value) return;
   const [year, month] = sel.value.split('-');
 
-  document.getElementById('monthlyListSpinner').classList.remove('d-none');
-  document.getElementById('monthlyListContent').classList.add('d-none');
-  document.getElementById('monthlyListEmpty').classList.add('d-none');
-  document.getElementById('monthlyListCSVBtn').classList.add('d-none');
+  document.getElementById('monthlyListSpinner').style.display = '';
+  document.getElementById('monthlyListContent').style.display = 'none';
+  document.getElementById('monthlyListEmpty').style.display = 'none';
+  document.getElementById('monthlyListCSVBtn').style.display = 'none';
 
   try {
     const res = await fetch(`/api/admin/incentive-summary?year=${year}&month=${parseInt(month)}`);
@@ -580,110 +581,111 @@ async function loadMonthlyList() {
     monthlyListData = data;
     renderMonthlyListTable(data);
   } catch (e) {
-    document.getElementById('monthlyListSpinner').classList.add('d-none');
-    document.getElementById('monthlyListEmpty').classList.remove('d-none');
+    document.getElementById('monthlyListSpinner').style.display = 'none';
+    document.getElementById('monthlyListEmpty').style.display = '';
     document.getElementById('monthlyListEmpty').textContent = 'エラー: ' + e.message;
   }
 }
 
 function renderMonthlyListTable(data) {
-  document.getElementById('monthlyListSpinner').classList.add('d-none');
+  document.getElementById('monthlyListSpinner').style.display = 'none';
   const staffList = data.staff.filter(s => !s.error);
   if (staffList.length === 0) {
-    document.getElementById('monthlyListEmpty').classList.remove('d-none');
+    document.getElementById('monthlyListEmpty').style.display = '';
     return;
   }
-  document.getElementById('monthlyListContent').classList.remove('d-none');
-  document.getElementById('monthlyListCSVBtn').classList.remove('d-none');
+  document.getElementById('monthlyListContent').style.display = '';
+  document.getElementById('monthlyListCSVBtn').style.display = '';
 
   const nurses = staffList.filter(s => s.type === 'nurse');
   const rehabs = staffList.filter(s => s.type !== 'nurse');
 
-  const thC = 'ilist-th';
-  const tdC = 'ilist-td';
+  const th = 'padding:6px 8px;border-bottom:2px solid var(--border);font-size:13px';
+  const td = 'padding:6px 8px;font-size:13px';
+  const nameLink = 'color:var(--blue);cursor:pointer;text-decoration:underline;font-weight:500';
 
   let html = '';
 
   // ── 看護職テーブル
   if (nurses.length > 0) {
-    html += `<div class="ilist-section-nurse">🩺 看護職</div>`;
-    html += `<div class="table-wrap"><table class="table-full-sm min-w-720">
-      <thead><tr class="ilist-nurse-header">
-        <th class="${thC} text-left">名前</th>
-        <th class="${thC} text-center">日数</th>
-        <th class="${thC} text-right">介護</th>
-        <th class="${thC} text-right">医療</th>
-        <th class="${thC} text-right fw-700">合計</th>
-        <th class="${thC} text-center">ライン</th>
-        <th class="${thC} text-right">閾値</th>
-        <th class="${thC} text-right">超過</th>
-        <th class="${thC} text-center">単価</th>
-        <th class="${thC} text-right fw-700">支給額</th>
+    html += `<div style="margin-bottom:6px;font-weight:700;font-size:14px;color:#0969da">🩺 看護職</div>`;
+    html += `<div class="table-wrap"><table style="width:100%;font-size:13px;border-collapse:collapse;min-width:720px">
+      <thead><tr style="background:#e8f4fd">
+        <th style="${th};text-align:left">名前</th>
+        <th style="${th};text-align:center">日数</th>
+        <th style="${th};text-align:right">介護</th>
+        <th style="${th};text-align:right">医療</th>
+        <th style="${th};text-align:right;font-weight:700">合計</th>
+        <th style="${th};text-align:center">ライン</th>
+        <th style="${th};text-align:right">閾値</th>
+        <th style="${th};text-align:right">超過</th>
+        <th style="${th};text-align:center">単価</th>
+        <th style="${th};text-align:right;font-weight:700">支給額</th>
       </tr></thead><tbody>`;
     for (const s of nurses) {
-      const amtClass = s.amount > 0 ? 'ilist-amt-ok' : 'ilist-amt-muted';
-      const overClass = s.over > 0 ? 'ilist-over-warn' : '';
+      const amtStyle = s.amount > 0 ? 'color:#1a7f37;font-weight:700' : 'color:var(--muted)';
+      const overStyle = s.over > 0 ? 'color:#cf222e;font-weight:600' : '';
       const rate = Number(s.incentive_rate || 4000);
-      html += `<tr class="ilist-row-border">
-        <td class="${tdC}"><span class="ilist-name-link" data-staff-id="${esc(s.id)}" data-action="goto-detail">${esc(s.name)}</span></td>
-        <td class="${tdC} text-center">${s.working_days}</td>
-        <td class="${tdC} text-right">${(s.total_kaigo || 0).toFixed(1)}</td>
-        <td class="${tdC} text-right">${(s.total_iryo || 0).toFixed(1)}</td>
-        <td class="${tdC} text-right fw-600">${(s.total || 0).toFixed(1)}</td>
-        <td class="${tdC} text-center">${s.effective_line}h/日</td>
-        <td class="${tdC} text-right">${s.threshold}h</td>
-        <td class="${tdC} text-right ${overClass}">${s.over > 0 ? '+' + s.over : '0'}h</td>
-        <td class="${tdC} text-center fs-12">¥${rate.toLocaleString()}/h</td>
-        <td class="${tdC} text-right ${amtClass}">${s.amount > 0 ? '¥' + s.amount.toLocaleString() : '—'}</td>
+      html += `<tr style="border-bottom:1px solid #eee">
+        <td style="${td}"><span style="${nameLink}" data-staff-id="${esc(s.id)}" data-action="goto-detail">${esc(s.name)}</span></td>
+        <td style="${td};text-align:center">${s.working_days}</td>
+        <td style="${td};text-align:right">${(s.total_kaigo || 0).toFixed(1)}</td>
+        <td style="${td};text-align:right">${(s.total_iryo || 0).toFixed(1)}</td>
+        <td style="${td};text-align:right;font-weight:600">${(s.total || 0).toFixed(1)}</td>
+        <td style="${td};text-align:center">${s.effective_line}h/日</td>
+        <td style="${td};text-align:right">${s.threshold}h</td>
+        <td style="${td};text-align:right;${overStyle}">${s.over > 0 ? '+' + s.over : '0'}h</td>
+        <td style="${td};text-align:center;font-size:12px">¥${rate.toLocaleString()}/h</td>
+        <td style="${td};text-align:right;${amtStyle}">${s.amount > 0 ? '¥' + s.amount.toLocaleString() : '—'}</td>
       </tr>`;
     }
     const nurseTotal = nurses.reduce((a, s) => a + s.amount, 0);
-    html += `</tbody><tfoot><tr class="ilist-nurse-foot">
-      <td colspan="9" class="${tdC} text-right fw-700">看護職 小計</td>
-      <td class="${tdC} text-right ilist-amt-ok">¥${nurseTotal.toLocaleString()}</td>
+    html += `</tbody><tfoot><tr style="border-top:2px solid #c8d6e5;background:#f0f7ff">
+      <td colspan="9" style="${td};text-align:right;font-weight:700">看護職 小計</td>
+      <td style="${td};text-align:right;font-weight:700;color:#1a7f37">¥${nurseTotal.toLocaleString()}</td>
     </tr></tfoot></table></div>`;
   }
 
   // ── リハビリ職テーブル
   if (rehabs.length > 0) {
-    html += `<div class="ilist-section-rehab">🏃 リハビリ職</div>`;
-    html += `<div class="table-wrap"><table class="table-full-sm min-w-600">
-      <thead><tr class="ilist-rehab-header">
-        <th class="${thC} text-left">名前</th>
-        <th class="${thC} text-center">日数</th>
-        <th class="${thC} text-right fw-700">単位数</th>
-        <th class="${thC} text-center">ライン</th>
-        <th class="${thC} text-right">閾値</th>
-        <th class="${thC} text-right">超過</th>
-        <th class="${thC} text-center">単価</th>
-        <th class="${thC} text-right fw-700">支給額</th>
+    html += `<div style="margin-top:18px;margin-bottom:6px;font-weight:700;font-size:14px;color:#6f42c1">🏃 リハビリ職</div>`;
+    html += `<div class="table-wrap"><table style="width:100%;font-size:13px;border-collapse:collapse;min-width:600px">
+      <thead><tr style="background:#f0e8fd">
+        <th style="${th};text-align:left">名前</th>
+        <th style="${th};text-align:center">日数</th>
+        <th style="${th};text-align:right;font-weight:700">単位数</th>
+        <th style="${th};text-align:center">ライン</th>
+        <th style="${th};text-align:right">閾値</th>
+        <th style="${th};text-align:right">超過</th>
+        <th style="${th};text-align:center">単価</th>
+        <th style="${th};text-align:right;font-weight:700">支給額</th>
       </tr></thead><tbody>`;
     for (const s of rehabs) {
-      const amtClass = s.amount > 0 ? 'ilist-amt-ok' : 'ilist-amt-muted';
-      const overClass = s.over > 0 ? 'ilist-over-warn' : '';
+      const amtStyle = s.amount > 0 ? 'color:#1a7f37;font-weight:700' : 'color:var(--muted)';
+      const overStyle = s.over > 0 ? 'color:#cf222e;font-weight:600' : '';
       const rate = Number(s.incentive_rate || 500);
-      html += `<tr class="ilist-row-border">
-        <td class="${tdC}"><span class="ilist-name-link" data-staff-id="${esc(s.id)}" data-action="goto-detail">${esc(s.name)}</span></td>
-        <td class="${tdC} text-center">${s.working_days}</td>
-        <td class="${tdC} text-right fw-600">${s.total}</td>
-        <td class="${tdC} text-center">${s.effective_line}単位/日</td>
-        <td class="${tdC} text-right">${s.threshold}単位</td>
-        <td class="${tdC} text-right ${overClass}">${s.over > 0 ? '+' + s.over : '0'}単位</td>
-        <td class="${tdC} text-center fs-12">¥${rate.toLocaleString()}/単位</td>
-        <td class="${tdC} text-right ${amtClass}">${s.amount > 0 ? '¥' + s.amount.toLocaleString() : '—'}</td>
+      html += `<tr style="border-bottom:1px solid #eee">
+        <td style="${td}"><span style="${nameLink}" data-staff-id="${esc(s.id)}" data-action="goto-detail">${esc(s.name)}</span></td>
+        <td style="${td};text-align:center">${s.working_days}</td>
+        <td style="${td};text-align:right;font-weight:600">${s.total}</td>
+        <td style="${td};text-align:center">${s.effective_line}単位/日</td>
+        <td style="${td};text-align:right">${s.threshold}単位</td>
+        <td style="${td};text-align:right;${overStyle}">${s.over > 0 ? '+' + s.over : '0'}単位</td>
+        <td style="${td};text-align:center;font-size:12px">¥${rate.toLocaleString()}/単位</td>
+        <td style="${td};text-align:right;${amtStyle}">${s.amount > 0 ? '¥' + s.amount.toLocaleString() : '—'}</td>
       </tr>`;
     }
     const rehabTotal = rehabs.reduce((a, s) => a + s.amount, 0);
-    html += `</tbody><tfoot><tr class="ilist-rehab-foot">
-      <td colspan="7" class="${tdC} text-right fw-700">リハビリ職 小計</td>
-      <td class="${tdC} text-right ilist-amt-ok">¥${rehabTotal.toLocaleString()}</td>
+    html += `</tbody><tfoot><tr style="border-top:2px solid #d4c5f0;background:#f8f0ff">
+      <td colspan="7" style="${td};text-align:right;font-weight:700">リハビリ職 小計</td>
+      <td style="${td};text-align:right;font-weight:700;color:#1a7f37">¥${rehabTotal.toLocaleString()}</td>
     </tr></tfoot></table></div>`;
   }
 
   // ── 合計
-  html += `<div class="ilist-total-box">
-    <span class="ilist-total-label">インセンティブ合計支給額</span>
-    <span class="ilist-total-amount">¥${data.total_amount.toLocaleString()}</span>
+  html += `<div style="margin-top:14px;padding:10px 14px;background:#f8f9fa;border-radius:8px;border:1.5px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:14px">インセンティブ合計支給額</span>
+    <span style="font-weight:800;font-size:18px;color:#1a7f37">¥${data.total_amount.toLocaleString()}</span>
   </div>`;
 
   document.getElementById('monthlyListContent').innerHTML = html;

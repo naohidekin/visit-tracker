@@ -135,7 +135,7 @@ async function passwordLogin() {
         link.id = 'pwChangeLink';
         link.href = '/login.html';
         link.textContent = 'スタッフ画面でパスワードを変更する →';
-        link.className = 'pw-change-link';
+        link.style.cssText = 'display:block;margin-top:8px;color:#1F497D;font-weight:700;text-decoration:underline';
         err.appendChild(link);
       }
     }

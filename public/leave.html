@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>有給管理 | にこっと訪問看護ステーション</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/css/utilities.css">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -115,9 +114,6 @@
     .spinner{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s}
     .toast.show{opacity:1}
-    .info-next-val{text-align:right}
-    .celebration-sub{font-size:11px;color:var(--muted);margin-top:2px}
-    .request-actions{display:flex;align-items:center;gap:8px}
   </style>
 </head>
 <body>
@@ -139,7 +135,7 @@
     <div class="menu-drawer" id="menuDrawer">
       <a href="/">入力画面</a>
       <a href="/history">月次実績</a>
-      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge d-none" id="menuBadge"></span></span></a>
+      <a href="/notices"><span class="menu-link-wrap">お知らせ<span class="unread-badge" id="menuBadge" style="display:none"></span></span></a>
       <a href="/change-password">PW変更</a>
       <a href="/manual">使い方</a>
       <button class="menu-logout" id="menuLogoutBtn">ログアウト</button>
@@ -152,34 +148,34 @@
   <div class="spinner" id="spinner">読み込み中...</div>
 
   <!-- 残日数カード -->
-  <div class="balance-card d-none" id="balanceCard">
+  <div class="balance-card" id="balanceCard" style="display:none">
     <div class="balance-label">有給残日数</div>
     <div><span class="balance-number" id="balanceNum">-</span><span class="balance-unit">日</span></div>
     <div class="balance-calc">
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op"></span><span class="balance-calc-label">年間付与</span></div><span class="balance-calc-val" id="balGranted">-</span></div>
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">前年繰越</span></div><span class="balance-calc-val" id="balCarried">-</span></div>
-      <div class="balance-calc-row d-none" id="balOcRow"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">OC有給</span></div><span class="balance-calc-val" id="balOc">-</span></div>
+      <div class="balance-calc-row" id="balOcRow" style="display:none"><div class="balance-calc-left"><span class="balance-calc-op">+</span><span class="balance-calc-label">OC有給</span></div><span class="balance-calc-val" id="balOc">-</span></div>
       <div class="balance-calc-row"><div class="balance-calc-left"><span class="balance-calc-op">-</span><span class="balance-calc-label">使用済</span></div><span class="balance-calc-val" id="balUsed">-</span></div>
       <div class="balance-calc-row balance-calc-total"><div class="balance-calc-left"><span class="balance-calc-op">=</span><span class="balance-calc-label">残日数</span></div><span class="balance-calc-val" id="balTotal">-</span></div>
     </div>
     <div class="balance-carry-note" id="carryNote"><span>⏳</span><span>前年繰越 <span id="carryDays">-</span>日 は <span class="carry-date" id="carryExpiry">-</span> に期限切れ</span></div>
-    <div class="balance-carry-note d-none" id="celebNote"><span>🎉</span><span>お祝い休暇 <span class="carry-date" id="celebStatus">-</span></span></div>
-    <div class="balance-carry-note d-none" id="ocExpiryNote"><span>⏳</span><span>OC有給 <span id="ocExpiryStatus">-</span></span></div>
+    <div class="balance-carry-note" id="celebNote" style="display:none"><span>🎉</span><span>お祝い休暇 <span class="carry-date" id="celebStatus">-</span></span></div>
+    <div class="balance-carry-note" id="ocExpiryNote" style="display:none"><span>⏳</span><span>OC有給 <span id="ocExpiryStatus">-</span></span></div>
   </div>
 
   <!-- 付与情報カード -->
-  <div class="info-card d-none" id="infoCard">
+  <div class="info-card" id="infoCard" style="display:none">
     <div class="info-row">
       <span class="info-label">入職日</span>
       <span class="info-value" id="infoHireDate">-</span>
     </div>
-    <div class="info-row d-none" id="infoCelebrationRow">
+    <div class="info-row" id="infoCelebrationRow" style="display:none">
       <span class="info-label">お祝い休暇（3日）</span>
       <span class="info-value" id="infoCelebration">-</span>
     </div>
     <div class="info-row" id="infoNextGrantRow">
       <span class="info-label">次回有給付与</span>
-      <div class="info-next-val">
+      <div style="text-align:right">
         <div class="info-countdown">
           <span class="countdown-num" id="infoCountdown">-</span>
           <span class="countdown-unit">日後</span>
@@ -190,7 +186,7 @@
   </div>
 
   <!-- 申請フォーム -->
-  <div class="card d-none" id="formCard">
+  <div class="card" id="formCard" style="display:none">
     <div class="card-title">有給申請</div>
     <div class="form-group">
       <label class="form-label">種別</label>
@@ -216,10 +212,10 @@
   </div>
 
   <!-- 申請履歴 -->
-  <div class="card d-none" id="historyCard">
+  <div class="card" id="historyCard" style="display:none">
     <div class="card-title">申請履歴</div>
     <div id="requestsList"></div>
-    <div class="empty-msg d-none" id="emptyMsg">申請履歴はありません</div>
+    <div class="empty-msg" id="emptyMsg" style="display:none">申請履歴はありません</div>
   </div>
 </div>
 </div>
@@ -354,7 +350,7 @@
         if (celebrationRemaining > 0) {
           document.getElementById('infoCelebration').innerHTML =
             '<span class="celebration-badge">残り ' + celebrationRemaining + '日 / ' + celebrationDays + '日</span>' +
-            '<div class="celebration-sub">期限: ' + formatDateFull(ng.celebration_expiry) + '</div>';
+            '<div style="font-size:11px;color:var(--muted);margin-top:2px">期限: ' + formatDateFull(ng.celebration_expiry) + '</div>';
         } else {
           document.getElementById('infoCelebration').innerHTML =
             '<span class="celebration-badge celebration-expired">使用済</span>';
@@ -406,7 +402,7 @@
               <div class="request-dates">${dateStr}</div>
               <div class="request-type">${typeLabel}（${dayCount}日）</div>
             </div>
-            <div class="request-actions">
+            <div style="display:flex;align-items:center;gap:8px">
               <span class="status-badge status-${r.status}">${statusLabel}</span>
               ${canCancel ? `<button class="btn-cancel" data-action="cancel-request" data-id="${esc(r.id)}">取消</button>` : ''}
             </div>

@@ -10,9 +10,7 @@ function switchLeaveTab(btn) {
   btn.classList.add('active');
   const tabId = btn.dataset.tab;
   ['leavePending', 'leaveHistory', 'leaveBalance'].forEach(id => {
-    const el = document.getElementById(id);
-    if (id === tabId) el.classList.remove('d-none');
-    else el.classList.add('d-none');
+    document.getElementById(id).style.display = id === tabId ? '' : 'none';
   });
   if (tabId === 'leavePending') loadLeavePending();
   if (tabId === 'leaveHistory') loadLeaveHistory();
@@ -23,14 +21,14 @@ async function loadLeavePending() {
   const spinner = document.getElementById('leavePendingSpinner');
   const empty = document.getElementById('leavePendingEmpty');
   const wrap = document.getElementById('leavePendingTableWrap');
-  spinner.style.display = ''; empty.classList.add('d-none'); wrap.classList.add('d-none');
+  spinner.style.display = ''; empty.style.display = 'none'; wrap.style.display = 'none';
 
   const res = await fetch('/api/admin/leave/requests?status=pending');
   const { requests } = await res.json();
   spinner.style.display = 'none';
 
-  if (!requests.length) { empty.classList.remove('d-none'); return; }
-  wrap.classList.remove('d-none');
+  if (!requests.length) { empty.style.display = ''; return; }
+  wrap.style.display = '';
 
   document.getElementById('leavePendingBody').innerHTML = requests.map(r => {
     const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
@@ -38,13 +36,13 @@ async function loadLeavePending() {
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>
-      <td class="leave-td-nowrap">${dateStr}</td>
+      <td style="white-space:nowrap">${dateStr}</td>
       <td>${typeLabel}</td>
-      <td class="leave-td-sm">${esc(r.reason || '-')}</td>
-      <td class="leave-td-sm">${created}</td>
-      <td class="leave-td-nowrap">
+      <td style="font-size:14px">${esc(r.reason || '-')}</td>
+      <td style="font-size:14px">${created}</td>
+      <td style="white-space:nowrap">
         <button class="btn btn-blue btn-sm" data-action="leave-approve" data-id="${esc(r.id)}">承認</button>
-        <button class="btn btn-sm btn-reject" data-action="leave-reject" data-id="${esc(r.id)}">却下</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c" data-action="leave-reject" data-id="${esc(r.id)}">却下</button>
       </td>
     </tr>`;
   }).join('');
@@ -106,7 +104,7 @@ async function loadLeaveHistory() {
   const spinner = document.getElementById('leaveHistorySpinner');
   const empty = document.getElementById('leaveHistoryEmpty');
   const wrap = document.getElementById('leaveHistoryTableWrap');
-  spinner.style.display = ''; empty.classList.add('d-none'); wrap.classList.add('d-none');
+  spinner.style.display = ''; empty.style.display = 'none'; wrap.style.display = 'none';
 
   // スタッフドロップダウン更新
   const staffSel = document.getElementById('leaveHistoryStaff');
@@ -131,8 +129,8 @@ async function loadLeaveHistory() {
   const staffFilter = staffSel.value;
   if (staffFilter) requests = requests.filter(r => r.staffId === staffFilter);
 
-  if (!requests.length) { empty.classList.remove('d-none'); return; }
-  wrap.classList.remove('d-none');
+  if (!requests.length) { empty.style.display = ''; return; }
+  wrap.style.display = '';
 
   const statusLabels = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' };
   document.getElementById('leaveHistoryBody').innerHTML = requests.map(r => {
@@ -141,11 +139,11 @@ async function loadLeaveHistory() {
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>
-      <td class="leave-td-nowrap">${dateStr}</td>
+      <td style="white-space:nowrap">${dateStr}</td>
       <td>${typeLabel}</td>
       <td><span class="leave-status ${r.status}">${statusLabels[r.status]}</span></td>
-      <td class="leave-td-sm">${esc(r.adminComment || '-')}</td>
-      <td class="leave-td-sm">${created}</td>
+      <td style="font-size:14px">${esc(r.adminComment || '-')}</td>
+      <td style="font-size:14px">${created}</td>
     </tr>`;
   }).join('');
 }
@@ -153,25 +151,25 @@ async function loadLeaveHistory() {
 async function loadLeaveBalanceSummary() {
   const spinner = document.getElementById('leaveBalanceSpinner');
   const wrap = document.getElementById('leaveBalanceTableWrap');
-  spinner.style.display = ''; wrap.classList.add('d-none');
+  spinner.style.display = ''; wrap.style.display = 'none';
 
   const res = await fetch('/api/admin/leave/summary');
   const { summary } = await res.json();
   spinner.style.display = 'none';
-  wrap.classList.remove('d-none');
+  wrap.style.display = '';
 
   document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
-    const balClass = s.balance <= 0 ? 'leave-bal-danger' : 'leave-bal-normal';
+    const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
     const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}">編集</button>`;
     return `<tr>
       <td class="leave-name">${esc(s.name)}</td>
-      <td data-label="入社日" class="fs-13">${s.hire_date || '未設定'}</td>
+      <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
       <td data-label="付与">${s.granted}日</td>
       <td data-label="繰越">${s.carried_over}日</td>
       <td data-label="調整">${adjStr}</td>
       <td data-label="使用">${s.used}日</td>
-      <td class="leave-balance ${balClass}" data-label="残">${s.balance}日</td>
+      <td class="leave-balance" data-label="残" style="font-weight:700;color:${balColor}">${s.balance}日</td>
       <td data-label="">${editBtn}</td>
     </tr>`;
   }).join('');

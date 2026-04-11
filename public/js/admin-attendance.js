@@ -63,13 +63,13 @@ async function loadAttendanceMonthly() {
 
   const spinner = document.getElementById('attendanceMonthlySpinner');
   const tableWrap = document.getElementById('attendanceMonthlyTableWrap');
-  spinner.classList.remove('d-none');
-  tableWrap.classList.add('d-none');
+  spinner.style.display = '';
+  tableWrap.style.display = 'none';
 
   try {
     const resp = await apiFetch(`/api/admin/attendance/monthly?month=${month}&mode=${attendanceMode}`);
     const data = await resp.json();
-    spinner.classList.add('d-none');
+    spinner.style.display = 'none';
 
     // 期間ラベル更新
     const label = document.getElementById('attendancePeriodLabel');
@@ -83,29 +83,28 @@ async function loadAttendanceMonthly() {
     tbody.innerHTML = '';
 
     if (!data.staff || data.staff.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-msg-lg">データがありません</td></tr>';
-      tableWrap.classList.remove('d-none');
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--muted)">データがありません</td></tr>';
+      tableWrap.style.display = '';
       return;
     }
 
     for (const s of data.staff) {
       const tr = document.createElement('tr');
-      const unconfClass = s.unconfirmedDays > 0 ? 'att-td-center att-unconfirmed-warn' : 'att-td-center color-muted';
       tr.innerHTML = `
-        <td class="att-td">${esc(s.name)}</td>
-        <td class="att-td-center fs-13">${esc(TYPE_LABELS[s.type] || s.type)}</td>
-        <td class="att-td-center">${s.workDays}</td>
-        <td class="att-td-center color-ok fw-600">${s.confirmedDays}</td>
-        <td class="att-td-center color-danger">${s.absentDays}</td>
-        <td class="att-td-center color-muted">${s.leaveDays}</td>
-        <td class="${unconfClass}">${s.unconfirmedDays}</td>
-        <td class="att-td-center att-rainy">${s.rainyDayAttendance}</td>`;
+        <td style="padding:6px;border-bottom:1px solid var(--border)">${esc(s.name)}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);font-size:13px">${esc(TYPE_LABELS[s.type] || s.type)}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border)">${s.workDays}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--ok);font-weight:600">${s.confirmedDays}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--danger)">${s.absentDays}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:var(--muted)">${s.leaveDays}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:${s.unconfirmedDays > 0 ? '#8b6914' : 'var(--muted)'};font-weight:${s.unconfirmedDays > 0 ? '600' : '400'}">${s.unconfirmedDays}</td>
+        <td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);color:#2563eb;font-weight:600">${s.rainyDayAttendance}</td>`;
       tbody.appendChild(tr);
     }
 
-    tableWrap.classList.remove('d-none');
+    tableWrap.style.display = '';
   } catch (e) {
-    spinner.classList.add('d-none');
+    spinner.style.display = 'none';
     showToast('集計の取得に失敗しました');
   }
 }

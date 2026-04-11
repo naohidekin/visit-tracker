@@ -5,7 +5,6 @@ require('dotenv').config();
 
 const express  = require('express');
 const path     = require('path');
-const fs       = require('fs');
 const crypto   = require('crypto');
 const csession = require('cookie-session');
 const cron     = require('node-cron');
@@ -43,20 +42,14 @@ if (!process.env.SESSION_SECRET) {
 
 app.set('trust proxy', 1);
 
-// ─── CSP nonce 生成 ────────────────────────────────────────────
-app.use((_req, res, next) => {
-  res.locals.nonce = crypto.randomBytes(16).toString('base64');
-  next();
-});
-
 // ─── セキュリティヘッダー ──────────────────────────────────────
 const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", (_req, res) => `'nonce-${res.locals.nonce}'`],
-      styleSrc:   ["'self'", (_req, res) => `'nonce-${res.locals.nonce}'`],
+      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      styleSrc:   ["'self'", "'unsafe-inline'"],
       imgSrc:     ["'self'", "data:"],
       connectSrc: ["'self'"],
       fontSrc:    ["'self'"],
@@ -96,23 +89,10 @@ app.use((req, res, next) => {
   }
   next();
 });
-// ─── HTML nonce 注入（express.static より先に処理） ─────────────
-const publicDir = path.join(__dirname, 'public');
-app.use((req, res, next) => {
-  if (!req.path.endsWith('.html')) return next();
-  const filePath = path.join(publicDir, req.path);
-  if (!filePath.startsWith(publicDir)) return next(); // path traversal防止
-  try { fs.accessSync(filePath, fs.constants.R_OK); } catch { return next(); }
-  let html = fs.readFileSync(filePath, 'utf-8');
-  const nonce = res.locals.nonce;
-  html = html.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`);
-  html = html.replace(/<style(?=[\s>])/g, `<style nonce="${nonce}"`);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.type('html').send(html);
-});
-app.use(express.static(publicDir, {
+app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders(res, filePath) {
+    // HTMLファイルはキャッシュしない（常に最新を配信）
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
