@@ -215,6 +215,7 @@ router.post('/api/admin/logout', (req, res) => {
   const name = req.session.adminStaffName || '管理者';
   auditLog(req, 'auth.admin_logout', { type: 'auth', label: name });
   req.session = null;
+  res.clearCookie('csrf_token');
   res.json({ success: true });
 });
 

@@ -214,6 +214,34 @@ async function runTests(app) {
     assert.strictEqual(res.status, 404);
   });
 
+  await test('管理者権限剥奪後の次リクエストが 401', async () => {
+    // t_admin で管理者ログイン
+    const { agent: adminAgent, csrfToken: adminCsrf } =
+      await loginAs(app, 't_admin', 'Admin12345', true);
+
+    // 管理者APIが通ることを確認
+    const before = await adminAgent.get('/api/admin/staff');
+    assert.strictEqual(before.status, 200, '権限剥奪前は 200');
+
+    // 別の管理者セッションで権限を剥奪（自分では剥奪不可なので直接DBを操作）
+    const { getDb } = require('./lib/db');
+    const db = getDb();
+    const row = db.prepare('SELECT data FROM staff WHERE id = ?').get('t_admin');
+    const staff = JSON.parse(row.data);
+    staff.is_admin = false;
+    db.prepare('UPDATE staff SET data = ? WHERE id = ?').run(JSON.stringify(staff), 't_admin');
+
+    try {
+      // 次のリクエストで 401 になること
+      const after = await adminAgent.get('/api/admin/staff');
+      assert.strictEqual(after.status, 401, '権限剥奪後は 401');
+    } finally {
+      // 復元
+      staff.is_admin = true;
+      db.prepare('UPDATE staff SET data = ? WHERE id = ?').run(JSON.stringify(staff), 't_admin');
+    }
+  });
+
   clearRateLimits();
   // ────────────────────────────────────────────────────────────
   console.log('\n📌 例外系テスト');

@@ -151,6 +151,7 @@ router.post('/api/login', async (req, res) => {
 router.post('/api/logout', (req, res) => {
   auditLog(req, 'auth.logout', { type: 'auth', id: req.session?.staffId, label: req.session?.staffName });
   req.session = null;
+  res.clearCookie('csrf_token');
   res.json({ success: true });
 });
 
