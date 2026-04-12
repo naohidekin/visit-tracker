@@ -9,6 +9,7 @@
     "test": "node test-leave.js && node test-admin-init.js && node test-api.js && node test-regression.js",
     "test:unit": "node test-leave.js && node test-admin-init.js",
     "test:api": "node test-api.js",
+    "lint": "eslint server.js lib/ routes/ && for f in public/js/admin-*.js; do node -c \"$f\" || exit 1; done && echo '✅ Lint OK'",
     "security-check": "node scripts/security-check.js"
   },
   "dependencies": {
@@ -34,6 +35,8 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.0",
     "supertest": "^7.2.2"
   }
 }
