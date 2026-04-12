@@ -355,6 +355,8 @@ async function removeCustomHoliday(date) {
     showToast('祝日の削除に失敗しました');
   }
 }
+
+function exportStandbyCSV() {
   const month = document.getElementById('standbyMonth').value;
   const recordMap = {};
   for (const r of lastStandbyRecords) recordMap[r.date] = r.staffId;
