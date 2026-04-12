@@ -110,7 +110,7 @@ async function loadLeaveHistory() {
   const staffSel = document.getElementById('leaveHistoryStaff');
   if (staffSel.options.length <= 1) {
     const sRes = await fetch('/api/admin/staff');
-    const { staff } = await sRes.json();
+    const staff = await sRes.json();
     staff.filter(s => !s.archived).forEach(s => {
       const opt = document.createElement('option');
       opt.value = s.id; opt.textContent = s.name;

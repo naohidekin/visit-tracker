@@ -5,11 +5,11 @@ const router = express.Router();
 
 const { loadStaff, loadLeave, loadAttendance, loadStandby } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
-const { isWorkday, formatLocalDate } = require('../lib/helpers');
+const { isWorkday, formatLocalDate, asyncRoute } = require('../lib/helpers');
 
 // ─── 出勤確定 集計 API（月次 / 締め期間 切替対応）──────────────────
 // mode=billing: 前月16日〜当月15日  mode=monthly(デフォルト): 1日〜末日
-router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
+router.get('/api/admin/attendance/monthly', requireAdmin, asyncRoute(async (req, res) => {
   const { month, mode } = req.query;
   if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: '月の形式が不正です (YYYY-MM)' });
 
@@ -109,6 +109,6 @@ router.get('/api/admin/attendance/monthly', requireAdmin, async (req, res) => {
     result.billingLabel = billingLabel;
   }
   res.json(result);
-});
+}));
 
 module.exports = router;
