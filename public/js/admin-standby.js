@@ -355,31 +355,3 @@ async function removeCustomHoliday(date) {
     showToast('祝日の削除に失敗しました');
   }
 }
-
-function exportStandbyCSV() {
-  const month = document.getElementById('standbyMonth').value;
-  const recordMap = {};
-  for (const r of lastStandbyRecords) recordMap[r.date] = r.staffId;
-  const staffMap = {};
-  for (const s of standbyEligibleStaff) staffMap[s.id] = s.name;
-  const rainySet = new Set(lastRainyDays);
-
-  const headers = ['日付', '曜日', '区分', '待機者', '待機料', '雨の日'];
-  const rows = [];
-  const start = new Date(lastStandbyStartDate + 'T00:00:00');
-  const end = new Date(lastStandbyEndDate + 'T00:00:00');
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = fmtDate(d);
-    const { category, fee } = getDateCategory(dateStr, lastCustomHolidays);
-    const staffId = recordMap[dateStr] || '';
-    rows.push([
-      dateStr,
-      DOW_NAMES[d.getDay()],
-      category,
-      staffId ? (staffMap[staffId] || staffId) : '',
-      staffId ? fee : '',
-      rainySet.has(dateStr) ? '○' : '',
-    ]);
-  }
-  downloadCSV(headers, rows, `待機一覧_${month}.csv`);
-}

@@ -27,10 +27,6 @@ function toggleAccordion(header) {
       initAttendanceMonth();
       loadAttendanceMonthly();
     }
-    if (h2 && h2.textContent.includes('インセンティブ月次集計')) {
-      initIncentiveSummaryMonth();
-      loadIncentiveSummary();
-    }
   }
 }
 
