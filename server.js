@@ -6,6 +6,7 @@ require('dotenv').config();
 const express  = require('express');
 const path     = require('path');
 const crypto   = require('crypto');
+const fs       = require('fs');
 const csession = require('cookie-session');
 const cron     = require('node-cron');
 const helmet   = require('helmet');
@@ -42,13 +43,19 @@ if (!process.env.SESSION_SECRET) {
 
 app.set('trust proxy', 1);
 
+// ─── CSP nonce 生成（リクエスト毎） ──────────────────────────────
+app.use((_req, res, next) => {
+  res.locals.nonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
 // ─── セキュリティヘッダー ──────────────────────────────────────
 const isProd = process.env.NODE_ENV === 'production';
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      scriptSrc:  ["'self'", (_req, res) => `'nonce-${res.locals.nonce}'`],
       styleSrc:   ["'self'", "'unsafe-inline'"],
       imgSrc:     ["'self'", "data:"],
       connectSrc: ["'self'"],
@@ -89,6 +96,29 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// ─── HTML nonce 注入（<script> タグに nonce 属性を付与） ────────
+function sendHtmlWithNonce(res, filePath) {
+  const nonce = res.locals.nonce;
+  fs.readFile(filePath, 'utf8', (err, html) => {
+    if (err) return res.status(404).send('Not Found');
+    html = html.replace(/<script(?=[\s>])/gi, `<script nonce="${nonce}"`);
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(html);
+  });
+}
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  if (!req.path.endsWith('.html')) return next();
+  const filePath = path.join(__dirname, 'public', req.path);
+  if (!path.resolve(filePath).startsWith(path.join(__dirname, 'public'))) return next();
+  fs.access(filePath, fs.constants.R_OK, (err) => {
+    if (err) return next();
+    sendHtmlWithNonce(res, filePath);
+  });
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders(res, filePath) {
@@ -144,38 +174,38 @@ app.use((req, res, next) => {
 
 // ─── HTMLルーティング ──────────────────────────────────────────
 const { requireAdmin } = require('./lib/auth-middleware');
-app.get('/login',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/login',           (_r, res) => sendHtmlWithNonce(res, path.join(__dirname, 'public','login.html')));
 app.get('/change-password', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'change-password.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','change-password.html'));
 });
-app.get('/admin',           (_r, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/admin-manual', requireAdmin, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-manual.html')));
+app.get('/admin',           (_r, res) => sendHtmlWithNonce(res, path.join(__dirname, 'public','admin.html')));
+app.get('/admin-manual', requireAdmin, (_req, res) => sendHtmlWithNonce(res, path.join(__dirname, 'public','admin-manual.html')));
 app.get('/history', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'history.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','history.html'));
 });
 app.get('/manual', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'manual.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','manual.html'));
 });
 app.get('/notices', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'notices.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','notices.html'));
 });
 app.get('/leave', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'leave.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','leave.html'));
 });
 app.get('/oncall', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'oncall.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','oncall.html'));
 });
-app.get('/forgot-password', (_r, res) => res.sendFile(path.join(__dirname, 'public', 'forgot-password.html')));
-app.get('/reset-password',  (_r, res) => res.sendFile(path.join(__dirname, 'public', 'reset-password.html')));
+app.get('/forgot-password', (_r, res) => sendHtmlWithNonce(res, path.join(__dirname, 'public','forgot-password.html')));
+app.get('/reset-password',  (_r, res) => sendHtmlWithNonce(res, path.join(__dirname, 'public','reset-password.html')));
 app.get('/', (req, res) => {
   if (!req.session.staffId) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  sendHtmlWithNonce(res, path.join(__dirname, 'public','index.html'));
 });
 
 // ─── APIルーターマウント ────────────────────────────────────────
