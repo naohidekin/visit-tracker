@@ -612,6 +612,14 @@
             <label>手動調整</label>
             <input type="number" id="leaveEditAdj" step="0.5" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           </div>
+          <div class="field" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+            <label>お祝い休暇（付与日数）</label>
+            <input type="number" id="leaveEditCelebDays" step="1" min="0" max="30" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+          <div class="field">
+            <label>お祝い休暇（使用済み調整）</label>
+            <input type="number" id="leaveEditCelebAdj" step="0.5" min="0" max="30" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn btn-blue" id="leaveEditSaveBtn" style="flex:1">保存</button>
             <button class="btn" id="leaveEditCancelBtn" style="flex:1;background:#eee;color:var(--text)">キャンセル</button>

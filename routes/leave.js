@@ -380,13 +380,15 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         pending: pendingDays,
         balance,
         grant_date: s.leave_grant_date,
+        celebration_days: s.celebration_days || 3,
+        celebration_used_adj: s.celebration_used_adj || 0,
       };
     });
   res.json({ summary });
 });
 
 router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {
-  const { granted, carried_over, manual_adjustment, grant_date } = req.body;
+  const { granted, carried_over, manual_adjustment, grant_date, celebration_days, celebration_used_adj } = req.body;
   // バリデーション先行
   if (granted !== undefined) {
     const v = validateNum(granted, { min: 0, max: 365 });
@@ -404,6 +406,14 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
     if (grant_date !== null && grant_date !== '' && !isValidDate(grant_date))
       return res.status(400).json({ error: '付与日の形式が不正です' });
   }
+  if (celebration_days !== undefined) {
+    const v = validateNum(celebration_days, { min: 0, max: 30 });
+    if (!v.valid) return res.status(400).json({ error: 'お祝い休暇日数が不正です（0〜30）' });
+  }
+  if (celebration_used_adj !== undefined) {
+    const v = validateNum(celebration_used_adj, { min: 0, max: 30 });
+    if (!v.valid) return res.status(400).json({ error: 'お祝い休暇使用済み調整値が不正です（0〜30）' });
+  }
 
   const result = atomicModify(() => {
     const staffData = loadStaff();
@@ -414,12 +424,14 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
     if (carried_over !== undefined) staff.leave_carried_over = validateNum(carried_over, { min: 0, max: 365 }).value;
     if (manual_adjustment !== undefined) staff.leave_manual_adjustment = validateNum(manual_adjustment, { min: -365, max: 365 }).value;
     if (grant_date !== undefined) staff.leave_grant_date = grant_date || null;
+    if (celebration_days !== undefined) staff.celebration_days = validateNum(celebration_days, { min: 0, max: 30 }).value;
+    if (celebration_used_adj !== undefined) staff.celebration_used_adj = validateNum(celebration_used_adj, { min: 0, max: 30 }).value;
 
     saveStaff(staffData);
     return { ok: true, balance: calcLeaveBalance(staff) };
   });
   if (result.error) return res.status(result.status).json({ error: result.error });
-  auditLog(req, 'leave.balance_update', { type: 'leave', id: req.params.id, label: req.params.id }, { granted, carried_over, manual_adjustment, grant_date });
+  auditLog(req, 'leave.balance_update', { type: 'leave', id: req.params.id, label: req.params.id }, { granted, carried_over, manual_adjustment, grant_date, celebration_days, celebration_used_adj });
   res.json({ ok: true, balance: result.balance });
 }));
 

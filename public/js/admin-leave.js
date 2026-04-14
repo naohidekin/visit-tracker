@@ -61,7 +61,7 @@ document.getElementById('leaveBalanceBody').addEventListener('click', e => {
   const btn = e.target.closest('[data-action="edit-leave"]');
   if (!btn) return;
   const d = btn.dataset;
-  openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj));
+  openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj), Number(d.celebDays), Number(d.celebAdj));
 });
 
 function openLeaveModal(action, requestId) {
@@ -161,7 +161,7 @@ async function loadLeaveBalanceSummary() {
   document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
-    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}">編集</button>`;
+    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
     return `<tr>
       <td class="leave-name">${esc(s.name)}</td>
       <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
@@ -175,7 +175,7 @@ async function loadLeaveBalanceSummary() {
   }).join('');
 }
 
-function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj) {
+function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, celebDays, celebAdj) {
   leaveEditStaffId = id;
   document.getElementById('leaveEditName').textContent = name;
   document.getElementById('leaveEditHireDate').value = hireDate;
@@ -183,6 +183,8 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj) {
   document.getElementById('leaveEditGranted').value = granted;
   document.getElementById('leaveEditCarried').value = carried;
   document.getElementById('leaveEditAdj').value = adj;
+  document.getElementById('leaveEditCelebDays').value = celebDays;
+  document.getElementById('leaveEditCelebAdj').value = celebAdj;
   document.getElementById('leaveEditModal').style.display = 'flex';
 }
 function closeLeaveEditModal() {
@@ -194,6 +196,8 @@ async function saveLeaveEdit() {
   const granted = Number(document.getElementById('leaveEditGranted').value);
   const carried = Number(document.getElementById('leaveEditCarried').value);
   const adj = Number(document.getElementById('leaveEditAdj').value);
+  const celebDays = Number(document.getElementById('leaveEditCelebDays').value);
+  const celebAdj  = Number(document.getElementById('leaveEditCelebAdj').value);
 
   // 入社日を保存
   if (hireDate) {
@@ -203,11 +207,11 @@ async function saveLeaveEdit() {
       body: JSON.stringify({ hire_date: hireDate }),
     });
   }
-  // 残日数を保存
+  // 残日数・お祝い休暇を保存
   const res = await apiFetch(`/api/admin/staff/${leaveEditStaffId}/leave-balance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj }),
+    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj, celebration_days: celebDays, celebration_used_adj: celebAdj }),
   });
   const data = await res.json();
   closeLeaveEditModal();
