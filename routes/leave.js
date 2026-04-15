@@ -155,14 +155,40 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       const now = new Date(getTodayJST());
       if (now >= celebrationExpiry) return { error: `お祝い休暇の有効期限（入職から${expiryMonths}ヶ月）が過ぎています`, status: 400 };
 
+      // HIGH-1: 各申請日が有効期限内かチェック
+      const expiryStr = celebrationExpiry.toISOString().slice(0, 10);
+      for (const d of dates) {
+        if (new Date(d) >= celebrationExpiry)
+          return { error: `${d} はお祝い休暇の有効期限（${expiryStr}）を超えています`, status: 400 };
+      }
+
+      // HIGH-2: GET /api/leave/balance と同じロジックで消化済み日数を計算
       const celebrationDays = staff.celebration_days || 3;
-      const celebrationUsed = leaveData.requests.filter(r =>
-        r.staffId === staff.id && r.status === 'approved' && r.type === 'celebration'
-      ).reduce((sum, r) => sum + r.dates.length, 0);
-      const celebrationPending = leaveData.requests.filter(r =>
-        r.staffId === staff.id && r.status === 'pending' && r.type === 'celebration'
-      ).reduce((sum, r) => sum + r.dates.length, 0);
-      const celebrationRemaining = celebrationDays - celebrationUsed - celebrationPending;
+      const celebrationAdj = staff.celebration_used_adj || 0;
+      let celebrationUsed = celebrationAdj;
+      for (const r of leaveData.requests.filter(req => req.staffId === staff.id && req.status === 'approved')) {
+        if (celebrationUsed >= celebrationDays) break;
+        for (const d of r.dates) {
+          if (celebrationUsed >= celebrationDays) break;
+          if (new Date(d) < celebrationExpiry) {
+            celebrationUsed += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          }
+        }
+      }
+      celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
+
+      // 有効期限内の日付を含む保留中申請の日数
+      let celebrationPending = 0;
+      for (const r of leaveData.requests) {
+        if (r.staffId !== staff.id || r.status !== 'pending') continue;
+        for (const d of r.dates) {
+          if (new Date(d) < celebrationExpiry)
+            celebrationPending += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        }
+      }
+      celebrationPending = Math.round(celebrationPending * 10) / 10;
+
+      const celebrationRemaining = Math.max(0, celebrationDays - celebrationUsed - celebrationPending);
       if (celebrationRemaining < dates.length)
         return { error: 'お祝い休暇の残日数が不足しています', status: 400 };
     } else {
@@ -267,9 +293,31 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
     const staff = staffData.staff.find(s => s.id === request.staffId);
     if (staff) {
       const balance = calcLeaveBalance(staff);
-      const celebrationRemaining = calcCelebrationRemaining(staff);
       const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
         ? request.dates.length * 0.5 : request.dates.length;
+
+      // お祝い休暇の残日数を申請作成時と同じロジックで再計算
+      const hire = staff.hire_date ? new Date(staff.hire_date) : null;
+      const expiryMonths = staff.celebration_expiry_months || 6;
+      let celebrationRemaining = 0;
+      if (hire) {
+        const celebrationExpiry = new Date(hire);
+        celebrationExpiry.setMonth(celebrationExpiry.getMonth() + expiryMonths);
+        const celebDays = staff.celebration_days || 3;
+        const celebAdj = staff.celebration_used_adj || 0;
+        let celebUsed = celebAdj;
+        for (const r of leaveData.requests.filter(r => r.staffId === staff.id && r.status === 'approved' && r.id !== request.id)) {
+          if (celebUsed >= celebDays) break;
+          for (const d of r.dates) {
+            if (celebUsed >= celebDays) break;
+            if (new Date(d) < celebrationExpiry)
+              celebUsed += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          }
+        }
+        celebUsed = Math.round(Math.min(celebUsed, celebDays) * 10) / 10;
+        celebrationRemaining = Math.max(0, celebDays - celebUsed);
+      }
+
       if (balance + celebrationRemaining < requestDays)
         return { error: '残日数が不足しています', status: 400 };
     }
