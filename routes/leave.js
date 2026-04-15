@@ -65,16 +65,16 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
   const balance     = calcLeaveBalance(staff);
   const autoGrantDays = calcLeaveGrantDays(staff.hire_date);
 
-  const nextGrant = calcNextGrant(staff.hire_date);
+  const nextGrant = calcNextGrant(staff.hire_date, undefined, staff.celebration_expiry_months || 6);
 
-  // お祝い休暇の使用日数を計算（手動調整 + 入職半年以内の承認済み申請から自動消化）
+  // お祝い休暇の使用日数を計算（手動調整 + 有効期限内の承認済み申請から自動消化）
   const celebrationDays = staff.celebration_days || 3;
   const celebrationAdj = staff.celebration_used_adj || 0;
   let celebrationUsed = celebrationAdj;
   if (staff.hire_date) {
     const hireDate = new Date(staff.hire_date);
     const celebrationExpiry = new Date(hireDate);
-    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + (staff.celebration_expiry_months || 6));
     for (const r of approved) {
       if (celebrationUsed >= celebrationDays) break;
       for (const d of r.dates) {
@@ -149,10 +149,11 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
     if (type === 'celebration') {
       if (!staff.hire_date) return { error: 'お祝い休暇は入職日が設定されている場合のみ利用できます', status: 400 };
       const hire = new Date(staff.hire_date);
+      const expiryMonths = staff.celebration_expiry_months || 6;
       const celebrationExpiry = new Date(hire);
-      celebrationExpiry.setMonth(celebrationExpiry.getMonth() + 6);
+      celebrationExpiry.setMonth(celebrationExpiry.getMonth() + expiryMonths);
       const now = new Date(getTodayJST());
-      if (now >= celebrationExpiry) return { error: 'お祝い休暇の有効期限（入職から6ヶ月）が過ぎています', status: 400 };
+      if (now >= celebrationExpiry) return { error: `お祝い休暇の有効期限（入職から${expiryMonths}ヶ月）が過ぎています`, status: 400 };
 
       const celebrationDays = staff.celebration_days || 3;
       const celebrationUsed = leaveData.requests.filter(r =>

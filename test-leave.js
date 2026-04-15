@@ -251,6 +251,21 @@ test('celebration_days未定義 → デフォルト3', () => {
   assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 3);
 });
 
+test('celebration_expiry_months=12: 入職6ヶ月超過でも残日数が返る', () => {
+  const staff = { hire_date: '2026-03-01', celebration_days: 10, celebration_expiry_months: 12 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-09-02'), 10);
+});
+
+test('celebration_expiry_months=12: 入職12ヶ月超過 → 0', () => {
+  const staff = { hire_date: '2026-03-01', celebration_days: 10, celebration_expiry_months: 12 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2027-03-02'), 0);
+});
+
+test('celebration_expiry_months未設定: デフォルト6ヶ月で期限切れ → 0', () => {
+  const staff = { hire_date: '2026-03-01', celebration_days: 10 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-09-02'), 0);
+});
+
 // ─── お祝い休暇統合バリデーション ───
 console.log('\n📌 お祝い休暇統合バリデーション');
 
