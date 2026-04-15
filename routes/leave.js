@@ -117,7 +117,8 @@ router.get('/api/leave/requests', requireStaff, (req, res) => {
 });
 
 router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
-  const { type, startDate, endDate, reason } = req.body;
+  const { type, startDate, endDate } = req.body;
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim().slice(0, 200) : '';
   if (!type || !startDate) return res.status(400).json({ error: '種別と開始日は必須です' });
   if (!['full', 'half_am', 'half_pm', 'celebration'].includes(type))
     return res.status(400).json({ error: '種別が不正です' });
@@ -338,7 +339,7 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
     const dateStr  = dates.length === 0 ? '(日付不明)'
       : dates.length === 1 ? dates[0]
       : `${dates[0]}〜${dates[dates.length - 1]}`;
-    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
+    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : request.type === 'half_pm' ? '午後半休' : 'お祝い休暇';
     createStaffNotice(request.staffId,
       '✅ 有給申請が承認されました',
       `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
