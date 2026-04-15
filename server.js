@@ -261,11 +261,11 @@ async function main() {
   ensureLeaveFields();
   ensureAdminFields();
   ensureInitialAdmins();
-  migrateCelebrationExpiryTo1Year();
   initMail();
   cleanExpiredTokens();
   await syncNewStaffFromSource();
   syncLeaveFieldsFromSource();
+  migrateCelebrationExpiryTo1Year();
   publishReleaseNotes();
 
   // 毎年12/31 23:00 JST に翌年スプレッドシートを自動作成
