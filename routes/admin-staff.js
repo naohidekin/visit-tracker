@@ -378,7 +378,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       const freshData = loadStaff();
       if (isNurseType) {
         for (const s of freshData.staff)
-          if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) + 2);
+          if (s.type !== 'nurse' && s.col != null) s.col = idxToCol(colToIdx(s.col) + 2);
       }
       freshData.staff.push(newEntry);
       saveStaff(freshData);
@@ -517,7 +517,7 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
           }
         }
         for (const s of data.staff) {
-          if (s.type !== 'nurse') s.col = idxToCol(colToIdx(s.col) - 2);
+          if (s.type !== 'nurse' && s.col != null) s.col = idxToCol(colToIdx(s.col) - 2);
         }
         saveStaff(data);
         return { staff: data.staff };
@@ -559,7 +559,7 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
         if (idx === -1) return { error: 'スタッフが見つかりません', status: 404 };
         data.staff.splice(idx, 1);
         for (const s of data.staff) {
-          if (s.type !== 'nurse' && colToIdx(s.col) > delIdx) {
+          if (s.type !== 'nurse' && s.col != null && colToIdx(s.col) > delIdx) {
             s.col = idxToCol(colToIdx(s.col) - 1);
           }
         }
