@@ -394,7 +394,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('❌ スタッフ追加エラー:', e);
-    res.status(500).json({ error: `スタッフの追加に失敗しました [${e?.name}: ${e?.message}]` });
+    res.status(500).json({ error: 'スタッフの追加に失敗しました' });
   }
 }));
 
