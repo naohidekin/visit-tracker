@@ -9,7 +9,7 @@ const { auditLog } = require('../lib/audit');
 
 router.get('/api/admin/incentive', requireAdmin, (_req, res) => {
   const data = loadStaff();
-  const defs = data.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const defs = data.incentive_defaults;
   res.json({
     defaults: {
       nurse: defs.nurse ?? 3.5, rehab: defs.rehab ?? 20.0,

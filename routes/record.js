@@ -178,7 +178,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
         total_iryo  += i;
         if (k > 0 || i > 0) working_days++;
       }
-      const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+      const iDef = staffData.incentive_defaults;
       const rawLine   = (staff.incentive_line != null) ? staff.incentive_line : iDef.nurse;
       const workRatio = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline     = Math.round(rawLine * workRatio * 100) / 100;
@@ -201,7 +201,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
         total_units += v;
         if (v > 0) working_days++;
       }
-      const iDef2     = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+      const iDef2     = staffData.incentive_defaults;
       const rawLine2  = (staff.incentive_line != null) ? staff.incentive_line : iDef2.rehab;
       const workRatio2 = (staff.work_hours != null) ? staff.work_hours / 8.0 : 1.0;
       const iline2    = Math.round(rawLine2 * workRatio2 * 100) / 100;
@@ -236,7 +236,7 @@ async function handleBillingDetail(req, res) {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
   const isNurse = staff.type === 'nurse';
 
   try {
@@ -358,7 +358,7 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
 
   try {
     const api = await getSheets();
@@ -450,7 +450,7 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
 
   try {
     const api = await getSheets();

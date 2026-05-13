@@ -22,7 +22,7 @@ async function handleAdminBillingDetail(req, res) {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
   const isNurse = staff.type === 'nurse';
@@ -141,7 +141,7 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
 
@@ -230,7 +230,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
   const endRow = DATA_START_ROW + daysInMonth - 1;
 
   const staffData = loadStaff();
-  const iDef = staffData.incentive_defaults || { nurse: 3.5, rehab: 20.0 };
+  const iDef = staffData.incentive_defaults;
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
   const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office' && s.type !== 'admin');
