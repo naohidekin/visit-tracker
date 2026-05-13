@@ -6,7 +6,7 @@ const router = express.Router();
 const { loadStaff, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
-const { getSheets, sheetsRetry } = require('../lib/sheets');
+const { getValues } = require('../lib/sheets');
 const { DATA_START_ROW, WD, BILLING_DAY, INCENTIVE_NURSE_RATE, INCENTIVE_REHAB_RATE } = require('../lib/constants');
 
 // ─── 管理者用 締め期間日別明細 ──────────────────────────────────
@@ -28,7 +28,6 @@ async function handleAdminBillingDetail(req, res) {
   const isNurse = staff.type === 'nurse';
 
   try {
-    const api = await getSheets();
     const sidPrev = getSpreadsheetIdForYear(prevYear);
     const sidCur  = getSpreadsheetIdForYear(y);
     const colRange = isNurse
@@ -42,12 +41,10 @@ async function handleAdminBillingDetail(req, res) {
     const endRowB   = DATA_START_ROW + 14;
     const rangeB = `${m}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
 
-    const [respA, respB] = await Promise.all([
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidPrev, range: rangeA })).catch(() => ({ data: { values: [] } })),
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidCur,  range: rangeB })).catch(() => ({ data: { values: [] } })),
+    const [rowsA, rowsB] = await Promise.all([
+      getValues(sidPrev, rangeA).catch(() => []),
+      getValues(sidCur,  rangeB).catch(() => []),
     ]);
-    const rowsA = respA.data.values ?? [];
-    const rowsB = respB.data.values ?? [];
 
     const days = [];
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
@@ -146,13 +143,8 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -184,11 +176,7 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
                  incentive_rate: rateAN,
                  work_hours: staff.work_hours ?? null } });
     } else {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
       let total_units = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -236,18 +224,13 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
   const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office' && s.type !== 'admin');
 
   try {
-    const api = await getSheets();
     const results = [];
     let total_amount = 0;
 
     for (const staff of activeStaff) {
       try {
         if (staff.type === 'nurse') {
-          const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-            spreadsheetId: sid,
-            range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-          }));
-          const rows = resp.data.values ?? [];
+          const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
           let total_kaigo = 0, total_iryo = 0, working_days = 0;
           for (const r of rows) {
             const k = parseFloat(r?.[0]) || 0;
@@ -279,11 +262,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           });
         } else if (staff.col) {
           // リハビリ職共通（PT/OT/ST）: 単一列構造
-          const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-            spreadsheetId: sid,
-            range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-          }));
-          const rows = resp.data.values ?? [];
+          const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
           let total_units = 0, working_days = 0;
           for (const r of rows) {
             const v = parseFloat(r?.[0]) || 0;
