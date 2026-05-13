@@ -8,7 +8,7 @@ const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear } = require('
 const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, validateNum, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { getSheets, sheetsRetry } = require('../lib/sheets');
+const { getValues, updateValues, batchUpdateValues, getAllStaffRecordStatus } = require('../lib/sheets');
 const { DATA_START_ROW, WD, BILLING_DAY } = require('../lib/constants');
 
 async function hasRecordForDate(staff, dateStr) {
@@ -19,20 +19,11 @@ async function hasRecordForDate(staff, dateStr) {
   const sid = getSpreadsheetIdForYear(year);
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`,
-      }));
-      const vals = resp.data.values?.[0] ?? [];
+      const vals = (await getValues(sid, `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`))[0] ?? [];
       return (vals[0] !== undefined && vals[0] !== '') || (vals[1] !== undefined && vals[1] !== '');
     } else {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.col}${row}`,
-      }));
-      const val = resp.data.values?.[0]?.[0];
+      const val = (await getValues(sid, `${month}月!${staff.col}${row}`))[0]?.[0];
       return val !== undefined && val !== '';
     }
   } catch (e) {
@@ -57,20 +48,12 @@ router.get('/api/record', requireStaff, async (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`,
-      }));
-      const vals = resp.data.values?.[0] ?? [];
+      const vals = (await getValues(sid, `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`))[0] ?? [];
       res.json({ kaigo: vals[0] ?? null, iryo: vals[1] ?? null });
     } else {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.col}${row}`,
-      }));
-      res.json({ value: resp.data.values?.[0]?.[0] ?? null });
+      const val = (await getValues(sid, `${month}月!${staff.col}${row}`))[0]?.[0] ?? null;
+      res.json({ value: val });
     }
   } catch (e) {
     console.error('❌ record GET error:', e.message);
@@ -107,38 +90,24 @@ router.post('/api/record', requireStaff, async (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
       const { kaigo, iryo } = req.body;
       const kv = validateUnitValue(kaigo);
       const iv = validateUnitValue(iryo);
       if (!kv.valid || !iv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
-      const kVal = kv.value, iVal = iv.value;
-      await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
-        spreadsheetId: sid,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: [
-            { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kVal]] },
-            { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iVal]] },
-          ],
-        },
-      }));
-      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, kaigo: kVal, iryo: iVal });
-      res.json({ success: true, kaigo: kVal, iryo: iVal });
+      await batchUpdateValues(sid, [
+        { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kv.value]] },
+        { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iv.value]] },
+      ]);
+      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, kaigo: kv.value, iryo: iv.value });
+      res.json({ success: true, kaigo: kv.value, iryo: iv.value });
     } else {
       const { value } = req.body;
       const vv = validateUnitValue(value);
       if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
-      const val = vv.value;
-      await sheetsRetry(() => api.spreadsheets.values.update({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.col}${row}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [[val]] },
-      }));
-      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, value: val });
-      res.json({ success: true, value: val });
+      await updateValues(sid, `${month}月!${staff.col}${row}`, [[vv.value]]);
+      auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, value: vv.value });
+      res.json({ success: true, value: vv.value });
     }
   } catch (e) {
     console.error('❌ record POST error:', JSON.stringify(e.response?.data ?? e.message));
@@ -163,13 +132,8 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${mv.value}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${mv.value}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       for (const r of rows) {
         const k = parseFloat(r?.[0]) || 0;
@@ -190,11 +154,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
                  incentive_line: iline, incentive_triggered: total >= targetTotal,
                  work_hours: staff.work_hours ?? null });
     } else {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${mv.value}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${mv.value}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
       let total_units = 0, working_days = 0;
       for (const r of rows) {
         const v = parseFloat(r?.[0]) || 0;
@@ -240,26 +200,23 @@ async function handleBillingDetail(req, res) {
   const isNurse = staff.type === 'nurse';
 
   try {
-    const api = await getSheets();
     const sidPrev = getSpreadsheetIdForYear(prevYear);
     const sidCur  = getSpreadsheetIdForYear(y);
     const colRange = isNurse
       ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
       : `${staff.col}%s:${staff.col}%s`;
 
-    const startRowA = DATA_START_ROW + 15;
+    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
     const endRowA   = DATA_START_ROW + daysInPrev - 1;
     const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
     const startRowB = DATA_START_ROW;
-    const endRowB   = DATA_START_ROW + 14;
+    const endRowB   = DATA_START_ROW + (BILLING_DAY - 2);
     const rangeB = `${m}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
 
-    const [respA, respB] = await Promise.all([
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidPrev, range: rangeA })).catch(() => ({ data: { values: [] } })),
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidCur,  range: rangeB })).catch(() => ({ data: { values: [] } })),
+    const [rowsA, rowsB] = await Promise.all([
+      getValues(sidPrev, rangeA).catch(() => []),
+      getValues(sidCur,  rangeB).catch(() => []),
     ]);
-    const rowsA = respA.data.values ?? [];
-    const rowsB = respB.data.values ?? [];
 
     const days = [];
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
@@ -361,13 +318,8 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const iDef = staffData.incentive_defaults;
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -397,11 +349,7 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
                  incentive_amount: incentive_amountN,
                  work_hours: staff.work_hours ?? null } });
     } else {
-      const resp = await sheetsRetry(() => api.spreadsheets.values.get({
-        spreadsheetId: sid,
-        range: `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`,
-      }));
-      const rows = resp.data.values ?? [];
+      const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
       let total_units = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -453,7 +401,6 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
   const iDef = staffData.incentive_defaults;
 
   try {
-    const api = await getSheets();
     const sidPrev = getSpreadsheetIdForYear(prevYear);
     const sidCur  = getSpreadsheetIdForYear(payYear);
 
@@ -463,24 +410,21 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
       ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
       : `${staff.col}%s:${staff.col}%s`;
 
-    // Range A: 前月16日〜末日 (row = DATA_START_ROW + day - 1)
-    const startRowA = DATA_START_ROW + 15; // 16日 = row 20
+    // Range A: 前月BILLING_DAY日〜末日
+    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
     const endRowA   = DATA_START_ROW + daysInPrev - 1;
     const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
 
-    // Range B: 当月1日〜15日
-    const startRowB = DATA_START_ROW;     // 1日 = row 5
-    const endRowB   = DATA_START_ROW + 14; // 15日 = row 19
+    // Range B: 当月1日〜(BILLING_DAY-1)日
+    const startRowB = DATA_START_ROW;
+    const endRowB   = DATA_START_ROW + (BILLING_DAY - 2);
     const rangeB = `${payM}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
 
     // 並列フェッチ
-    const [respA, respB] = await Promise.all([
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidPrev, range: rangeA })).catch(() => ({ data: { values: [] } })),
-      sheetsRetry(() => api.spreadsheets.values.get({ spreadsheetId: sidCur,  range: rangeB })).catch(() => ({ data: { values: [] } })),
+    const [rowsA, rowsB] = await Promise.all([
+      getValues(sidPrev, rangeA).catch(() => []),
+      getValues(sidCur,  rangeB).catch(() => []),
     ]);
-
-    const rowsA = respA.data.values ?? [];
-    const rowsB = respB.data.values ?? [];
 
     // 今日の日付で残日数・確定判定
     const today = new Date();
