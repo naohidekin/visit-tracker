@@ -6,7 +6,7 @@ const { loadStaff, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { validateUnitValue } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { getSheets, sheetsRetry } = require('../lib/sheets');
+const { updateValues, batchUpdateValues } = require('../lib/sheets');
 const { DATA_START_ROW } = require('../lib/constants');
 
 router.post('/api/admin/record', requireAdmin, async (req, res) => {
@@ -24,34 +24,20 @@ router.post('/api/admin/record', requireAdmin, async (req, res) => {
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
 
   try {
-    const api = await getSheets();
     if (staff.type === 'nurse') {
       const { kaigo, iryo } = req.body;
       const kv = validateUnitValue(kaigo);
       const iv = validateUnitValue(iryo);
       if (!kv.valid || !iv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
-      const kVal = kv.value, iVal = iv.value;
-      await sheetsRetry(() => api.spreadsheets.values.batchUpdate({
-        spreadsheetId: sid,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: [
-            { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kVal]] },
-            { range: `${month}月!${staff.iryo_col}${row}`, values: [[iVal]] },
-          ],
-        },
-      }));
+      await batchUpdateValues(sid, [
+        { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kv.value]] },
+        { range: `${month}月!${staff.iryo_col}${row}`, values: [[iv.value]] },
+      ]);
     } else {
       const { value } = req.body;
       const vv = validateUnitValue(value);
       if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
-      const val = vv.value;
-      await sheetsRetry(() => api.spreadsheets.values.update({
-        spreadsheetId: sid,
-        range: `${month}月!${staff.col}${row}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [[val]] },
-      }));
+      await updateValues(sid, `${month}月!${staff.col}${row}`, [[vv.value]]);
     }
     auditLog(req, 'record.admin_edit', { type: 'visit_record', id: staffId, label: `${staff.name} ${date}` }, { date, ...req.body });
     res.json({ success: true });
