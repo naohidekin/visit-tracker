@@ -6,6 +6,7 @@ const router = express.Router();
 const { loadStaff, loadLeave, loadAttendance, loadStandby } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { isWorkday, formatLocalDate, asyncRoute } = require('../lib/helpers');
+const { BILLING_DAY } = require('../lib/constants');
 
 // ─── 出勤確定 集計 API（月次 / 締め期間 切替対応）──────────────────
 // mode=billing: 前月16日〜当月15日  mode=monthly(デフォルト): 1日〜末日
@@ -23,9 +24,9 @@ router.get('/api/admin/attendance/monthly', requireAdmin, asyncRoute(async (req,
   if (isBilling) {
     let prevY = year, prevM = m - 1;
     if (prevM < 1) { prevY--; prevM = 12; }
-    startDate = `${prevY}-${String(prevM).padStart(2, '0')}-16`;
-    endDate   = `${year}-${String(m).padStart(2, '0')}-15`;
-    billingLabel = `${prevM}/16〜${m}/15`;
+    startDate = `${prevY}-${String(prevM).padStart(2, '0')}-${String(BILLING_DAY).padStart(2, '0')}`;
+    endDate   = `${year}-${String(m).padStart(2, '0')}-${String(BILLING_DAY - 1).padStart(2, '0')}`;
+    billingLabel = `${prevM}/${BILLING_DAY}〜${m}/${BILLING_DAY - 1}`;
   } else {
     const daysInMonth = new Date(year, m, 0).getDate();
     startDate = `${yearStr}-${monthStr}-01`;

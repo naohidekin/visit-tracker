@@ -8,7 +8,7 @@ const { requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, formatLocalDate, getStandbyFeeWithCustom, isOnLeaveToday } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { DATA_START_ROW } = require('../lib/constants');
+const { DATA_START_ROW, BILLING_DAY } = require('../lib/constants');
 
 // 全スタッフの入力状況を一括取得（batchGet で効率化）
 async function getAllStaffRecordStatus(dateStr) {
@@ -87,7 +87,7 @@ router.get('/api/admin/standby/records', requireAdmin, (req, res) => {
   if (!month) return res.status(400).json({ error: 'month は必須です' });
   const data = loadStandby();
   const [y, m] = month.split('-').map(Number);
-  const startDate = new Date(y, m - 2, 16);
+  const startDate = new Date(y, m - 2, BILLING_DAY);
   const endDate = new Date(y, m - 1, 15);
   const startStr = formatLocalDate(startDate);
   const endStr = formatLocalDate(endDate);
@@ -143,7 +143,7 @@ router.get('/api/admin/standby/summary', requireAdmin, (req, res) => {
   const data = loadStandby();
   const customHols = new Set(data.customHolidays || []);
   const [y, m] = month.split('-').map(Number);
-  const startDate = new Date(y, m - 2, 16);
+  const startDate = new Date(y, m - 2, BILLING_DAY);
   const endDate = new Date(y, m - 1, 15);
   const startStr = formatLocalDate(startDate);
   const endStr = formatLocalDate(endDate);
@@ -216,7 +216,7 @@ router.get('/api/admin/rainy/summary', requireAdmin, async (req, res) => {
   if (!month) return res.status(400).json({ error: 'month は必須です' });
   const data = loadStandby();
   const [y, m] = month.split('-').map(Number);
-  const startDate = new Date(y, m - 2, 16);
+  const startDate = new Date(y, m - 2, BILLING_DAY);
   const endDate = new Date(y, m - 1, 15);
   const startStr = formatLocalDate(startDate);
   const endStr = formatLocalDate(endDate);

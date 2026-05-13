@@ -7,7 +7,7 @@ const { loadStaff, getSpreadsheetIdForYear } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { DATA_START_ROW, WD } = require('../lib/constants');
+const { DATA_START_ROW, WD, BILLING_DAY, INCENTIVE_NURSE_RATE, INCENTIVE_REHAB_RATE } = require('../lib/constants');
 
 // ─── 管理者用 締め期間日別明細 ──────────────────────────────────
 async function handleAdminBillingDetail(req, res) {
@@ -16,15 +16,15 @@ async function handleAdminBillingDetail(req, res) {
   const prevM = m === 1 ? 12 : m - 1;
   const prevYear = m === 1 ? y - 1 : y;
   const daysInPrev = new Date(prevYear, prevM, 0).getDate();
-  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-16`;
+  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(BILLING_DAY).padStart(2,'0')}`;
   const billingEnd   = `${y}-${String(m).padStart(2,'0')}-15`;
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
   const iDef = staffData.incentive_defaults;
-  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
-  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
+  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? INCENTIVE_NURSE_RATE;
+  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
   const isNurse = staff.type === 'nurse';
 
   try {
@@ -35,7 +35,7 @@ async function handleAdminBillingDetail(req, res) {
       ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
       : `${staff.col}%s:${staff.col}%s`;
 
-    const startRowA = DATA_START_ROW + 15;
+    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
     const endRowA   = DATA_START_ROW + daysInPrev - 1;
     const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
     const startRowB = DATA_START_ROW;
@@ -52,8 +52,8 @@ async function handleAdminBillingDetail(req, res) {
     const days = [];
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
 
-    for (let i = 0; i < (daysInPrev - 15); i++) {
-      const day = 16 + i;
+    for (let i = 0; i < (daysInPrev - (BILLING_DAY - 1)); i++) {
+      const day = BILLING_DAY + i;
       const row = rowsA[i] ?? [];
       if (isNurse) {
         const kaigo = (row[0] !== undefined && row[0] !== '') ? parseFloat(row[0]) : null;
@@ -142,8 +142,8 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const daysInMonth = new Date(y, m, 0).getDate();
   const endRow = DATA_START_ROW + daysInMonth - 1;
   const iDef = staffData.incentive_defaults;
-  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
-  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
+  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? INCENTIVE_NURSE_RATE;
+  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
 
   try {
     const api = await getSheets();
@@ -231,8 +231,8 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
 
   const staffData = loadStaff();
   const iDef = staffData.incentive_defaults;
-  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? 4000;
-  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? 500;
+  const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? INCENTIVE_NURSE_RATE;
+  const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
   const activeStaff = staffData.staff.filter(s => !s.archived && s.type !== 'office' && s.type !== 'admin');
 
   try {

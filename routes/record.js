@@ -9,7 +9,7 @@ const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, validateNum, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, getExpectedWorkingDays, getExpectedWorkingDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { DATA_START_ROW, WD } = require('../lib/constants');
+const { DATA_START_ROW, WD, BILLING_DAY } = require('../lib/constants');
 
 async function hasRecordForDate(staff, dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -230,8 +230,8 @@ async function handleBillingDetail(req, res) {
   const prevM = m === 1 ? 12 : m - 1;
   const prevYear = m === 1 ? y - 1 : y;
   const daysInPrev = new Date(prevYear, prevM, 0).getDate();
-  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-16`;
-  const billingEnd   = `${y}-${String(m).padStart(2,'0')}-15`;
+  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(BILLING_DAY).padStart(2,'0')}`;
+  const billingEnd   = `${y}-${String(m).padStart(2,'0')}-${String(BILLING_DAY - 1).padStart(2,'0')}`;
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -265,8 +265,8 @@ async function handleBillingDetail(req, res) {
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
 
     // 前月16日〜末日
-    for (let i = 0; i < (daysInPrev - 15); i++) {
-      const day = 16 + i;
+    for (let i = 0; i < (daysInPrev - (BILLING_DAY - 1)); i++) {
+      const day = BILLING_DAY + i;
       const dateStr = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       const row = rowsA[i] ?? [];
       if (isNurse) {
@@ -437,13 +437,13 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
     return res.status(400).json({ error: 'payMonth パラメータが必要です (YYYY-MM)' });
 
   const [payYear, payM] = payMonth.split('-').map(Number);
-  // 対象期間: 前月16日 〜 当月15日
+  // 対象期間: 前月BILLING_DAY日 〜 当月(BILLING_DAY-1)日
   const prevM    = payM === 1 ? 12 : payM - 1;
   const prevYear = payM === 1 ? payYear - 1 : payYear;
   const daysInPrev = new Date(prevYear, prevM, 0).getDate();
 
-  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-16`;
-  const billingEnd   = `${payYear}-${String(payM).padStart(2,'0')}-15`;
+  const billingStart = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(BILLING_DAY).padStart(2,'0')}`;
+  const billingEnd   = `${payYear}-${String(payM).padStart(2,'0')}-${String(BILLING_DAY - 1).padStart(2,'0')}`;
   const payDate      = `${payYear}-${String(payM).padStart(2,'0')}-25`;
 
   const staffData = loadStaff();
@@ -491,8 +491,8 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
       let total_kaigo = 0, total_iryo = 0, working_days = 0, daysRemaining = 0;
 
       // Range A: 前月16日〜末日
-      for (let i = 0; i < (daysInPrev - 15); i++) {
-        const day = 16 + i;
+      for (let i = 0; i < (daysInPrev - (BILLING_DAY - 1)); i++) {
+        const day = BILLING_DAY + i;
         const dateStr = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         const row = rowsA[i] ?? [];
         const k = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
@@ -535,8 +535,8 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
     } else {
       let total_units = 0, working_days = 0, daysRemaining = 0;
 
-      for (let i = 0; i < (daysInPrev - 15); i++) {
-        const day = 16 + i;
+      for (let i = 0; i < (daysInPrev - (BILLING_DAY - 1)); i++) {
+        const day = BILLING_DAY + i;
         const dateStr = `${prevYear}-${String(prevM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         const row = rowsA[i] ?? [];
         const v = (row[0] !== undefined && row[0] !== '') ? (parseFloat(row[0]) || 0) : 0;
