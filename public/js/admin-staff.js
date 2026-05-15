@@ -219,31 +219,33 @@ async function addStaff() {
 
   btn.disabled = true; btn.textContent = '処理中（全月シート更新中）...';
 
-  const res  = await apiFetch('/api/admin/staff', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, furigana_family: fkana, furigana_given: gkana,
-                           type, loginId, initialPw: initPw,
-                           hire_date: hireDate, oncall, email }),
-  });
-  const data = await res.json();
-
-  if (data.success) {
-    btn.disabled = false; btn.textContent = '追加する';
-    staffList = data.staff;
-    renderTable();
-    // フォームリセット
-    ['newName','newFkana','newGkana','newLoginId','newInitialPw','newEmail','newHireDate'].forEach(id => {
-      document.getElementById(id).value = '';
+  try {
+    const res  = await apiFetch('/api/admin/staff', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, furigana_family: fkana, furigana_given: gkana,
+                             type, loginId, initialPw: initPw,
+                             hire_date: hireDate, oncall, email }),
     });
-    document.getElementById('idAutoLabel').textContent = '';
-    document.getElementById('pwAutoLabel').textContent = '';
-    document.getElementById('newOncall').value = '無';
-    document.getElementById('oncallField').style.display = 'none';
-    showToast(`✅ ${name} を追加しました`);
-  } else {
+    const data = await res.json();
+
+    if (data.success) {
+      staffList = data.staff;
+      renderTable();
+      // フォームリセット
+      ['newName','newFkana','newGkana','newLoginId','newInitialPw','newEmail','newHireDate'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('idAutoLabel').textContent = '';
+      document.getElementById('pwAutoLabel').textContent = '';
+      document.getElementById('newOncall').value = '無';
+      document.getElementById('oncallField').style.display = 'none';
+      showToast(`✅ ${name} を追加しました`);
+    } else {
+      err.textContent = 'エラー: ' + (data.error || '追加失敗');
+      err.style.display = 'block';
+    }
+  } finally {
     btn.disabled = false; btn.textContent = '追加する';
-    err.textContent = 'エラー: ' + (data.error || '追加失敗');
-    err.style.display = 'block';
   }
 }
 
@@ -278,8 +280,9 @@ function closeDelModal() {
   deleteTarget = '';
 }
 async function confirmDelete() {
+  const id = deleteTarget;
   closeDelModal();
-  const res  = await apiFetch(`/api/admin/staff/${encodeURIComponent(deleteTarget)}`, {
+  const res  = await apiFetch(`/api/admin/staff/${encodeURIComponent(id)}`, {
     method: 'DELETE', headers: { 'Content-Type': 'application/json' },
   });
   const data = await res.json();

@@ -123,8 +123,8 @@ async function loadDashboard() {
     const lRes = await fetch('/api/admin/leave/requests');
     if (lRes.ok) {
       const leave = await lRes.json();
-      const pendingLeave = Array.isArray(leave)
-        ? leave.filter(r => r.status === 'pending').length : 0;
+      const pendingLeave = Array.isArray(leave.requests)
+        ? leave.requests.filter(r => r.status === 'pending').length : 0;
       document.getElementById('dashLeave').textContent = pendingLeave;
       const badge = document.getElementById('badgeLeave');
       if (pendingLeave > 0) { badge.textContent = pendingLeave; badge.style.display = ''; }

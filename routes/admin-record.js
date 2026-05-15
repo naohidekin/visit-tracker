@@ -12,6 +12,7 @@ const { DATA_START_ROW } = require('../lib/constants');
 router.post('/api/admin/record', requireAdmin, async (req, res) => {
   const { staffId, date } = req.body;
   if (!staffId || !date) return res.status(400).json({ error: 'パラメータ不足' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '日付形式が不正です' });
 
   const d     = new Date(date);
   const year  = d.getFullYear();

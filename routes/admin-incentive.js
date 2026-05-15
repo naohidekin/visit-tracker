@@ -15,7 +15,7 @@ router.get('/api/admin/incentive', requireAdmin, (_req, res) => {
       nurse: defs.nurse ?? 3.5, rehab: defs.rehab ?? 20.0,
       nurse_rate: defs.nurse_rate ?? 4000, rehab_rate: defs.rehab_rate ?? 500,
     },
-    staff: data.staff.filter(s => !s.archived && s.type !== 'office').map(s => ({
+    staff: data.staff.filter(s => !s.archived && s.type !== 'office' && s.type !== 'admin').map(s => ({
       id: s.id, name: s.name, type: s.type,
       furigana_family: s.furigana_family, furigana_given: s.furigana_given,
       incentive_line: s.incentive_line ?? null,

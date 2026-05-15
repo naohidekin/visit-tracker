@@ -36,6 +36,8 @@ router.get('/api/notices/unread-count', requireStaff, (req, res) => {
 router.post('/api/notices/:id/read', requireStaff, asyncRoute((req, res) => {
   atomicModify(() => {
     const data = loadNotices();
+    const noticeExists = data.notices.some(n => n.id === req.params.id);
+    if (!noticeExists) return;
     const staffId = req.session.staffId;
     if (!data.readStatus[staffId]) data.readStatus[staffId] = [];
     if (!data.readStatus[staffId].includes(req.params.id)) {

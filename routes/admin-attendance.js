@@ -72,7 +72,7 @@ router.get('/api/admin/attendance/monthly', requireAdmin, asyncRoute(async (req,
 
       const manual = dayRecords[s.id];
       const onLeave = leaveData.requests.some(r =>
-        r.staffId === s.id && r.status === 'approved' && r.dates.includes(dateStr)
+        r.staffId === s.id && r.status === 'approved' && r.type === 'full' && r.dates.includes(dateStr)
       );
 
       let status;

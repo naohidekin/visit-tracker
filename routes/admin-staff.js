@@ -290,7 +290,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: 'nurse', kaigo_col: kaigoCol, iryo_col: iryoCol,
-        seq: nextSeq, initial_pw: initialPw,
+        seq: nextSeq,
         hire_date: hire_date || null,
         oncall: oncall || '無',
         email: email || null,
@@ -302,7 +302,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type,
-        seq: nextSeq, initial_pw: initialPw,
+        seq: nextSeq,
         hire_date: hire_date || null,
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
@@ -366,7 +366,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       newEntry = { id: loginId, name,
         furigana_family: furigana_family || '', furigana_given: furigana_given || '',
         type: type, col: newCol,
-        seq: nextSeq, initial_pw: initialPw,
+        seq: nextSeq,
         hire_date: hire_date || null,
         email: email || null,
         password_hash: await bcrypt.hash(initialPw, 10) };
@@ -597,73 +597,20 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
 }));
 
 router.post('/api/admin/staff/:id/reset-password', requireAdmin, asyncRoute(async (req, res) => {
-  // First read to get initial_pw (read-only, outside atomicModify)
-  const preData = loadStaff();
-  const preStaff = preData.staff.find(s => s.id === req.params.id);
-  if (!preStaff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  // initial_pwがあればそれを使用、なければランダム4桁パスワードを生成
-  const newPw = preStaff.initial_pw || Math.random().toString(36).slice(-4).toUpperCase();
+  const newPw = Math.random().toString(36).slice(-4).toUpperCase() + Math.random().toString(36).slice(-4).toUpperCase();
   const hash = await bcrypt.hash(newPw, 10);
   const result = atomicModify(() => {
     const data  = loadStaff();
     const staff = data.staff.find(s => s.id === req.params.id);
     if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
     staff.password_hash = hash;
+    delete staff.initial_pw;
     saveStaff(data);
     return { staffId: staff.id, staffName: staff.name };
   });
   if (result.error) return res.status(result.status).json({ error: result.error });
   auditLog(req, 'staff.reset_password', { type: 'staff', id: result.staffId, label: result.staffName });
-  res.json({ success: true, initial_pw: newPw });
-}));
-
-// ─── API: 一時修正 – 列ズレ修正 v2（森部・佐原バグ対応） ─────────
-router.post('/api/admin/fix-staff-columns', requireAdmin, asyncRoute((req, res) => {
-  try {
-    const result = atomicModify(() => {
-      const data = loadStaff();
-      const changes = [];
-
-      // PT の列を修正（既に正しい場合はスキップ）
-      const ptFixes = { nakashima05: 'O', ozawa06: 'P', ooe07: 'Q' };
-      for (const s of data.staff) {
-        if (ptFixes[s.id] && s.col !== ptFixes[s.id]) {
-          changes.push(`${s.name}: col ${s.col}→${ptFixes[s.id]}`);
-          s.col = ptFixes[s.id];
-        }
-      }
-
-      // 正規の森部・佐原エントリの列を確定（IDで特定）
-      const nurseFixes = {
-        moribe10: { kaigo_col: 'K', iryo_col: 'L' },
-        sahara11: { kaigo_col: 'M', iryo_col: 'N' },
-      };
-      for (const s of data.staff) {
-        if (nurseFixes[s.id]) {
-          const fix = nurseFixes[s.id];
-          if (s.kaigo_col !== fix.kaigo_col) {
-            changes.push(`${s.name}(${s.id}): kaigo_col ${s.kaigo_col}→${fix.kaigo_col}`);
-            s.kaigo_col = fix.kaigo_col;
-            s.iryo_col  = fix.iryo_col;
-          }
-        }
-      }
-
-      // 重複エントリ（morobe08/sahara09）をスタッフリストから削除（スプレッドシートは触らない）
-      const duplicateIds = ['morobe08', 'sahara09'];
-      const before = data.staff.length;
-      data.staff = data.staff.filter(s => !duplicateIds.includes(s.id));
-      const removedCount = before - data.staff.length;
-      if (removedCount > 0) changes.push(`重複エントリ削除: ${duplicateIds.join(', ')} (${removedCount}件)`);
-
-      saveStaff(data);
-      return { changes, allStaff: data.staff };
-    });
-    res.json({ success: true, changes: result.changes, staff: result.allStaff });
-  } catch (e) {
-    console.error('❌ staff sync error:', e);
-    res.status(500).json({ error: 'スタッフ同期に失敗しました' });
-  }
+  res.json({ ok: true });
 }));
 
 module.exports = router;

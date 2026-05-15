@@ -207,7 +207,7 @@ fetch('/api/admin/staff').then(r => {
     const res = await fetch('/api/admin/me');
     if (res.ok) {
       const data = await res.json();
-      if (data.staffId) {
+      if (data.id) {
         onLoginSuccess();
         return;
       }

@@ -101,6 +101,11 @@ router.get('/api/admin/standby/records', requireAdmin, (req, res) => {
 router.post('/api/admin/standby/records', requireAdmin, asyncRoute((req, res) => {
   const { date, staffId } = req.body;
   if (!date) return res.status(400).json({ error: 'date は必須です' });
+  if (staffId && staffId !== '') {
+    const staffData = loadStaff();
+    const valid = staffData.staff.some(s => s.id === staffId && !s.archived && s.type === 'nurse');
+    if (!valid) return res.status(400).json({ error: '有効な看護師スタッフIDを指定してください' });
+  }
   atomicModify(() => {
     const data = loadStandby();
     const idx = data.records.findIndex(r => r.date === date);
