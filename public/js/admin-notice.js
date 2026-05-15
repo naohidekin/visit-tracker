@@ -89,9 +89,18 @@ async function loadAdminNotices() {
     const badge = isSystem
       ? '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fff3cd;color:#856404;border:1px solid #ffc107">運営</span>'
       : '<span style="display:inline-block;font-size:14px;font-weight:700;padding:2px 7px;border-radius:6px;background:#e8f4fd;color:#1565c0;border:1px solid #90caf9">管理者</span>';
-    const targetLabel = n.target === 'admin' ? '<span style="font-size:12px;color:#7b1fa2">管理者</span>'
-      : n.target === 'staff' ? '<span style="font-size:12px;color:#1565c0">スタッフ</span>'
-      : '<span style="font-size:12px;color:#666">全員</span>';
+    let targetLabel;
+    if (n.targetStaffId) {
+      const s = staffList.find(x => x.id === n.targetStaffId);
+      const name = s ? s.name : n.targetStaffId;
+      targetLabel = `<span style="font-size:12px;color:#e65100">${esc(name)}</span>`;
+    } else if (n.target === 'admin') {
+      targetLabel = '<span style="font-size:12px;color:#7b1fa2">管理者</span>';
+    } else if (n.target === 'staff') {
+      targetLabel = '<span style="font-size:12px;color:#1565c0">スタッフ</span>';
+    } else {
+      targetLabel = '<span style="font-size:12px;color:#666">全員</span>';
+    }
     const btns = `<button class="btn-xs btn-edit" data-action="edit-notice" data-id="${esc(n.id)}">編集</button><button class="btn-xs btn-danger" data-action="delete-notice" data-id="${esc(n.id)}">削除</button>`;
     return `<tr>
       <td>${badge}</td>
