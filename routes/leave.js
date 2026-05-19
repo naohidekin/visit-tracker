@@ -129,7 +129,11 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
   const start = startDate;
   const end   = endDate || startDate;
   if (start > end) return res.status(400).json({ error: '終了日は開始日以降にしてください' });
-  if (start < today) return res.status(400).json({ error: '本日以降の日付を指定してください' });
+  // 2か月前まで遡って申請可能
+  const twoMonthsAgo = new Date(today + 'T00:00:00+09:00');
+  twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+  const twoMonthsAgoStr = new Date(twoMonthsAgo.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (start < twoMonthsAgoStr) return res.status(400).json({ error: '2か月以上前の日付は指定できません' });
 
   // 日付配列を展開
   const dates = [];
