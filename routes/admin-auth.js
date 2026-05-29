@@ -11,8 +11,14 @@ const { auditLog } = require('../lib/audit');
 const { loadCredentials, updateCredentialCounter, getWebAuthnRpId, getWebAuthnOrigin } = require('../lib/webauthn');
 
 // Face ID有無チェック（ログイン画面でUIを切り替える用）
-router.post('/api/admin/check', async (_req, res) => {
-  return res.json({ ok: true });
+router.post('/api/admin/check', async (req, res) => {
+  const { staffId } = req.body || {};
+  if (!staffId) return res.json({ exists: false });
+  const data = loadStaff();
+  const staff = data.staff.find(s => s.id === staffId && !s.archived && s.is_admin);
+  if (!staff) return res.json({ exists: false });
+  const creds = loadCredentials(staffId);
+  return res.json({ exists: true, hasFaceId: creds.length > 0 });
 });
 
 // ルートA: パスワードログイン（Face ID未登録者向け、8文字以上）
