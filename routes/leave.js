@@ -41,8 +41,11 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
   );
   let usedDays = 0;
   for (const r of approved) {
+    if (r.type === 'celebration') continue; // お祝い休暇は有給使用済から除外
     const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-    usedDays += r.dates.length * perDate;
+    const totalDays = r.dates.length * perDate;
+    const celebPortion = r.celebration_days || 0; // 部分消費分は有給使用済から除外
+    usedDays += totalDays - celebPortion;
   }
   usedDays = Math.round(usedDays * 10) / 10;
   const granted     = staff.leave_granted || 0;
@@ -67,26 +70,24 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
 
   const nextGrant = calcNextGrant(staff.hire_date, undefined, staff.celebration_expiry_months || 6);
 
-  // お祝い休暇の使用日数を計算（手動調整 + 有効期限内の承認済み申請から自動消化）
+  // お祝い休暇の使用日数を計算（手動調整 + celebration申請 + 部分消費のある通常申請）
   const celebrationDays = staff.celebration_days || 3;
   const celebrationAdj = staff.celebration_used_adj || 0;
   let celebrationUsed = celebrationAdj;
-  if (staff.hire_date) {
-    const hireDate = new Date(staff.hire_date);
-    const celebrationExpiry = new Date(hireDate);
-    celebrationExpiry.setMonth(celebrationExpiry.getMonth() + (staff.celebration_expiry_months || 6));
-    for (const r of approved) {
-      if (celebrationUsed >= celebrationDays) break;
+  for (const r of approved) {
+    if (celebrationUsed >= celebrationDays) break;
+    if (r.type === 'celebration') {
+      const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
       for (const d of r.dates) {
         if (celebrationUsed >= celebrationDays) break;
-        if (new Date(d) < celebrationExpiry) {
-          const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-          celebrationUsed += perDate;
-        }
+        celebrationUsed += perDate;
       }
+    } else if (r.celebration_days) {
+      // 部分消費: 通常申請のうちお祝い休暇から消費した分
+      celebrationUsed = Math.min(celebrationDays, celebrationUsed + r.celebration_days);
     }
-    celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
   }
+  celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
 
   res.json({
     balance,
@@ -151,63 +152,92 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
     if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
     const leaveData = loadLeave();
 
-    if (type === 'celebration') {
-      if (!staff.hire_date) return { error: 'お祝い休暇は入職日が設定されている場合のみ利用できます', status: 400 };
+    const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
+
+    // お祝い休暇の有効期限・残日数を先に計算（自動変換・部分消費判定でも使用）
+    let celebInfo = null;
+    if (staff.hire_date) {
       const hire = new Date(staff.hire_date);
       const expiryMonths = staff.celebration_expiry_months || 6;
       const celebrationExpiry = new Date(hire);
       celebrationExpiry.setMonth(celebrationExpiry.getMonth() + expiryMonths);
       const now = new Date(getTodayJST());
-      if (now >= celebrationExpiry) return { error: `お祝い休暇の有効期限（入職から${expiryMonths}ヶ月）が過ぎています`, status: 400 };
-
-      // HIGH-1: 各申請日が有効期限内かチェック
-      const expiryStr = celebrationExpiry.toISOString().slice(0, 10);
-      for (const d of dates) {
-        if (new Date(d) >= celebrationExpiry)
-          return { error: `${d} はお祝い休暇の有効期限（${expiryStr}）を超えています`, status: 400 };
-      }
-
-      // HIGH-2: GET /api/leave/balance と同じロジックで消化済み日数を計算
       const celebrationDays = staff.celebration_days || 3;
       const celebrationAdj = staff.celebration_used_adj || 0;
       let celebrationUsed = celebrationAdj;
-      for (const r of leaveData.requests.filter(req => req.staffId === staff.id && req.status === 'approved')) {
+      // 承認済みの消化数: type='celebration' + 部分消費のある通常申請
+      for (const r of leaveData.requests.filter(lr => lr.staffId === staff.id && lr.status === 'approved')) {
         if (celebrationUsed >= celebrationDays) break;
-        for (const d of r.dates) {
-          if (celebrationUsed >= celebrationDays) break;
-          if (new Date(d) < celebrationExpiry) {
-            celebrationUsed += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        if (r.type === 'celebration') {
+          const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          for (const d of r.dates) {
+            if (celebrationUsed >= celebrationDays) break;
+            celebrationUsed += per;
           }
+        } else if (r.celebration_days) {
+          celebrationUsed = Math.min(celebrationDays, celebrationUsed + r.celebration_days);
         }
       }
       celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
-
-      // 有効期限内の日付を含む保留中申請の日数
+      // 保留中の消化数: type='celebration' + 部分消費のある通常申請
       let celebrationPending = 0;
       for (const r of leaveData.requests) {
         if (r.staffId !== staff.id || r.status !== 'pending') continue;
-        for (const d of r.dates) {
-          if (new Date(d) < celebrationExpiry)
-            celebrationPending += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+        if (r.type === 'celebration') {
+          const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          for (const d of r.dates) celebrationPending += per;
+        } else if (r.celebration_days) {
+          celebrationPending += r.celebration_days;
         }
       }
       celebrationPending = Math.round(celebrationPending * 10) / 10;
+      celebInfo = {
+        expiry: celebrationExpiry,
+        expiryStr: celebrationExpiry.toISOString().slice(0, 10),
+        expiryMonths,
+        active: now < celebrationExpiry,
+        remaining: Math.max(0, celebrationDays - celebrationUsed - celebrationPending),
+      };
+    }
 
-      const celebrationRemaining = Math.max(0, celebrationDays - celebrationUsed - celebrationPending);
-      if (celebrationRemaining < dates.length)
+    // お祝い休暇優先消費:
+    //   残高 >= リクエスト日数 → 完全自動変換（celebration タイプ）
+    //   残高 > 0 かつ < リクエスト日数 → 残高を全消費し、不足分を有給から補う（部分消費）
+    let effectiveType = type;
+    let celebrationDaysApplied = 0; // 部分消費時にお祝い休暇から消費する日数
+
+    if (type !== 'celebration' && celebInfo && celebInfo.active && celebInfo.remaining > 0) {
+      if (celebInfo.remaining >= requestDays) {
+        effectiveType = 'celebration'; // 完全自動変換
+      } else {
+        celebrationDaysApplied = celebInfo.remaining; // 残高全部消費、不足分は有給へ
+      }
+    }
+
+    if (effectiveType === 'celebration') {
+      if (!celebInfo || !celebInfo.active)
+        return { error: `お祝い休暇の有効期限（入職から${celebInfo ? celebInfo.expiryMonths : 6}ヶ月）が過ぎています`, status: 400 };
+      if (!staff.hire_date)
+        return { error: 'お祝い休暇は入職日が設定されている場合のみ利用できます', status: 400 };
+      for (const d of dates) {
+        if (new Date(d) >= celebInfo.expiry)
+          return { error: `${d} はお祝い休暇の有効期限（${celebInfo.expiryStr}）を超えています`, status: 400 };
+      }
+      if (celebInfo.remaining < requestDays)
         return { error: 'お祝い休暇の残日数が不足しています', status: 400 };
     } else {
+      // 有給残高のみで検証（お祝い部分を差し引いた分が有給で賄えるか）
       const balance = calcLeaveBalance(staff);
-      const celebrationRemaining = calcCelebrationRemaining(staff);
-      const totalAvailable = balance + celebrationRemaining;
-      const requestDays = (type === 'half_am' || type === 'half_pm') ? dates.length * 0.5 : dates.length;
+      const paidNeeded = requestDays - celebrationDaysApplied;
       const pendingDays = leaveData.requests
         .filter(r => r.staffId === staff.id && r.status === 'pending' && r.type !== 'celebration')
         .reduce((sum, r) => {
           const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-          return sum + r.dates.length * per;
+          const total = r.dates.length * per;
+          const celebPortion = r.celebration_days || 0;
+          return sum + Math.max(0, total - celebPortion);
         }, 0);
-      if (totalAvailable - pendingDays < requestDays)
+      if (balance - pendingDays < paidNeeded)
         return { error: '有給残日数が不足しています', status: 400 };
     }
 
@@ -226,17 +256,17 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       if (!ex) continue;
       if (ex.has('full') || ex.has('celebration'))
         return { error: `${dd} は既に申請済みです`, status: 400 };
-      if (type === 'full' || type === 'celebration')
+      if (effectiveType === 'full' || effectiveType === 'celebration')
         return { error: `${dd} は既に半日休暇が申請済みのため、全日申請できません`, status: 400 };
-      if (ex.has(type))
-        return { error: `${dd} は既に同じ区分（${type === 'half_am' ? '午前' : '午後'}）で申請済みです`, status: 400 };
+      if (ex.has(effectiveType))
+        return { error: `${dd} は既に同じ区分（${effectiveType === 'half_am' ? '午前' : '午後'}）で申請済みです`, status: 400 };
     }
 
     const request = {
       id: `${staff.id}-${start}-${Date.now()}`,
       staffId: staff.id,
       staffName: staff.name,
-      type,
+      type: effectiveType,
       dates,
       reason: reason || '',
       status: 'pending',
@@ -244,6 +274,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       createdAt: getNowJST().toISOString(),
       reviewedAt: null,
       cancelledAt: null,
+      ...(celebrationDaysApplied > 0 ? { celebration_days: celebrationDaysApplied } : {}),
     };
     leaveData.requests.push(request);
     saveLeave(leaveData);
@@ -251,7 +282,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
   });
 
   if (result.error) return res.status(result.status).json({ error: result.error });
-  auditLog(req, 'leave.request', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${startDate}` }, { type, dates });
+  auditLog(req, 'leave.request', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${startDate}` }, { type: result.request.type, dates });
   res.json({ ok: true, request: result.request });
 }));
 
