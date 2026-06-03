@@ -18,7 +18,7 @@ const { loadNotices, saveNotices, loadAttendance, saveAttendance, atomicModify }
 const { initMail } = require('./lib/mail');
 const { cleanExpiredTokens } = require('./lib/data');
 const { ensureDataDir } = require('./lib/data');
-const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, ensureAdminFields, ensureInitialAdmins, applyInitialAdminPassword, publishReleaseNotes, migrateCelebrationExpiryTo1Year } = require('./lib/startup');
+const { ensurePasswordsHashed, syncNewStaffFromSource, syncLeaveFieldsFromSource, ensureLeaveFields, ensureAdminFields, ensureInitialAdmins, applyInitialAdminPassword, publishReleaseNotes, migrateCelebrationExpiry } = require('./lib/startup');
 const { createSpreadsheetForYear } = require('./lib/sheets');
 const { getAllStaffRecordStatus } = require('./lib/sheets');
 
@@ -266,7 +266,7 @@ async function main() {
   cleanExpiredTokens();
   await syncNewStaffFromSource();
   syncLeaveFieldsFromSource();
-  migrateCelebrationExpiryTo1Year();
+  migrateCelebrationExpiry();
   publishReleaseNotes();
 
   // 毎年12/31 23:00 JST に翌年スプレッドシートを自動作成
