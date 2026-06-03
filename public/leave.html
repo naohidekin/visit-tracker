@@ -297,6 +297,11 @@
     document.getElementById('balanceCalc').style.display = '';
     document.getElementById('celebCalcRow').style.display = 'none';
     document.getElementById('infoCelebrationRow').style.display = 'none';
+    // State 1で変更したラベル・行をリセット
+    const _grantedRow = document.getElementById('balGranted').closest('.balance-calc-row');
+    _grantedRow.querySelector('.balance-calc-label').textContent = '年間付与';
+    _grantedRow.querySelector('.balance-calc-op').textContent = '';
+    document.getElementById('balCarried').closest('.balance-calc-row').style.display = '';
 
     const paidBalance = data.balance;
     const celebDays = data.celebration_days || 0;
@@ -315,9 +320,7 @@
         document.getElementById('balanceLabel').style.display = 'none';
         document.getElementById('celebIcon').style.display = '';
         document.getElementById('celebOnlyLabel').style.display = '';
-        document.getElementById('celebCalcRow').style.display = '';
-        document.getElementById('celebCalcVal').innerHTML =
-          '<span class="celebration-badge">残り ' + celebRemain + '日</span>';
+        // celebCalcRow は非表示のまま（内訳に統合）
       } else {
         // State 2: 両方保有
         document.getElementById('celebCalcRow').style.display = '';
@@ -347,9 +350,26 @@
       }
     }
     document.getElementById('balUsed').textContent = data.used + '日';
-    // State 1: 残日数欄はお祝い休暇残日数を表示（有給残=0のため）
-    const balTotalVal = (celebActive && celebRemain > 0 && paidBalance <= 0) ? celebRemain : paidBalance;
-    document.getElementById('balTotal').textContent = balTotalVal + '日';
+    document.getElementById('balTotal').textContent = paidBalance + '日';
+
+    // State 1 override: 内訳をお祝い休暇ベースに書き換え
+    if (celebActive && celebRemain > 0 && paidBalance <= 0) {
+      const effectiveRemaining = paidBalance + celebRemain;
+      const effectiveUsed = celebDays - effectiveRemaining;
+
+      currentBalance = effectiveRemaining;
+      document.getElementById('balanceNum').textContent = effectiveRemaining;
+
+      const grantedRow = document.getElementById('balGranted').closest('.balance-calc-row');
+      grantedRow.querySelector('.balance-calc-label').textContent = 'お祝い休暇';
+      document.getElementById('balGranted').textContent = celebDays + '日';
+
+      document.getElementById('balCarried').closest('.balance-calc-row').style.display = 'none';
+      document.getElementById('balOcRow').style.display = 'none';
+
+      document.getElementById('balUsed').textContent = effectiveUsed + '日';
+      document.getElementById('balTotal').textContent = effectiveRemaining + '日';
+    }
 
     // 繰越期限表示
     if (data.carried_over > 0 && data.grant_date) {
@@ -370,9 +390,10 @@
     }
 
     // お祝い休暇の残日数
+    // paidBalanceが負の場合、その分もお祝い休暇プールから消費されたとみなす
     const celebrationDays = data.celebration_days || 0;
     const celebrationUsed = data.celebration_used || 0;
-    const celebrationRemaining = celebrationDays - celebrationUsed;
+    const celebrationRemaining = Math.max(0, celebrationDays - celebrationUsed + Math.min(0, paidBalance));
 
     const ng = data.next_grant;
     if (ng) {
@@ -425,9 +446,13 @@
       const dateStr = r.dates.length === 1
         ? formatDate(r.dates[0])
         : formatDate(r.dates[0]) + '〜' + formatDate(r.dates[r.dates.length - 1]);
-      const typeLabel = r.type === 'full' ? '全日' : r.type === 'half_am' ? '午前半休' : '午後半休';
+      const ot = r.originalType || r.type;
+      const isHalf = (ot === 'half_am' || ot === 'half_pm');
+      const isCeleb = r.type === 'celebration';
+      const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
+      const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
       const statusLabel = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' }[r.status];
-      const dayCount = r.type === 'full' ? r.dates.length : r.dates.length * 0.5;
+      const dayCount = isHalf ? r.dates.length * 0.5 : r.dates.length;
       const canCancel = r.status === 'pending' || r.status === 'approved';
 
       return `

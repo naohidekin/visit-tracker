@@ -412,6 +412,38 @@ test('calcLeaveBalance が期限切れOC有給を除外すること', () => {
   assert.strictEqual(calcLeaveBalance(staff, []), 12);
 });
 
+// ── 半日お祝い休暇 originalType 対応 ─────────────────────────────
+console.log('\n📌 半日お祝い休暇（originalType）');
+
+test('半日celebration（originalType=half_am）の消費は0.5日', () => {
+  const staff = { hire_date: '2026-01-01', leave_granted: 10, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  // 半日お祝い休暇: type=celebration, originalType=half_am → 0.5日消費
+  const approved = [{ staffId: 's1', status: 'approved', type: 'celebration', originalType: 'half_am', dates: ['2026-02-01'] }];
+  // 有給残: leave_granted(10) - 有給使用(0, celebrationはskip) = 10
+  assert.strictEqual(calcLeaveBalance(staff, approved), 10);
+});
+
+test('全日celebration（originalTypeなし）の消費は1日（後方互換）', () => {
+  const staff = { hire_date: '2026-01-01', leave_granted: 10, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  // 全日お祝い休暇: type=celebration, originalTypeなし → 1日消費（後方互換）
+  const approved = [{ staffId: 's1', status: 'approved', type: 'celebration', dates: ['2026-02-01'] }];
+  assert.strictEqual(calcLeaveBalance(staff, approved), 10);
+});
+
+test('半日celebration（originalType=half_pm）はcalcLeaveBalanceで有給から引かれない', () => {
+  const staff = { hire_date: '2026-01-01', leave_granted: 5, leave_carried_over: 0,
+    leave_manual_adjustment: 0, oncall_leave_granted: 0, celebration_days: 3, celebration_used_adj: 0 };
+  // 半日お祝い + 全日有給
+  const approved = [
+    { staffId: 's1', status: 'approved', type: 'celebration', originalType: 'half_pm', dates: ['2026-02-01'] },
+    { staffId: 's1', status: 'approved', type: 'full', dates: ['2026-03-01'] },
+  ];
+  // 有給残: 5 - 1(full) = 4（celebrationはskip）
+  assert.strictEqual(calcLeaveBalance(staff, approved), 4);
+});
+
 // ── 結果サマリー ────────────────────────────────────────────────
 console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 console.log(`結果: ${passed} passed, ${failed} failed`);

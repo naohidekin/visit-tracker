@@ -32,7 +32,11 @@ async function loadLeavePending() {
 
   document.getElementById('leavePendingBody').innerHTML = requests.map(r => {
     const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
-    const typeLabel = r.type === 'full' ? '全日' : r.type === 'half_am' ? '午前半休' : r.type === 'half_pm' ? '午後半休' : r.type === 'celebration' ? 'お祝い休暇' : r.type;
+    const ot = r.originalType || r.type;
+    const isHalf = (ot === 'half_am' || ot === 'half_pm');
+    const isCeleb = r.type === 'celebration';
+    const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
+    const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>
@@ -135,7 +139,11 @@ async function loadLeaveHistory() {
   const statusLabels = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' };
   document.getElementById('leaveHistoryBody').innerHTML = requests.map(r => {
     const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
-    const typeLabel = r.type === 'full' ? '全日' : r.type === 'half_am' ? '午前半休' : r.type === 'half_pm' ? '午後半休' : r.type === 'celebration' ? 'お祝い休暇' : r.type;
+    const ot = r.originalType || r.type;
+    const isHalf = (ot === 'half_am' || ot === 'half_pm');
+    const isCeleb = r.type === 'celebration';
+    const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
+    const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>

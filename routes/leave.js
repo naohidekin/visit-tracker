@@ -77,7 +77,8 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
   for (const r of approved) {
     if (celebrationUsed >= celebrationDays) break;
     if (r.type === 'celebration') {
-      const perDate = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+      const ot = r.originalType || r.type;
+      const perDate = (ot === 'half_am' || ot === 'half_pm') ? 0.5 : 1;
       for (const d of r.dates) {
         if (celebrationUsed >= celebrationDays) break;
         celebrationUsed += perDate;
@@ -169,7 +170,8 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       for (const r of leaveData.requests.filter(lr => lr.staffId === staff.id && lr.status === 'approved')) {
         if (celebrationUsed >= celebrationDays) break;
         if (r.type === 'celebration') {
-          const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          const ot = r.originalType || r.type;
+          const per = (ot === 'half_am' || ot === 'half_pm') ? 0.5 : 1;
           for (const d of r.dates) {
             if (celebrationUsed >= celebrationDays) break;
             celebrationUsed += per;
@@ -184,7 +186,8 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       for (const r of leaveData.requests) {
         if (r.staffId !== staff.id || r.status !== 'pending') continue;
         if (r.type === 'celebration') {
-          const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+          const ot = r.originalType || r.type;
+          const per = (ot === 'half_am' || ot === 'half_pm') ? 0.5 : 1;
           for (const d of r.dates) celebrationPending += per;
         } else if (r.celebration_days) {
           celebrationPending += r.celebration_days;
@@ -275,6 +278,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       reviewedAt: null,
       cancelledAt: null,
       ...(celebrationDaysApplied > 0 ? { celebration_days: celebrationDaysApplied } : {}),
+      ...(effectiveType !== type ? { originalType: type } : {}),
     };
     leaveData.requests.push(request);
     saveLeave(leaveData);
@@ -329,7 +333,8 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
     const staff = staffData.staff.find(s => s.id === request.staffId);
     if (staff) {
       const balance = calcLeaveBalance(staff);
-      const requestDays = (request.type === 'half_am' || request.type === 'half_pm')
+      const ot = request.originalType || request.type;
+      const requestDays = (ot === 'half_am' || ot === 'half_pm')
         ? request.dates.length * 0.5 : request.dates.length;
 
       // お祝い休暇の残日数を申請作成時と同じロジックで再計算
@@ -344,10 +349,12 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
         let celebUsed = celebAdj;
         for (const r of leaveData.requests.filter(r => r.staffId === staff.id && r.status === 'approved' && r.id !== request.id)) {
           if (celebUsed >= celebDays) break;
+          const rot = r.originalType || r.type;
+          const perDay = (rot === 'half_am' || rot === 'half_pm') ? 0.5 : 1;
           for (const d of r.dates) {
             if (celebUsed >= celebDays) break;
             if (new Date(d) < celebrationExpiry)
-              celebUsed += (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
+              celebUsed += perDay;
           }
         }
         celebUsed = Math.round(Math.min(celebUsed, celebDays) * 10) / 10;
