@@ -263,7 +263,7 @@
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const label = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+      const label = (d.getMonth() + 1) + '月（締期間）';
       sel.innerHTML += `<option value="${val}">${label}</option>`;
     }
 

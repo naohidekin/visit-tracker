@@ -261,6 +261,8 @@
     .page-section .card-header{cursor:default}
     .page-section .acc-icon{display:none}
     .page-section .card{box-shadow:var(--shadow);margin-bottom:14px}
+    #oncallBody .oncall-summary-row{cursor:pointer;transition:background .1s}
+    #oncallBody .oncall-summary-row:hover{background:#f5f7fa}
   </style>
 </head>
 <body>
@@ -815,6 +817,22 @@
             </table>
           </div>
           <div id="oncallEmpty" class="empty-msg" style="display:none">この月のオンコール記録はありません</div>
+          <div id="oncallDetail" style="display:none;margin-top:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <h3 style="font-size:14px;font-weight:700;margin:0" id="oncallDetailTitle"></h3>
+              <button id="oncallDetailClose" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--muted)">閉じる</button>
+            </div>
+            <table style="width:100%;font-size:13px;border-collapse:collapse">
+              <thead>
+                <tr style="background:#f0f4f8">
+                  <th style="padding:6px;text-align:left;border-bottom:2px solid var(--border)">日付</th>
+                  <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">時間</th>
+                  <th style="padding:6px;text-align:center;border-bottom:2px solid var(--border)">交通費</th>
+                </tr>
+              </thead>
+              <tbody id="oncallDetailBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 

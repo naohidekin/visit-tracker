@@ -290,6 +290,35 @@ async function runTests(app) {
     assert.strictEqual(res.status, 200);
     assert.ok(Array.isArray(res.body.summary), `summary 配列が返る body=${JSON.stringify(res.body)}`);
   });
+
+  // ── 締期間フィルタテスト（単一セッションで実行） ──────────────
+  console.log('\n📌 オンコール締期間フィルタテスト');
+
+  await test('締期間フィルタ: 境界値と年跨ぎ', async () => {
+    const { agent, csrfToken } = await loginAs(app, 't_nurse', 'nurse123');
+
+    // テストデータ投入
+    for (const d of ['2028-02-16', '2028-03-15', '2028-03-16', '2027-12-20']) {
+      const r = await agent.post('/api/oncall/records')
+        .set('x-csrf-token', csrfToken)
+        .send({ date: d, count: 1, totalMinutes: 60, transportCount: 0 });
+      assert.ok(r.status === 200 || r.status === 201, `POST ${d} status=${r.status}`);
+    }
+
+    // month=2028-03 の締期間（2028-02-16 〜 2028-03-15）
+    const res3 = await agent.get('/api/oncall/records?month=2028-03').set('x-csrf-token', csrfToken);
+    assert.strictEqual(res3.status, 200);
+    const dates3 = res3.body.records.map(r => r.date);
+    assert.ok(dates3.includes('2028-02-16'), `前月16日が含まれるべき: ${JSON.stringify(dates3)}`);
+    assert.ok(dates3.includes('2028-03-15'), `当月15日が含まれるべき: ${JSON.stringify(dates3)}`);
+    assert.ok(!dates3.includes('2028-03-16'), `当月16日は含まれてはいけない: ${JSON.stringify(dates3)}`);
+
+    // month=2028-01 の締期間（2027-12-16 〜 2028-01-15）年跨ぎ
+    const res1 = await agent.get('/api/oncall/records?month=2028-01').set('x-csrf-token', csrfToken);
+    assert.strictEqual(res1.status, 200);
+    const dates1 = res1.body.records.map(r => r.date);
+    assert.ok(dates1.includes('2027-12-20'), `年跨ぎ: 2027-12-20 が含まれるべき: ${JSON.stringify(dates1)}`);
+  });
 }
 
 // ── メイン ────────────────────────────────────────────────────────

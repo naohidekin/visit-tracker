@@ -6,9 +6,18 @@ const router = express.Router();
 
 const { loadStaff, saveStaff, loadOncall, saveOncall, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
-const { asyncRoute, validateNum, getNowJST, getTodayJST, toDateStr } = require('../lib/helpers');
+const { asyncRoute, validateNum, getNowJST, getTodayJST, toDateStr, formatLocalDate } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { calcOncallLeaveExpiry } = require('../lib/leave-calc');
+const { BILLING_DAY } = require('../lib/constants');
+
+// 締期間の開始日・終了日を算出（前月16日〜当月15日）
+function billingRange(month) {
+  const [y, m] = month.split('-').map(Number);
+  const start = formatLocalDate(new Date(y, m - 2, BILLING_DAY));
+  const end   = formatLocalDate(new Date(y, m - 1, BILLING_DAY - 1));
+  return { start, end };
+}
 
 // オンコール累計時間から有給付与日数を再計算し、staffデータを更新
 function updateOncallLeave(staffId) {
@@ -44,7 +53,10 @@ router.get('/api/oncall/records', requireStaff, (req, res) => {
   const month = req.query.month;
   const data = loadOncall();
   let records = data.records.filter(r => r.staffId === req.session.staffId);
-  if (month) records = records.filter(r => r.date.startsWith(month));
+  if (month) {
+    const { start, end } = billingRange(month);
+    records = records.filter(r => r.date >= start && r.date <= end);
+  }
   records.sort((a, b) => a.date.localeCompare(b.date));
   res.json({ records });
 });
@@ -125,7 +137,8 @@ router.get('/api/oncall/monthly-summary', requireStaff, (req, res) => {
   if (!month) return res.status(400).json({ error: 'month パラメータが必要です' });
   const data = loadOncall();
   const myRecords = data.records.filter(r => r.staffId === req.session.staffId);
-  const monthRecords = myRecords.filter(r => r.date.startsWith(month));
+  const { start, end } = billingRange(month);
+  const monthRecords = myRecords.filter(r => r.date >= start && r.date <= end);
 
   const summary = {
     totalCount: monthRecords.reduce((s, r) => s + (r.count || 0), 0),
@@ -155,7 +168,8 @@ router.get('/api/admin/oncall/summary', requireAdmin, (req, res) => {
   const summary = staffData.staff
     .filter(s => !s.archived && s.oncall_eligible)
     .map(s => {
-      const records = oncallData.records.filter(r => r.staffId === s.id && r.date.startsWith(month));
+      const { start, end } = billingRange(month);
+      const records = oncallData.records.filter(r => r.staffId === s.id && r.date >= start && r.date <= end);
       return {
         staffId: s.id,
         name: s.name,
@@ -174,7 +188,10 @@ router.get('/api/admin/oncall/records', requireAdmin, (req, res) => {
   const staffId = req.query.staffId;
   const data = loadOncall();
   let records = data.records;
-  if (month) records = records.filter(r => r.date.startsWith(month));
+  if (month) {
+    const { start, end } = billingRange(month);
+    records = records.filter(r => r.date >= start && r.date <= end);
+  }
   if (staffId) records = records.filter(r => r.staffId === staffId);
   records.sort((a, b) => a.date.localeCompare(b.date));
   res.json({ records });
