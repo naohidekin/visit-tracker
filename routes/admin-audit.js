@@ -32,9 +32,9 @@ router.get('/api/admin/audit-log/verify', requireAdmin, (_req, res) => {
   res.json(result);
 });
 
-router.get('/api/admin/health', requireAdmin, (_req, res) => {
+router.get('/api/admin/health', requireAdmin, async (_req, res) => {
   const { runHealthChecks } = require('../lib/health');
-  res.json(runHealthChecks());
+  res.json(await runHealthChecks());
 });
 
 router.get('/api/admin/health/last', requireAdmin, (_req, res) => {

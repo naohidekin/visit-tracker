@@ -269,6 +269,31 @@ async function main() {
   migrateCelebrationExpiry();
   publishReleaseNotes();
 
+  // 起動時 Sheets API 接続テスト
+  try {
+    const { getValues } = require('./lib/sheets');
+    const { getSpreadsheetIdForYear } = require('./lib/data');
+    const sid = getSpreadsheetIdForYear(new Date().getFullYear());
+    await getValues(sid, '1月!A1');
+    console.log('✅ Google Sheets API 接続確認済み');
+  } catch (e) {
+    console.error('❌ Google Sheets API 接続エラー:', e.message);
+    console.error('⚠️ 訪問記録の読み書きが正常に動作しません。GOOGLE_CREDENTIALS を確認してください。');
+  }
+
+  // 起動時 スタッフ列定義チェック
+  {
+    const { loadStaff } = require('./lib/data');
+    const staffData = loadStaff();
+    const missingCols = staffData.staff.filter(s => !s.archived && (
+      s.type === 'nurse' ? (!s.kaigo_col || !s.iryo_col) : !s.col
+    ));
+    if (missingCols.length > 0) {
+      console.warn(`⚠️ 列定義未設定のスタッフ: ${missingCols.map(s => `${s.name}(${s.id})`).join(', ')}`);
+      console.warn('⚠️ これらのスタッフは訪問記録の入力ができません。管理画面で列を設定してください。');
+    }
+  }
+
   // 毎年12/31 23:00 JST に翌年スプレッドシートを自動作成
   cron.schedule('0 23 31 12 *', async () => {
     const nextYear = new Date().getFullYear() + 1;
@@ -360,9 +385,9 @@ async function main() {
   cron.schedule('0 0 * * *', () => { cleanExpiredTokens(); cleanExpiredRateLimits(); }, { timezone: 'Asia/Tokyo' });
 
   // 毎日 02:00 JST: システムヘルスチェック
-  cron.schedule('0 2 * * *', () => {
+  cron.schedule('0 2 * * *', async () => {
     const { runHealthChecks } = require('./lib/health');
-    const result = runHealthChecks();
+    const result = await runHealthChecks();
     if (result.ok) {
       console.log('[health] ✅ 全チェック正常:', result.checkedAt);
     } else {
