@@ -21,10 +21,11 @@ async function getAllStaffRecordStatus(dateStr) {
   const staffData = loadStaff();
   const activeStaff = staffData.staff.filter(s => !s.archived);
 
-  // batchGet用のレンジを構築
+  // batchGet用のレンジを構築（列未設定スタッフを除外）
   const ranges = [];
   const staffMap = [];
   for (const s of activeStaff) {
+    if (s.type === 'nurse' ? (!s.kaigo_col || !s.iryo_col) : !s.col) continue;
     if (s.type === 'nurse') {
       ranges.push(`${month}月!${s.kaigo_col}${row}:${s.iryo_col}${row}`);
     } else {

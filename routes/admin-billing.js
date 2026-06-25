@@ -22,6 +22,9 @@ async function handleAdminBillingDetail(req, res) {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) {
+    return res.status(400).json({ error: 'このスタッフの列設定が未完了です' });
+  }
   const iDef = staffData.incentive_defaults;
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? INCENTIVE_NURSE_RATE;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
@@ -133,6 +136,9 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) {
+    return res.status(400).json({ error: 'このスタッフの列設定が未完了です' });
+  }
 
   const y   = Number(year), m = Number(month);
   const sid = getSpreadsheetIdForYear(y);
@@ -229,6 +235,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
 
     for (const staff of activeStaff) {
       try {
+        if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) continue;
         if (staff.type === 'nurse') {
           const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
           let total_kaigo = 0, total_iryo = 0, working_days = 0;

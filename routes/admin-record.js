@@ -23,6 +23,9 @@ router.post('/api/admin/record', requireAdmin, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) {
+    return res.status(400).json({ error: 'このスタッフの列設定が未完了です' });
+  }
 
   try {
     if (staff.type === 'nurse') {

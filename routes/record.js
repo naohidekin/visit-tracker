@@ -11,7 +11,12 @@ const { auditLog } = require('../lib/audit');
 const { getValues, updateValues, batchUpdateValues, getAllStaffRecordStatus } = require('../lib/sheets');
 const { DATA_START_ROW, WD, BILLING_DAY } = require('../lib/constants');
 
+function isColumnMissing(staff) {
+  return staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col;
+}
+
 async function hasRecordForDate(staff, dateStr) {
+  if (isColumnMissing(staff)) return true;
   const d = new Date(dateStr + 'T00:00:00');
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
@@ -46,6 +51,9 @@ router.get('/api/record', requireStaff, async (req, res) => {
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (isColumnMissing(staff)) {
+    return res.json({ kaigo: null, iryo: null, value: null });
+  }
 
   try {
     if (staff.type === 'nurse') {
@@ -88,7 +96,7 @@ router.post('/api/record', requireStaff, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-  if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) {
+  if (isColumnMissing(staff)) {
     return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
   }
 
@@ -133,6 +141,9 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (isColumnMissing(staff)) {
+    return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
+  }
 
   try {
     if (staff.type === 'nurse') {
@@ -199,6 +210,9 @@ async function handleBillingDetail(req, res) {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (isColumnMissing(staff)) {
+    return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
+  }
   const iDef = staffData.incentive_defaults;
   const isNurse = staff.type === 'nurse';
 
@@ -317,6 +331,9 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (isColumnMissing(staff)) {
+    return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
+  }
 
   const iDef = staffData.incentive_defaults;
 
@@ -400,6 +417,9 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (isColumnMissing(staff)) {
+    return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
+  }
 
   const iDef = staffData.incentive_defaults;
 

@@ -70,6 +70,9 @@ router.post('/api/schedules/:id/confirm', requireStaff, asyncRoute(async (req, r
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === schedule.staffId);
   if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) {
+    return res.status(400).json({ error: 'スタッフの列設定が未完了です。管理者にお問い合わせください' });
+  }
 
   const d     = new Date(schedule.date + 'T00:00:00');
   const year  = d.getFullYear();
