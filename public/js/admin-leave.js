@@ -62,10 +62,17 @@ document.getElementById('leavePendingBody').addEventListener('click', e => {
 
 // ── #leaveBalanceBody イベント委譲 ─────────────────────────────
 document.getElementById('leaveBalanceBody').addEventListener('click', e => {
-  const btn = e.target.closest('[data-action="edit-leave"]');
-  if (!btn) return;
-  const d = btn.dataset;
-  openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj), Number(d.celebDays), Number(d.celebAdj));
+  const editBtn = e.target.closest('[data-action="edit-leave"]');
+  if (editBtn) {
+    const d = editBtn.dataset;
+    openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj), Number(d.celebDays), Number(d.celebAdj));
+    return;
+  }
+  const nameLink = e.target.closest('[data-action="show-leave-dates"]');
+  if (nameLink) {
+    e.preventDefault();
+    showStaffLeaveDates(nameLink.dataset.id, nameLink.dataset.name);
+  }
 });
 
 function openLeaveModal(action, requestId) {
@@ -171,7 +178,7 @@ async function loadLeaveBalanceSummary() {
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
     const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
     return `<tr>
-      <td class="leave-name">${esc(s.name)}</td>
+      <td class="leave-name"><a href="#" data-action="show-leave-dates" data-id="${esc(s.id)}" data-name="${esc(s.name)}">${esc(s.name)}</a></td>
       <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
       <td data-label="付与">${s.granted}日</td>
       <td data-label="繰越">${s.carried_over}日</td>
@@ -197,6 +204,65 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
 }
 function closeLeaveEditModal() {
   document.getElementById('leaveEditModal').style.display = 'none';
+}
+
+function closeLeaveDatesModal() {
+  document.getElementById('leaveDatesModal').style.display = 'none';
+}
+
+async function showStaffLeaveDates(staffId, staffName) {
+  document.getElementById('leaveDatesName').textContent = staffName;
+  document.getElementById('leaveDatesSummary').textContent = '';
+  document.getElementById('leaveDatesBody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px 0">読み込み中...</td></tr>';
+  document.getElementById('leaveDatesModal').style.display = 'flex';
+
+  let requests;
+  try {
+    const res = await fetch('/api/admin/leave/requests?status=approved');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    ({ requests } = await res.json());
+  } catch (e) {
+    document.getElementById('leaveDatesBody').innerHTML =
+      '<tr><td colspan="3" style="text-align:center;color:#c0392b;padding:16px 0">データの取得に失敗しました</td></tr>';
+    return;
+  }
+
+  const staffRequests = requests.filter(r => r.staffId === staffId);
+  const rows = [];
+  for (const r of staffRequests) {
+    if (!Array.isArray(r.dates)) continue;
+    const ot = r.originalType || r.type;
+    const isHalf = (ot === 'half_am' || ot === 'half_pm');
+    const isCeleb = r.type === 'celebration';
+    const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
+    const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
+    for (const d of r.dates) {
+      if (typeof d !== 'string' || !d) continue;
+      rows.push({ date: d, typeLabel, reason: r.reason || '' });
+    }
+  }
+
+  rows.sort((a, b) => b.date.localeCompare(a.date));
+
+  if (!rows.length) {
+    document.getElementById('leaveDatesBody').innerHTML =
+      '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px 0">取得済みの有給はありません</td></tr>';
+    return;
+  }
+
+  const totalDays = rows.reduce((sum, r) => sum + (r.typeLabel.includes('半休') ? 0.5 : 1), 0);
+  document.getElementById('leaveDatesSummary').textContent = '承認済み ' + rows.length + '件（' + totalDays + '日分）';
+
+  document.getElementById('leaveDatesBody').innerHTML = rows.map(r => {
+    const d = new Date(r.date + 'T00:00:00');
+    const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+    const dateStr = (d.getMonth()+1) + '/' + d.getDate() + '（' + dow + '）';
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-weight:600">' + dateStr + '</td>' +
+      '<td>' + r.typeLabel + '</td>' +
+      '<td style="font-size:13px;color:var(--muted)">' + esc(r.reason || '-') + '</td>' +
+    '</tr>';
+  }).join('');
 }
 
 async function saveLeaveEdit() {

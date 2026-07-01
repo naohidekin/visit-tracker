@@ -178,6 +178,8 @@
     .leave-status.approved{background:#dcfce7;color:#166534}
     .leave-status.rejected{background:#fee2e2;color:#b91c1c}
     .leave-status.cancelled{background:#f0f0f0;color:#6b7a99}
+    .leave-name a{color:var(--blue);text-decoration:underline;cursor:pointer;font-weight:700}
+    .leave-name a:hover{opacity:.7}
 
     /* ══════ サイドバーレイアウト ══════ */
     #appLayout{display:none;min-height:100vh}
@@ -624,6 +626,25 @@
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn btn-blue" id="leaveEditSaveBtn" style="flex:1">保存</button>
             <button class="btn" id="leaveEditCancelBtn" style="flex:1;background:#eee;color:var(--text)">キャンセル</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 有給取得日一覧モーダル -->
+      <div class="modal-overlay" id="leaveDatesModal" style="display:none">
+        <div class="modal" style="max-width:420px">
+          <h3 style="font-size:16px;margin-bottom:4px"><span id="leaveDatesName"></span> の有給取得日</h3>
+          <p id="leaveDatesSummary" style="font-size:13px;color:var(--muted);margin-bottom:10px"></p>
+          <div class="table-wrap" style="max-height:60vh;overflow-y:auto">
+            <table style="min-width:auto">
+              <thead>
+                <tr><th>日付</th><th>種別</th><th>理由</th></tr>
+              </thead>
+              <tbody id="leaveDatesBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn" id="leaveDatesCloseBtn" style="width:100%;background:#eee;color:var(--text);padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">閉じる</button>
           </div>
         </div>
       </div>
@@ -1341,6 +1362,15 @@
   });
   document.getElementById('leaveEditSaveBtn').addEventListener('click', saveLeaveEdit);
   document.getElementById('leaveEditCancelBtn').addEventListener('click', closeLeaveEditModal);
+
+  // Leave dates modal
+  document.getElementById('leaveDatesModal').addEventListener('click', function(e) {
+    if (e.target === this) closeLeaveDatesModal();
+  });
+  document.getElementById('leaveDatesModal').querySelector('.modal').addEventListener('click', function(e) {
+    e.stopPropagation();
+  });
+  document.getElementById('leaveDatesCloseBtn').addEventListener('click', closeLeaveDatesModal);
 
   // Health check
   document.getElementById('healthRunBtn').addEventListener('click', runHealthCheck);
