@@ -294,6 +294,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
         hire_date: hire_date || null,
         oncall: oncall || '無',
         email: email || null,
+        celebration_days: 3,
         password_hash: await bcrypt.hash(initialPw, 10) };
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type: 'nurse', columns: { kaigo: kaigoCol, iryo: iryoCol } });
 
@@ -305,6 +306,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
         seq: nextSeq,
         hire_date: hire_date || null,
         email: email || null,
+        celebration_days: 3,
         password_hash: await bcrypt.hash(initialPw, 10) };
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: null, note: 'スプレッドシート列なし' });
 
@@ -369,6 +371,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
         seq: nextSeq,
         hire_date: hire_date || null,
         email: email || null,
+        celebration_days: 3,
         password_hash: await bcrypt.hash(initialPw, 10) };
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: { col: newCol } });
     }
