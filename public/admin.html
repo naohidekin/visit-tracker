@@ -643,9 +643,11 @@
       <!-- 有給取得日一覧モーダル -->
       <div class="modal-overlay" id="leaveDatesModal" style="display:none">
         <div class="modal" style="max-width:420px">
-          <h3 style="font-size:16px;margin-bottom:4px"><span id="leaveDatesName"></span> の有給取得日</h3>
+          <h3 style="font-size:16px;margin-bottom:4px"><span id="leaveDatesName"></span> の有給状況</h3>
           <p id="leaveDatesSummary" style="font-size:13px;color:var(--muted);margin-bottom:10px"></p>
-          <div class="table-wrap" style="max-height:60vh;overflow-y:auto">
+          <div id="leaveDatesView" style="margin-bottom:12px"></div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">有給取得日</div>
+          <div class="table-wrap" style="max-height:40vh;overflow-y:auto">
             <table style="min-width:auto">
               <thead>
                 <tr><th>日付</th><th>種別</th><th>理由</th></tr>

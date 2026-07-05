@@ -352,6 +352,22 @@ async function runTests(app) {
     }
   });
 
+  await test('管理者: 本人ビュー内訳の取得（本人 /api/leave/balance と一致）', async () => {
+    const { agent: admin } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const adminView = await admin.get('/api/admin/staff/t_nurse/leave-balance-view');
+    assert.strictEqual(adminView.status, 200);
+    assert.strictEqual(typeof adminView.body.balance, 'number', 'balance が返る');
+    assert.ok('celebration_remaining' in adminView.body, 'お祝い休暇残を含む');
+    // 本人が自分の /api/leave/balance で見る値と一致する
+    const { agent: staff } = await loginAs(app, 't_nurse', 'nurse123');
+    const own = await staff.get('/api/leave/balance');
+    assert.strictEqual(adminView.body.balance, own.body.balance, '本人画面と残日数が一致');
+    assert.strictEqual(adminView.body.used, own.body.used, '本人画面と使用日数が一致');
+    // 存在しない職員 → 404
+    const nf = await admin.get('/api/admin/staff/__nope__/leave-balance-view');
+    assert.strictEqual(nf.status, 404);
+  });
+
   clearRateLimits();
   // ────────────────────────────────────────────────────────────
   console.log('\n📌 オンコール記録・集計テスト');

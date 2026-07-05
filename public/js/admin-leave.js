@@ -264,11 +264,49 @@ function closeLeaveDatesModal() {
   document.getElementById('leaveDatesModal').style.display = 'none';
 }
 
+// 繰越期限（付与日 + 1年 − 1日）を「YYYY年M月D日」で返す（本人画面と同ロジック）
+function carryExpiryLabel(grantDate) {
+  const gd = new Date(grantDate);
+  gd.setFullYear(gd.getFullYear() + 1);
+  gd.setDate(gd.getDate() - 1);
+  return gd.getFullYear() + '年' + (gd.getMonth() + 1) + '月' + gd.getDate() + '日';
+}
+
+// 本人の有給画面と同じ内訳を管理画面に表示（数値は共通計算で本人画面と一致）
+async function renderLeaveView(staffId) {
+  const box = document.getElementById('leaveDatesView');
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted)">本人ビュー読み込み中...</div>';
+  let v;
+  try {
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(staffId)}/leave-balance-view`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    v = await res.json();
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:12px;color:#c0392b">本人ビューの取得に失敗しました</div>';
+    return;
+  }
+  const r = (label, val) => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span style="color:var(--muted)">${esc(label)}</span><span style="font-weight:600">${esc(String(val))}</span></div>`;
+  const p = [];
+  p.push(`<div style="text-align:center;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px"><div style="font-size:12px;color:var(--muted)">有給残日数</div><div style="font-size:24px;font-weight:800">${esc(String(v.balance))}日</div></div>`);
+  p.push(r('年間付与', v.granted + '日'));
+  p.push(r('前年繰越', v.carried_over + '日' + (v.carried_over > 0 && v.grant_date ? `（期限 ${carryExpiryLabel(v.grant_date)}）` : '')));
+  if (v.manual_adjustment) p.push(r('手動調整', (v.manual_adjustment > 0 ? '+' : '') + v.manual_adjustment + '日'));
+  p.push(r('使用済み（有給）', v.used + '日'));
+  if (v.oncall_leave_valid) p.push(r('累積OC（有効）', v.oncall_leave_valid + '日' + (v.oncall_leave_expiry_date ? `（期限 ${v.oncall_leave_expiry_date}）` : '')));
+  if (v.oncall_leave_expired) p.push(r('累積OC（期限切れ）', v.oncall_leave_expired + '日'));
+  p.push('<div style="border-top:1px solid var(--border);margin:6px 0"></div>');
+  p.push(r('お祝い休暇 残', `${v.celebration_remaining}日 / ${v.celebration_days}日`));
+  p.push(r('お祝い休暇 使用', v.celebration_used + '日'));
+  if (v.next_grant && v.next_grant.next_grant_date) p.push(r('次回付与', `${v.next_grant.next_grant_date} に ${v.next_grant.next_grant_days}日`));
+  box.innerHTML = `<div style="background:var(--card-bg,#f7f9fc);border:1px solid var(--border);border-radius:8px;padding:10px">${p.join('')}</div>`;
+}
+
 async function showStaffLeaveDates(staffId, staffName) {
   document.getElementById('leaveDatesName').textContent = staffName;
   document.getElementById('leaveDatesSummary').textContent = '';
   document.getElementById('leaveDatesBody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px 0">読み込み中...</td></tr>';
   document.getElementById('leaveDatesModal').style.display = 'flex';
+  renderLeaveView(staffId);
 
   let requests;
   try {

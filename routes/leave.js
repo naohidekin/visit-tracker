@@ -30,11 +30,9 @@ function createStaffNotice(staffId, title, body) {
 }
 
 // ─── API: 有給休暇（スタッフ向け） ─────────────────────────────
-router.get('/api/leave/balance', requireStaff, (req, res) => {
-  const data = loadStaff();
-  const staff = data.staff.find(s => s.id === req.session.staffId);
-  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
-
+// 有給残の内訳（本人の有給画面と同じ表示データ）を計算して返す。
+// 本人用 /api/leave/balance と管理者用 leave-balance-view で共通利用し、両画面の数値を必ず一致させる。
+function buildLeaveBalanceView(staff) {
   const leaveData = loadLeave();
   const approved = leaveData.requests.filter(r =>
     r.staffId === staff.id && r.status === 'approved'
@@ -65,7 +63,7 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
       }
     }
   }
-  const balance     = calcLeaveBalance(staff);
+  const balance     = calcLeaveBalance(staff, approved);
   const autoGrantDays = calcLeaveGrantDays(staff.hire_date);
 
   const nextGrant = calcNextGrant(staff.hire_date, undefined, staff.celebration_expiry_months || 6);
@@ -90,7 +88,7 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
   }
   celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
 
-  res.json({
+  return {
     balance,
     granted,
     carried_over: carriedOver,
@@ -107,7 +105,13 @@ router.get('/api/leave/balance', requireStaff, (req, res) => {
     celebration_days: celebrationDays,
     celebration_used: celebrationUsed,
     celebration_remaining: Math.max(0, celebrationDays - celebrationUsed),
-  });
+  };
+}
+
+router.get('/api/leave/balance', requireStaff, (req, res) => {
+  const staff = loadStaff().staff.find(s => s.id === req.session.staffId);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  res.json(buildLeaveBalanceView(staff));
 });
 
 router.get('/api/leave/requests', requireStaff, (req, res) => {
@@ -510,6 +514,13 @@ router.get('/api/admin/leave/grant-alerts', requireAdmin, (_req, res) => {
   }
   alerts.sort((a, b) => (a.reached_date || '').localeCompare(b.reached_date || ''));
   res.json({ count: alerts.length, alerts });
+});
+
+// 管理者向け: 対象職員の有給内訳（本人の有給画面と同じ表示データ）
+router.get('/api/admin/staff/:id/leave-balance-view', requireAdmin, (req, res) => {
+  const staff = loadStaff().staff.find(s => s.id === req.params.id);
+  if (!staff) return res.status(404).json({ error: 'スタッフが見つかりません' });
+  res.json(buildLeaveBalanceView(staff));
 });
 
 router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {
