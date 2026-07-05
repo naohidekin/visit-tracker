@@ -8,7 +8,7 @@ const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, at
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcPendingGrant, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
+const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcPendingGrant, formatTenureLabel, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
 
 // 有給通知ヘルパー（個人宛お知らせ）
 function createStaffNotice(staffId, title, body) {
@@ -457,7 +457,9 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
       const carriedOver  = s.leave_carried_over || 0;
       const manualAdj    = s.leave_manual_adjustment || 0;
       const oncallLeave  = s.oncall_leave_granted || 0;
-      const balance      = Math.round((granted + carriedOver + manualAdj + oncallLeave - usedDays) * 10) / 10;
+      // 残日数は calcLeaveBalance と同じ「期限内OC」で算出（期限切れOCを含めない）
+      const oncallValid  = calcValidOncallLeave(s);
+      const balance      = Math.round((granted + carriedOver + manualAdj + oncallValid - usedDays) * 10) / 10;
       return {
         id: s.id,
         name: s.name,
@@ -475,7 +477,9 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         celebration_days: s.celebration_days || 3,
         celebration_used_adj: s.celebration_used_adj || 0,
         pending_grant: calcPendingGrant(s),
-        grant_history: (s.leave_grant_history || []).slice().sort((a, b) => (b.grantedAt || '').localeCompare(a.grantedAt || '')),
+        grant_history: (s.leave_grant_history || []).slice()
+          .sort((a, b) => (b.grantedAt || '').localeCompare(a.grantedAt || ''))
+          .map(h => ({ ...h, label: formatTenureLabel(h.months) })),
       };
     });
   res.json({ summary });
@@ -549,6 +553,7 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
             months: pending.reached_months,
             days: pending.grant_days,
             label: pending.tenure_label,
+            reachedDate: pending.reached_date,
           };
         }
       }
@@ -561,15 +566,19 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
     if (celebration_days !== undefined) staff.celebration_days = validateNum(celebration_days, { min: 0, max: 30 }).value;
     if (celebration_used_adj !== undefined) staff.celebration_used_adj = validateNum(celebration_used_adj, { min: 0, max: 30 }).value;
 
-    // 付与履歴に記録（二度付け防止：同じマイルストーンは1回のみ）
-    if (grantToRecord) {
+    // 付与履歴に記録。二度付け防止＋「実際に保存された付与日数が規定日数に達している」場合のみ。
+    // （反映後に付与日数を手で下げた場合などは記録・通知しない）
+    if (grantToRecord && (staff.leave_granted || 0) >= grantToRecord.days) {
       if (!Array.isArray(staff.leave_grant_history)) staff.leave_grant_history = [];
       staff.leave_grant_history.push({
-        grantedAt: getTodayJST(),
+        grantedAt: grantToRecord.reachedDate,   // 付与の効力発生日（＝規定上の基準日）
         months: grantToRecord.months,
         days: grantToRecord.days,
       });
-      staff.leave_grant_date = getTodayJST();
+      // 付与日は「クリック日」ではなく付与規定上の基準日（繰越期限の起点になる）
+      staff.leave_grant_date = grantToRecord.reachedDate;
+    } else {
+      grantToRecord = null;  // 記録・通知の対象外
     }
 
     saveStaff(staffData);

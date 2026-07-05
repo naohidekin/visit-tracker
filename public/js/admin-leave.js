@@ -66,8 +66,7 @@ document.getElementById('leavePendingBody').addEventListener('click', e => {
 document.getElementById('leaveBalanceBody').addEventListener('click', e => {
   const editBtn = e.target.closest('[data-action="edit-leave"]');
   if (editBtn) {
-    const d = editBtn.dataset;
-    openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj), Number(d.celebDays), Number(d.celebAdj));
+    openLeaveEdit(editBtn.dataset.id);
     return;
   }
   const nameLink = e.target.closest('[data-action="show-leave-dates"]');
@@ -181,7 +180,7 @@ async function loadLeaveBalanceSummary() {
   document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
-    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
+    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}">編集</button>`;
     const grantBadge = s.pending_grant
       ? ` <span class="grant-alert-badge" title="${esc(s.pending_grant.tenure_label)}経過。付与規定では${s.pending_grant.grant_days}日を付与する時期です。付与日数を更新してください。">⚠付与時期</span>`
       : '';
@@ -198,19 +197,19 @@ async function loadLeaveBalanceSummary() {
   }).join('');
 }
 
-function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, celebDays, celebAdj) {
+// 残日数サマリ（leaveSummaryById）から1行分を読み込んで編集モーダルを開く
+function openLeaveEdit(id) {
+  const s = leaveSummaryById[id] || {};
   leaveEditStaffId = id;
   leaveEditRecordGrant = false;
-  document.getElementById('leaveEditName').textContent = name;
-  document.getElementById('leaveEditHireDate').value = hireDate;
-  document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `付与規定（自動計算）: ${autoGrant}日` : '入社日を設定すると自動計算されます';
-  document.getElementById('leaveEditGranted').value = granted;
-  document.getElementById('leaveEditCarried').value = carried;
-  document.getElementById('leaveEditAdj').value = adj;
-  document.getElementById('leaveEditCelebDays').value = celebDays;
-  document.getElementById('leaveEditCelebAdj').value = celebAdj;
-
-  const s = leaveSummaryById[id] || {};
+  document.getElementById('leaveEditName').textContent = s.name || '';
+  document.getElementById('leaveEditHireDate').value = s.hire_date || '';
+  document.getElementById('leaveEditAutoGrant').textContent = s.hire_date ? `付与規定（自動計算）: ${s.auto_grant_days}日` : '入社日を設定すると自動計算されます';
+  document.getElementById('leaveEditGranted').value = s.granted || 0;
+  document.getElementById('leaveEditCarried').value = s.carried_over || 0;
+  document.getElementById('leaveEditAdj').value = s.manual_adjustment || 0;
+  document.getElementById('leaveEditCelebDays').value = s.celebration_days || 3;
+  document.getElementById('leaveEditCelebAdj').value = s.celebration_used_adj || 0;
 
   // 付与時期の案内 & 「付与を反映」ボタン
   const box = document.getElementById('leaveEditGrantBox');
@@ -221,18 +220,18 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
     const isFirst = pg.reached_months === 6;
     document.getElementById('leaveEditGrantNote').textContent = isFirst
       ? '「反映する」で付与日数を自動入力します。内容を確認して保存すると本人にお知らせが届きます。'
-      : `「反映する」で付与日数を ${pg.grant_days}日 に、前年度の未使用分（現在の残 ${s.balance}日）を繰越に下書きします。金額を確認・調整のうえ保存してください。`;
+      : `「反映する」で付与日数を ${pg.grant_days}日 に、前年度分（前年度付与＋旧繰越）を繰越に下書きします。時効・上限を確認・調整のうえ保存してください。`;
     box.style.display = '';
   } else {
     box.style.display = 'none';
   }
 
-  // 付与履歴
+  // 付与履歴（ラベルはサーバ側で付与済み）
   const hist = s.grant_history || [];
   const histWrap = document.getElementById('leaveEditHistory');
   if (hist.length > 0) {
     document.getElementById('leaveEditHistoryList').innerHTML = hist.map(h =>
-      `${esc(h.grantedAt)} ｜ 勤続${esc(tenureLabelFromMonths(h.months))} ｜ ${esc(String(h.days))}日付与`
+      `${esc(h.grantedAt)} ｜ 勤続${esc(h.label || '')} ｜ ${esc(String(h.days))}日付与`
     ).join('<br>');
     histWrap.style.display = '';
   } else {
@@ -242,28 +241,20 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
   document.getElementById('leaveEditModal').style.display = 'flex';
 }
 
-// 勤続月数 → ラベル（サーバの formatTenureLabel と同等）
-function tenureLabelFromMonths(months) {
-  const y = Math.floor(months / 12);
-  const m = months % 12;
-  if (y === 0) return `${m}ヶ月`;
-  if (m === 0) return `${y}年`;
-  return `${y}年${m}ヶ月`;
-}
-
 // 「この付与を反映する」— 付与日数（と2年目以降は繰越）を下書きし、保存時に付与記録するフラグを立てる
 function applyPendingGrant() {
   const s = leaveSummaryById[leaveEditStaffId] || {};
   const pg = s.pending_grant;
   if (!pg) return;
   document.getElementById('leaveEditGranted').value = pg.grant_days;
-  // 2年目以降（初回=6ヶ月以外）は前年度の未使用分を繰越へ下書き
+  // 2年目以降（初回=6ヶ月以外）は前年度分（前年度付与＋旧繰越）を繰越へ下書き。
+  // 調整・OC・使用済みは各欄で保持されるため、ここで残日数を丸ごと入れると二重計上になる。
   if (pg.reached_months !== 6) {
-    const remaining = Number(s.balance) || 0;
-    document.getElementById('leaveEditCarried').value = remaining > 0 ? remaining : 0;
+    const prevCarry = (Number(s.granted) || 0) + (Number(s.carried_over) || 0);
+    document.getElementById('leaveEditCarried').value = prevCarry > 0 ? prevCarry : 0;
   }
   leaveEditRecordGrant = true;
-  showToast('付与内容を下書きしました。確認して「保存」してください');
+  showToast('付与内容を下書きしました。時効・繰越上限を確認して「保存」してください');
 }
 function closeLeaveEditModal() {
   document.getElementById('leaveEditModal').style.display = 'none';

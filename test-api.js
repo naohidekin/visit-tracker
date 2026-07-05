@@ -271,12 +271,20 @@ async function runTests(app) {
       assert.strictEqual(hireRes.status, 200);
       await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
 
-      // アラート一覧に出る
+      // アラート一覧に出る（規定上の基準日=マイルストーン日を控えておく）
       const alerts = await admin.get('/api/admin/leave/grant-alerts');
       assert.strictEqual(alerts.status, 200);
-      assert.ok(alerts.body.alerts.some(a => a.id === 't_nurse'), 'grant-alerts に t_nurse が出る');
+      const alert = alerts.body.alerts.find(a => a.id === 't_nurse');
+      assert.ok(alert, 'grant-alerts に t_nurse が出る');
+      const milestoneDate = alert.reached_date;
 
-      // 付与を反映（record_grant）→ 記録される
+      // 反映フラグ付きでも、保存された付与日数が規定未満なら記録・通知しない
+      const lowered = await setBalance({ granted: 5, record_grant: true });
+      assert.strictEqual(lowered.body.grant_recorded, false, '付与日数が規定未満なら記録しない');
+      const afterLow = await admin.get('/api/admin/leave/summary');
+      assert.strictEqual(afterLow.body.summary.find(s => s.id === 't_nurse').grant_history.length, 0, '未記録のまま');
+
+      // 付与を反映（record_grant, 規定どおり）→ 記録される
       const applied = await setBalance({ granted: 20, record_grant: true });
       assert.strictEqual(applied.status, 200);
       assert.strictEqual(applied.body.grant_recorded, true, '付与が記録される');
@@ -286,6 +294,10 @@ async function runTests(app) {
       const row = summary.body.summary.find(s => s.id === 't_nurse');
       assert.strictEqual(row.grant_history.length, 1, '付与履歴が1件');
       assert.strictEqual(row.pending_grant, null, 'アラート対象から外れる');
+      // 付与日は「クリック日」ではなく規定上の基準日（マイルストーン日）
+      assert.strictEqual(row.grant_history[0].grantedAt, milestoneDate, '履歴の付与日=マイルストーン日');
+      assert.strictEqual(row.grant_date, milestoneDate, 'grant_date=マイルストーン日（クリック日ではない）');
+      assert.ok(row.grant_history[0].label, '付与履歴にラベルがサーバ側で付く');
 
       // 二度付け防止：同じ時期を再度反映しても記録されない
       const again = await setBalance({ granted: 20, record_grant: true });
