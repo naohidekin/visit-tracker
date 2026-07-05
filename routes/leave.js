@@ -438,10 +438,13 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
       const approved = leaveData.requests.filter(r =>
         r.staffId === s.id && r.status === 'approved'
       );
+      // 有給の「使用」は本人画面(calcLeaveBalance)と同基準：
+      // お祝い休暇での取得は除外し、通常申請のうちお祝いで賄った分(celebration_days)も差し引く
       let usedDays = 0;
       for (const r of approved) {
+        if (r.type === 'celebration') continue;
         const per = (r.type === 'half_am' || r.type === 'half_pm') ? 0.5 : 1;
-        usedDays += r.dates.length * per;
+        usedDays += r.dates.length * per - (r.celebration_days || 0);
       }
       const pending = leaveData.requests.filter(r =>
         r.staffId === s.id && r.status === 'pending'
@@ -457,9 +460,9 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
       const carriedOver  = s.leave_carried_over || 0;
       const manualAdj    = s.leave_manual_adjustment || 0;
       const oncallLeave  = s.oncall_leave_granted || 0;
-      // 残日数は calcLeaveBalance と同じ「期限内OC」で算出（期限切れOCを含めない）
-      const oncallValid  = calcValidOncallLeave(s);
-      const balance      = Math.round((granted + carriedOver + manualAdj + oncallValid - usedDays) * 10) / 10;
+      // 残日数は本人画面と同じ calcLeaveBalance で算出
+      // （お祝い休暇での取得・期限切れOCを正しく除外し、両画面で一致させる）
+      const balance      = calcLeaveBalance(s, approved);
       return {
         id: s.id,
         name: s.name,

@@ -25,6 +25,7 @@ const request = require('supertest');
 const bcrypt  = require('bcryptjs');
 const { getDb }         = require('./lib/db');
 const { ensureDataDir } = require('./lib/data');
+const { getTodayJST }   = require('./lib/helpers');
 
 // ── テストランナー ────────────────────────────────────────────────
 let passed = 0;
@@ -310,6 +311,44 @@ async function runTests(app) {
     } finally {
       // 後続テストのため状態を戻す（付与日数・入社日）
       await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+    }
+  });
+
+  await test('管理サマリの残: お祝い休暇での取得は有給から差し引かない', async () => {
+    const { agent: admin, csrfToken: adminCsrf } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const today = getTodayJST();
+    try {
+      // 入社日を当日に設定（お祝い休暇有効期間内）＋付与10・お祝い5
+      await admin.post('/api/admin/staff/t_nurse/hire-date')
+        .set('x-csrf-token', adminCsrf).send({ hire_date: today });
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf)
+        .send({ granted: 10, carried_over: 0, manual_adjustment: 0, celebration_days: 5, celebration_used_adj: 0 });
+
+      // お祝い休暇申請“前”の残・使用を控える（他テストの承認済み申請の影響を排除）
+      const before = await admin.get('/api/admin/leave/summary');
+      const beforeRow = before.body.summary.find(s => s.id === 't_nurse');
+
+      // 本人がお祝い休暇（type=celebration）を1日申請 → 管理者が承認
+      const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
+      const reqRes = await staff.post('/api/leave/requests')
+        .set('x-csrf-token', staffCsrf)
+        .send({ type: 'celebration', startDate: today, endDate: today });
+      assert.ok(reqRes.status === 200 || reqRes.status === 201, `申請 status=${reqRes.status} body=${JSON.stringify(reqRes.body)}`);
+      const reqId = reqRes.body.id ?? reqRes.body.request?.id;
+      const apRes = await admin.post(`/api/admin/leave/requests/${reqId}/approve`)
+        .set('x-csrf-token', adminCsrf).send({ comment: 'ok' });
+      assert.strictEqual(apRes.status, 200);
+
+      // 管理サマリ: お祝い休暇取得分は有給残・使用に影響しない（前後で不変）
+      const after = await admin.get('/api/admin/leave/summary');
+      const afterRow = after.body.summary.find(s => s.id === 't_nurse');
+      assert.strictEqual(afterRow.used, beforeRow.used, 'お祝い休暇取得で有給の使用は増えない');
+      assert.strictEqual(afterRow.balance, beforeRow.balance, 'お祝い休暇取得で有給残は減らない');
+    } finally {
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf)
+        .send({ granted: 0, carried_over: 0, manual_adjustment: 0, celebration_used_adj: 0 });
     }
   });
 
