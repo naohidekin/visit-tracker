@@ -8,7 +8,7 @@ const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, at
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
+const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcPendingGrant, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
 
 // 有給通知ヘルパー（個人宛お知らせ）
 function createStaffNotice(staffId, title, body) {
@@ -474,9 +474,34 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         grant_date: s.leave_grant_date,
         celebration_days: s.celebration_days || 3,
         celebration_used_adj: s.celebration_used_adj || 0,
+        pending_grant: calcPendingGrant(s),
       };
     });
   res.json({ summary });
+});
+
+// 有給付与の時期が到来している職員のアラート一覧（管理者ダッシュボード用）
+// 入社日から半年→その後1年ごと（労基法テーブル）の付与基準日を過ぎているのに
+// 付与日数へ未反映のスタッフを返す。付与日数を更新すると自動的に一覧から消える。
+router.get('/api/admin/leave/grant-alerts', requireAdmin, (_req, res) => {
+  const staffData = loadStaff();
+  const alerts = [];
+  for (const s of staffData.staff) {
+    if (s.archived) continue;
+    const pending = calcPendingGrant(s);
+    if (pending) {
+      alerts.push({
+        id: s.id,
+        name: s.name,
+        grant_days: pending.grant_days,
+        current_granted: pending.granted,
+        reached_date: pending.reached_date,
+        tenure_label: pending.tenure_label,
+      });
+    }
+  }
+  alerts.sort((a, b) => (a.reached_date || '').localeCompare(b.reached_date || ''));
+  res.json({ count: alerts.length, alerts });
 });
 
 router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {

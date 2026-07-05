@@ -177,10 +177,13 @@ async function loadLeaveBalanceSummary() {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
     const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
+    const grantBadge = s.pending_grant
+      ? ` <span class="grant-alert-badge" title="${esc(s.pending_grant.tenure_label)}経過。労基法上は${s.pending_grant.grant_days}日を付与する時期です。付与日数を更新してください。">⚠付与時期</span>`
+      : '';
     return `<tr>
       <td class="leave-name"><a href="#" data-action="show-leave-dates" data-id="${esc(s.id)}" data-name="${esc(s.name)}">${esc(s.name)}</a></td>
       <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
-      <td data-label="付与">${s.granted}日</td>
+      <td data-label="付与">${s.granted}日${grantBadge}</td>
       <td data-label="繰越">${s.carried_over}日</td>
       <td data-label="調整">${adjStr}</td>
       <td data-label="使用">${s.used}日</td>

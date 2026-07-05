@@ -1,5 +1,8 @@
 // admin-nav.js — セクション切り替え・ダッシュボード
 
+// 有給付与の時期が来ている職員（ダッシュボードのアラート用）
+let dashGrantAlerts = [];
+
 // ── アコーディオン ──────────────────────────────────────────
 function toggleAccordion(header) {
   const body = header.nextElementSibling;
@@ -131,6 +134,15 @@ async function loadDashboard() {
       else { badge.style.display = 'none'; }
     }
   } catch {}
+  try {
+    // 有給付与の時期が来ている職員
+    const gRes = await fetch('/api/admin/leave/grant-alerts');
+    if (gRes.ok) {
+      const g = await gRes.json();
+      dashGrantAlerts = Array.isArray(g.alerts) ? g.alerts : [];
+    }
+  } catch { dashGrantAlerts = []; }
+
   // スタッフ数
   const activeCount = staffList ? staffList.filter(s => !s.archived).length : 0;
   document.getElementById('dashStaff').textContent = activeCount;
@@ -150,6 +162,13 @@ function buildDashAlerts() {
 
   const leaveCount = parseInt(document.getElementById('dashLeave').textContent) || 0;
   if (leaveCount > 0) alerts.push(`未処理の有給申請が ${leaveCount} 件あります`);
+
+  if (dashGrantAlerts.length > 0) {
+    const names = dashGrantAlerts
+      .map(a => `${a.name}（${a.tenure_label}経過・${a.grant_days}日）`)
+      .join('、');
+    alerts.push(`有給付与の時期が来ている職員が ${dashGrantAlerts.length} 名います: ${names}`);
+  }
 
   if (alerts.length === 0) {
     list.innerHTML = '<div class="dash-alert-none">対応が必要な項目はありません</div>';
