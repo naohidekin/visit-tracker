@@ -475,6 +475,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         celebration_days: s.celebration_days || 3,
         celebration_used_adj: s.celebration_used_adj || 0,
         pending_grant: calcPendingGrant(s),
+        grant_history: (s.leave_grant_history || []).slice().sort((a, b) => (b.grantedAt || '').localeCompare(a.grantedAt || '')),
       };
     });
   res.json({ summary });
@@ -505,7 +506,7 @@ router.get('/api/admin/leave/grant-alerts', requireAdmin, (_req, res) => {
 });
 
 router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req, res) => {
-  const { granted, carried_over, manual_adjustment, grant_date, celebration_days, celebration_used_adj } = req.body;
+  const { granted, carried_over, manual_adjustment, grant_date, celebration_days, celebration_used_adj, record_grant } = req.body;
   // バリデーション先行
   if (granted !== undefined) {
     const v = validateNum(granted, { min: 0, max: 365 });
@@ -537,6 +538,22 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
     const staff = staffData.staff.find(s => s.id === req.params.id);
     if (!staff) return { error: 'スタッフが見つかりません', status: 404 };
 
+    // 付与を記録する場合は、更新“前”の状態で対象マイルストーンを確定
+    let grantToRecord = null;
+    if (record_grant) {
+      const pending = calcPendingGrant(staff);
+      if (pending) {
+        const already = (staff.leave_grant_history || []).some(h => h.months === pending.reached_months);
+        if (!already) {
+          grantToRecord = {
+            months: pending.reached_months,
+            days: pending.grant_days,
+            label: pending.tenure_label,
+          };
+        }
+      }
+    }
+
     if (granted !== undefined) staff.leave_granted = validateNum(granted, { min: 0, max: 365 }).value;
     if (carried_over !== undefined) staff.leave_carried_over = validateNum(carried_over, { min: 0, max: 365 }).value;
     if (manual_adjustment !== undefined) staff.leave_manual_adjustment = validateNum(manual_adjustment, { min: -365, max: 365 }).value;
@@ -544,12 +561,42 @@ router.post('/api/admin/staff/:id/leave-balance', requireAdmin, asyncRoute((req,
     if (celebration_days !== undefined) staff.celebration_days = validateNum(celebration_days, { min: 0, max: 30 }).value;
     if (celebration_used_adj !== undefined) staff.celebration_used_adj = validateNum(celebration_used_adj, { min: 0, max: 30 }).value;
 
+    // 付与履歴に記録（二度付け防止：同じマイルストーンは1回のみ）
+    if (grantToRecord) {
+      if (!Array.isArray(staff.leave_grant_history)) staff.leave_grant_history = [];
+      staff.leave_grant_history.push({
+        grantedAt: getTodayJST(),
+        months: grantToRecord.months,
+        days: grantToRecord.days,
+      });
+      staff.leave_grant_date = getTodayJST();
+    }
+
     saveStaff(staffData);
-    return { ok: true, balance: calcLeaveBalance(staff) };
+    return {
+      ok: true,
+      balance: calcLeaveBalance(staff),
+      staffName: staff.name,
+      grantRecorded: grantToRecord,
+    };
   });
   if (result.error) return res.status(result.status).json({ error: result.error });
+
+  // 付与を記録した場合は本人へ個別お知らせを送信
+  if (result.grantRecorded) {
+    createStaffNotice(
+      req.params.id,
+      '有給休暇が付与されました',
+      `勤続${result.grantRecorded.label}に伴い、有給休暇 ${result.grantRecorded.days}日 が付与されました。\n` +
+      `現在の有給残日数は ${result.balance}日 です。\n` +
+      `詳しくは「有給休暇」画面でご確認ください。`
+    );
+    auditLog(req, 'leave.grant_recorded', { type: 'leave', id: req.params.id, label: result.staffName },
+      { months: result.grantRecorded.months, days: result.grantRecorded.days });
+  }
+
   auditLog(req, 'leave.balance_update', { type: 'leave', id: req.params.id, label: req.params.id }, { granted, carried_over, manual_adjustment, grant_date, celebration_days, celebration_used_adj });
-  res.json({ ok: true, balance: result.balance });
+  res.json({ ok: true, balance: result.balance, grant_recorded: !!result.grantRecorded });
 }));
 
 router.post('/api/admin/staff/:id/hire-date', requireAdmin, asyncRoute((req, res) => {

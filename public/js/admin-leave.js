@@ -4,6 +4,8 @@
 let leaveModalAction = null;
 let leaveModalRequestId = null;
 let leaveEditStaffId = null;
+let leaveSummaryById = {};        // 残日数サマリを id 別に保持（付与情報・履歴参照用）
+let leaveEditRecordGrant = false; // 「付与を反映」操作が行われたか（保存時に付与履歴へ記録）
 
 function switchLeaveTab(btn) {
   document.querySelectorAll('.leave-tab').forEach(t => t.classList.remove('active'));
@@ -173,6 +175,9 @@ async function loadLeaveBalanceSummary() {
   spinner.style.display = 'none';
   wrap.style.display = '';
 
+  leaveSummaryById = {};
+  summary.forEach(s => { leaveSummaryById[s.id] = s; });
+
   document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
@@ -195,6 +200,7 @@ async function loadLeaveBalanceSummary() {
 
 function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, celebDays, celebAdj) {
   leaveEditStaffId = id;
+  leaveEditRecordGrant = false;
   document.getElementById('leaveEditName').textContent = name;
   document.getElementById('leaveEditHireDate').value = hireDate;
   document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `労基法自動計算: ${autoGrant}日` : '入社日を設定すると自動計算されます';
@@ -203,7 +209,61 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
   document.getElementById('leaveEditAdj').value = adj;
   document.getElementById('leaveEditCelebDays').value = celebDays;
   document.getElementById('leaveEditCelebAdj').value = celebAdj;
+
+  const s = leaveSummaryById[id] || {};
+
+  // 付与時期の案内 & 「付与を反映」ボタン
+  const box = document.getElementById('leaveEditGrantBox');
+  const pg = s.pending_grant;
+  if (pg) {
+    document.getElementById('leaveEditGrantMsg').textContent =
+      `勤続${pg.tenure_label}に到達。労基法上は ${pg.grant_days}日 を付与する時期です。`;
+    const isFirst = pg.reached_months === 6;
+    document.getElementById('leaveEditGrantNote').textContent = isFirst
+      ? '「反映する」で付与日数を自動入力します。内容を確認して保存すると本人にお知らせが届きます。'
+      : `「反映する」で付与日数を ${pg.grant_days}日 に、前年度の未使用分（現在の残 ${s.balance}日）を繰越に下書きします。金額を確認・調整のうえ保存してください。`;
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+
+  // 付与履歴
+  const hist = s.grant_history || [];
+  const histWrap = document.getElementById('leaveEditHistory');
+  if (hist.length > 0) {
+    document.getElementById('leaveEditHistoryList').innerHTML = hist.map(h =>
+      `${esc(h.grantedAt)} ｜ 勤続${esc(tenureLabelFromMonths(h.months))} ｜ ${esc(String(h.days))}日付与`
+    ).join('<br>');
+    histWrap.style.display = '';
+  } else {
+    histWrap.style.display = 'none';
+  }
+
   document.getElementById('leaveEditModal').style.display = 'flex';
+}
+
+// 勤続月数 → ラベル（サーバの formatTenureLabel と同等）
+function tenureLabelFromMonths(months) {
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m}ヶ月`;
+  if (m === 0) return `${y}年`;
+  return `${y}年${m}ヶ月`;
+}
+
+// 「この付与を反映する」— 付与日数（と2年目以降は繰越）を下書きし、保存時に付与記録するフラグを立てる
+function applyPendingGrant() {
+  const s = leaveSummaryById[leaveEditStaffId] || {};
+  const pg = s.pending_grant;
+  if (!pg) return;
+  document.getElementById('leaveEditGranted').value = pg.grant_days;
+  // 2年目以降（初回=6ヶ月以外）は前年度の未使用分を繰越へ下書き
+  if (pg.reached_months !== 6) {
+    const remaining = Number(s.balance) || 0;
+    document.getElementById('leaveEditCarried').value = remaining > 0 ? remaining : 0;
+  }
+  leaveEditRecordGrant = true;
+  showToast('付与内容を下書きしました。確認して「保存」してください');
 }
 function closeLeaveEditModal() {
   document.getElementById('leaveEditModal').style.display = 'none';
@@ -293,12 +353,13 @@ async function saveLeaveEdit() {
   const res = await apiFetch(`/api/admin/staff/${leaveEditStaffId}/leave-balance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj, celebration_days: celebDays, celebration_used_adj: celebAdj }),
+    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj, celebration_days: celebDays, celebration_used_adj: celebAdj, record_grant: leaveEditRecordGrant }),
   });
   const data = await res.json();
+  leaveEditRecordGrant = false;
   closeLeaveEditModal();
   if (data.ok) {
-    showToast('保存しました');
+    showToast(data.grant_recorded ? '付与を記録し、本人にお知らせを送信しました' : '保存しました');
     loadLeaveBalanceSummary();
   } else {
     showToast('エラー: ' + (data.error || '保存失敗'));

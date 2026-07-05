@@ -258,6 +258,51 @@ async function runTests(app) {
 
   clearRateLimits();
   // ────────────────────────────────────────────────────────────
+  console.log('\n📌 有給付与記録・お知らせテスト');
+
+  await test('付与記録: アラート→反映→履歴記録＆本人お知らせ、二度付け防止', async () => {
+    const { agent: admin, csrfToken: adminCsrf } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const setBalance = (body) => admin.post('/api/admin/staff/t_nurse/leave-balance')
+      .set('x-csrf-token', adminCsrf).send(body);
+    try {
+      // 入社日を過去に設定（付与基準日を全て通過させる）＋付与日数を0に
+      const hireRes = await admin.post('/api/admin/staff/t_nurse/hire-date')
+        .set('x-csrf-token', adminCsrf).send({ hire_date: '2020-01-01' });
+      assert.strictEqual(hireRes.status, 200);
+      await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+
+      // アラート一覧に出る
+      const alerts = await admin.get('/api/admin/leave/grant-alerts');
+      assert.strictEqual(alerts.status, 200);
+      assert.ok(alerts.body.alerts.some(a => a.id === 't_nurse'), 'grant-alerts に t_nurse が出る');
+
+      // 付与を反映（record_grant）→ 記録される
+      const applied = await setBalance({ granted: 20, record_grant: true });
+      assert.strictEqual(applied.status, 200);
+      assert.strictEqual(applied.body.grant_recorded, true, '付与が記録される');
+
+      // 履歴に1件、アラートから消える
+      const summary = await admin.get('/api/admin/leave/summary');
+      const row = summary.body.summary.find(s => s.id === 't_nurse');
+      assert.strictEqual(row.grant_history.length, 1, '付与履歴が1件');
+      assert.strictEqual(row.pending_grant, null, 'アラート対象から外れる');
+
+      // 二度付け防止：同じ時期を再度反映しても記録されない
+      const again = await setBalance({ granted: 20, record_grant: true });
+      assert.strictEqual(again.body.grant_recorded, false, '二度付けされない');
+
+      // 本人に個別お知らせが届く
+      const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
+      const notices = await staff.get('/api/notices').set('x-csrf-token', staffCsrf);
+      assert.ok(notices.body.notices.some(n => n.title === '有給休暇が付与されました'), '付与お知らせが本人に届く');
+    } finally {
+      // 後続テストのため状態を戻す（付与日数・入社日）
+      await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+    }
+  });
+
+  clearRateLimits();
+  // ────────────────────────────────────────────────────────────
   console.log('\n📌 オンコール記録・集計テスト');
 
   const oncallMonth = '2028-03';
