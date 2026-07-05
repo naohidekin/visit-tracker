@@ -482,7 +482,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
 });
 
 // 有給付与の時期が到来している職員のアラート一覧（管理者ダッシュボード用）
-// 入社日から半年→その後1年ごと（労基法テーブル）の付与基準日を過ぎているのに
+// 入社日から半年→その後1年ごと（付与規定テーブル）の付与基準日を過ぎているのに
 // 付与日数へ未反映のスタッフを返す。付与日数を更新すると自動的に一覧から消える。
 router.get('/api/admin/leave/grant-alerts', requireAdmin, (_req, res) => {
   const staffData = loadStaff();

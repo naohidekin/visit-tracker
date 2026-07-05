@@ -183,7 +183,7 @@ async function loadLeaveBalanceSummary() {
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
     const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
     const grantBadge = s.pending_grant
-      ? ` <span class="grant-alert-badge" title="${esc(s.pending_grant.tenure_label)}経過。労基法上は${s.pending_grant.grant_days}日を付与する時期です。付与日数を更新してください。">⚠付与時期</span>`
+      ? ` <span class="grant-alert-badge" title="${esc(s.pending_grant.tenure_label)}経過。付与規定では${s.pending_grant.grant_days}日を付与する時期です。付与日数を更新してください。">⚠付与時期</span>`
       : '';
     return `<tr>
       <td class="leave-name"><a href="#" data-action="show-leave-dates" data-id="${esc(s.id)}" data-name="${esc(s.name)}">${esc(s.name)}</a></td>
@@ -203,7 +203,7 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
   leaveEditRecordGrant = false;
   document.getElementById('leaveEditName').textContent = name;
   document.getElementById('leaveEditHireDate').value = hireDate;
-  document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `労基法自動計算: ${autoGrant}日` : '入社日を設定すると自動計算されます';
+  document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `付与規定（自動計算）: ${autoGrant}日` : '入社日を設定すると自動計算されます';
   document.getElementById('leaveEditGranted').value = granted;
   document.getElementById('leaveEditCarried').value = carried;
   document.getElementById('leaveEditAdj').value = adj;
@@ -217,7 +217,7 @@ function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, cel
   const pg = s.pending_grant;
   if (pg) {
     document.getElementById('leaveEditGrantMsg').textContent =
-      `勤続${pg.tenure_label}に到達。労基法上は ${pg.grant_days}日 を付与する時期です。`;
+      `勤続${pg.tenure_label}に到達。付与規定では ${pg.grant_days}日 を付与する時期です。`;
     const isFirst = pg.reached_months === 6;
     document.getElementById('leaveEditGrantNote').textContent = isFirst
       ? '「反映する」で付与日数を自動入力します。内容を確認して保存すると本人にお知らせが届きます。'
