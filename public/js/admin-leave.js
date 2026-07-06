@@ -4,6 +4,8 @@
 let leaveModalAction = null;
 let leaveModalRequestId = null;
 let leaveEditStaffId = null;
+let leaveSummaryById = {};        // 残日数サマリを id 別に保持（付与情報・履歴参照用）
+let leaveEditRecordGrant = false; // 「付与を反映」操作が行われたか（保存時に付与履歴へ記録）
 
 function switchLeaveTab(btn) {
   document.querySelectorAll('.leave-tab').forEach(t => t.classList.remove('active'));
@@ -64,8 +66,7 @@ document.getElementById('leavePendingBody').addEventListener('click', e => {
 document.getElementById('leaveBalanceBody').addEventListener('click', e => {
   const editBtn = e.target.closest('[data-action="edit-leave"]');
   if (editBtn) {
-    const d = editBtn.dataset;
-    openLeaveEdit(d.id, d.name, d.hire, Number(d.auto), Number(d.granted), Number(d.carried), Number(d.adj), Number(d.celebDays), Number(d.celebAdj));
+    openLeaveEdit(editBtn.dataset.id);
     return;
   }
   const nameLink = e.target.closest('[data-action="show-leave-dates"]');
@@ -173,14 +174,20 @@ async function loadLeaveBalanceSummary() {
   spinner.style.display = 'none';
   wrap.style.display = '';
 
+  leaveSummaryById = {};
+  summary.forEach(s => { leaveSummaryById[s.id] = s; });
+
   document.getElementById('leaveBalanceBody').innerHTML = summary.map(s => {
     const adjStr = (s.manual_adjustment >= 0 ? '+' : '') + s.manual_adjustment;
     const balColor = s.balance <= 0 ? '#c0392b' : 'var(--text)';
-    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}" data-name="${esc(s.name)}" data-hire="${s.hire_date||''}" data-auto="${s.auto_grant_days}" data-granted="${s.granted}" data-carried="${s.carried_over}" data-adj="${s.manual_adjustment}" data-celeb-days="${s.celebration_days||3}" data-celeb-adj="${s.celebration_used_adj||0}">編集</button>`;
+    const editBtn = `<button class="btn btn-blue btn-sm" data-action="edit-leave" data-id="${esc(s.id)}">編集</button>`;
+    const grantBadge = s.pending_grant
+      ? ` <span class="grant-alert-badge" title="${esc(s.pending_grant.tenure_label)}経過。付与規定では${s.pending_grant.grant_days}日を付与する時期です。付与日数を更新してください。">⚠付与時期</span>`
+      : '';
     return `<tr>
       <td class="leave-name"><a href="#" data-action="show-leave-dates" data-id="${esc(s.id)}" data-name="${esc(s.name)}">${esc(s.name)}</a></td>
       <td data-label="入社日" style="font-size:13px">${s.hire_date || '未設定'}</td>
-      <td data-label="付与">${s.granted}日</td>
+      <td data-label="付与">${s.granted}日${grantBadge}</td>
       <td data-label="繰越">${s.carried_over}日</td>
       <td data-label="調整">${adjStr}</td>
       <td data-label="使用">${s.used}日</td>
@@ -190,17 +197,64 @@ async function loadLeaveBalanceSummary() {
   }).join('');
 }
 
-function openLeaveEdit(id, name, hireDate, autoGrant, granted, carried, adj, celebDays, celebAdj) {
+// 残日数サマリ（leaveSummaryById）から1行分を読み込んで編集モーダルを開く
+function openLeaveEdit(id) {
+  const s = leaveSummaryById[id] || {};
   leaveEditStaffId = id;
-  document.getElementById('leaveEditName').textContent = name;
-  document.getElementById('leaveEditHireDate').value = hireDate;
-  document.getElementById('leaveEditAutoGrant').textContent = hireDate ? `労基法自動計算: ${autoGrant}日` : '入社日を設定すると自動計算されます';
-  document.getElementById('leaveEditGranted').value = granted;
-  document.getElementById('leaveEditCarried').value = carried;
-  document.getElementById('leaveEditAdj').value = adj;
-  document.getElementById('leaveEditCelebDays').value = celebDays;
-  document.getElementById('leaveEditCelebAdj').value = celebAdj;
+  leaveEditRecordGrant = false;
+  document.getElementById('leaveEditName').textContent = s.name || '';
+  document.getElementById('leaveEditHireDate').value = s.hire_date || '';
+  document.getElementById('leaveEditAutoGrant').textContent = s.hire_date ? `付与規定（自動計算）: ${s.auto_grant_days}日` : '入社日を設定すると自動計算されます';
+  document.getElementById('leaveEditGranted').value = s.granted || 0;
+  document.getElementById('leaveEditCarried').value = s.carried_over || 0;
+  document.getElementById('leaveEditAdj').value = s.manual_adjustment || 0;
+  document.getElementById('leaveEditCelebDays').value = s.celebration_days || 3;
+  document.getElementById('leaveEditCelebAdj').value = s.celebration_used_adj || 0;
+
+  // 付与時期の案内 & 「付与を反映」ボタン
+  const box = document.getElementById('leaveEditGrantBox');
+  const pg = s.pending_grant;
+  if (pg) {
+    document.getElementById('leaveEditGrantMsg').textContent =
+      `勤続${pg.tenure_label}に到達。付与規定では ${pg.grant_days}日 を付与する時期です。`;
+    const isFirst = pg.reached_months === 6;
+    document.getElementById('leaveEditGrantNote').textContent = isFirst
+      ? '「反映する」で付与日数を自動入力します。内容を確認して保存すると本人にお知らせが届きます。'
+      : `「反映する」で付与日数を ${pg.grant_days}日 に、前年度分（前年度付与＋旧繰越）を繰越に下書きします。時効・上限を確認・調整のうえ保存してください。`;
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+
+  // 付与履歴（ラベルはサーバ側で付与済み）
+  const hist = s.grant_history || [];
+  const histWrap = document.getElementById('leaveEditHistory');
+  if (hist.length > 0) {
+    document.getElementById('leaveEditHistoryList').innerHTML = hist.map(h =>
+      `${esc(h.grantedAt)} ｜ 勤続${esc(h.label || '')} ｜ ${esc(String(h.days))}日付与`
+    ).join('<br>');
+    histWrap.style.display = '';
+  } else {
+    histWrap.style.display = 'none';
+  }
+
   document.getElementById('leaveEditModal').style.display = 'flex';
+}
+
+// 「この付与を反映する」— 付与日数（と2年目以降は繰越）を下書きし、保存時に付与記録するフラグを立てる
+function applyPendingGrant() {
+  const s = leaveSummaryById[leaveEditStaffId] || {};
+  const pg = s.pending_grant;
+  if (!pg) return;
+  document.getElementById('leaveEditGranted').value = pg.grant_days;
+  // 2年目以降（初回=6ヶ月以外）は前年度分（前年度付与＋旧繰越）を繰越へ下書き。
+  // 調整・OC・使用済みは各欄で保持されるため、ここで残日数を丸ごと入れると二重計上になる。
+  if (pg.reached_months !== 6) {
+    const prevCarry = (Number(s.granted) || 0) + (Number(s.carried_over) || 0);
+    document.getElementById('leaveEditCarried').value = prevCarry > 0 ? prevCarry : 0;
+  }
+  leaveEditRecordGrant = true;
+  showToast('付与内容を下書きしました。時効・繰越上限を確認して「保存」してください');
 }
 function closeLeaveEditModal() {
   document.getElementById('leaveEditModal').style.display = 'none';
@@ -210,11 +264,49 @@ function closeLeaveDatesModal() {
   document.getElementById('leaveDatesModal').style.display = 'none';
 }
 
+// 繰越期限（付与日 + 1年 − 1日）を「YYYY年M月D日」で返す（本人画面と同ロジック）
+function carryExpiryLabel(grantDate) {
+  const gd = new Date(grantDate);
+  gd.setFullYear(gd.getFullYear() + 1);
+  gd.setDate(gd.getDate() - 1);
+  return gd.getFullYear() + '年' + (gd.getMonth() + 1) + '月' + gd.getDate() + '日';
+}
+
+// 本人の有給画面と同じ内訳を管理画面に表示（数値は共通計算で本人画面と一致）
+async function renderLeaveView(staffId) {
+  const box = document.getElementById('leaveDatesView');
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted)">本人ビュー読み込み中...</div>';
+  let v;
+  try {
+    const res = await fetch(`/api/admin/staff/${encodeURIComponent(staffId)}/leave-balance-view`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    v = await res.json();
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:12px;color:#c0392b">本人ビューの取得に失敗しました</div>';
+    return;
+  }
+  const r = (label, val) => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span style="color:var(--muted)">${esc(label)}</span><span style="font-weight:600">${esc(String(val))}</span></div>`;
+  const p = [];
+  p.push(`<div style="text-align:center;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px"><div style="font-size:12px;color:var(--muted)">有給残日数</div><div style="font-size:24px;font-weight:800">${esc(String(v.balance))}日</div></div>`);
+  p.push(r('年間付与', v.granted + '日'));
+  p.push(r('前年繰越', v.carried_over + '日' + (v.carried_over > 0 && v.grant_date ? `（期限 ${carryExpiryLabel(v.grant_date)}）` : '')));
+  if (v.manual_adjustment) p.push(r('手動調整', (v.manual_adjustment > 0 ? '+' : '') + v.manual_adjustment + '日'));
+  p.push(r('使用済み（有給）', v.used + '日'));
+  if (v.oncall_leave_valid) p.push(r('累積OC（有効）', v.oncall_leave_valid + '日' + (v.oncall_leave_expiry_date ? `（期限 ${v.oncall_leave_expiry_date}）` : '')));
+  if (v.oncall_leave_expired) p.push(r('累積OC（期限切れ）', v.oncall_leave_expired + '日'));
+  p.push('<div style="border-top:1px solid var(--border);margin:6px 0"></div>');
+  p.push(r('お祝い休暇 残', `${v.celebration_remaining}日 / ${v.celebration_days}日`));
+  p.push(r('お祝い休暇 使用', v.celebration_used + '日'));
+  if (v.next_grant && v.next_grant.next_grant_date) p.push(r('次回付与', `${v.next_grant.next_grant_date} に ${v.next_grant.next_grant_days}日`));
+  box.innerHTML = `<div style="background:var(--card-bg,#f7f9fc);border:1px solid var(--border);border-radius:8px;padding:10px">${p.join('')}</div>`;
+}
+
 async function showStaffLeaveDates(staffId, staffName) {
   document.getElementById('leaveDatesName').textContent = staffName;
   document.getElementById('leaveDatesSummary').textContent = '';
   document.getElementById('leaveDatesBody').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px 0">読み込み中...</td></tr>';
   document.getElementById('leaveDatesModal').style.display = 'flex';
+  renderLeaveView(staffId);
 
   let requests;
   try {
@@ -290,12 +382,13 @@ async function saveLeaveEdit() {
   const res = await apiFetch(`/api/admin/staff/${leaveEditStaffId}/leave-balance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj, celebration_days: celebDays, celebration_used_adj: celebAdj }),
+    body: JSON.stringify({ granted, carried_over: carried, manual_adjustment: adj, celebration_days: celebDays, celebration_used_adj: celebAdj, record_grant: leaveEditRecordGrant }),
   });
   const data = await res.json();
+  leaveEditRecordGrant = false;
   closeLeaveEditModal();
   if (data.ok) {
-    showToast('保存しました');
+    showToast(data.grant_recorded ? '付与を記録し、本人にお知らせを送信しました' : '保存しました');
     loadLeaveBalanceSummary();
   } else {
     showToast('エラー: ' + (data.error || '保存失敗'));

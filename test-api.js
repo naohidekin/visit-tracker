@@ -25,6 +25,7 @@ const request = require('supertest');
 const bcrypt  = require('bcryptjs');
 const { getDb }         = require('./lib/db');
 const { ensureDataDir } = require('./lib/data');
+const { getTodayJST }   = require('./lib/helpers');
 
 // ── テストランナー ────────────────────────────────────────────────
 let passed = 0;
@@ -254,6 +255,117 @@ async function runTests(app) {
     const req = res.body.requests?.find(r => r.id === leaveRequestId);
     assert.ok(req, '申請が見つかる');
     assert.strictEqual(req.status, 'approved');
+  });
+
+  clearRateLimits();
+  // ────────────────────────────────────────────────────────────
+  console.log('\n📌 有給付与記録・お知らせテスト');
+
+  await test('付与記録: アラート→反映→履歴記録＆本人お知らせ、二度付け防止', async () => {
+    const { agent: admin, csrfToken: adminCsrf } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const setBalance = (body) => admin.post('/api/admin/staff/t_nurse/leave-balance')
+      .set('x-csrf-token', adminCsrf).send(body);
+    try {
+      // 入社日を過去に設定（付与基準日を全て通過させる）＋付与日数を0に
+      const hireRes = await admin.post('/api/admin/staff/t_nurse/hire-date')
+        .set('x-csrf-token', adminCsrf).send({ hire_date: '2020-01-01' });
+      assert.strictEqual(hireRes.status, 200);
+      await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+
+      // アラート一覧に出る（規定上の基準日=マイルストーン日を控えておく）
+      const alerts = await admin.get('/api/admin/leave/grant-alerts');
+      assert.strictEqual(alerts.status, 200);
+      const alert = alerts.body.alerts.find(a => a.id === 't_nurse');
+      assert.ok(alert, 'grant-alerts に t_nurse が出る');
+      const milestoneDate = alert.reached_date;
+
+      // 反映フラグ付きでも、保存された付与日数が規定未満なら記録・通知しない
+      const lowered = await setBalance({ granted: 5, record_grant: true });
+      assert.strictEqual(lowered.body.grant_recorded, false, '付与日数が規定未満なら記録しない');
+      const afterLow = await admin.get('/api/admin/leave/summary');
+      assert.strictEqual(afterLow.body.summary.find(s => s.id === 't_nurse').grant_history.length, 0, '未記録のまま');
+
+      // 付与を反映（record_grant, 規定どおり）→ 記録される
+      const applied = await setBalance({ granted: 20, record_grant: true });
+      assert.strictEqual(applied.status, 200);
+      assert.strictEqual(applied.body.grant_recorded, true, '付与が記録される');
+
+      // 履歴に1件、アラートから消える
+      const summary = await admin.get('/api/admin/leave/summary');
+      const row = summary.body.summary.find(s => s.id === 't_nurse');
+      assert.strictEqual(row.grant_history.length, 1, '付与履歴が1件');
+      assert.strictEqual(row.pending_grant, null, 'アラート対象から外れる');
+      // 付与日は「クリック日」ではなく規定上の基準日（マイルストーン日）
+      assert.strictEqual(row.grant_history[0].grantedAt, milestoneDate, '履歴の付与日=マイルストーン日');
+      assert.strictEqual(row.grant_date, milestoneDate, 'grant_date=マイルストーン日（クリック日ではない）');
+      assert.ok(row.grant_history[0].label, '付与履歴にラベルがサーバ側で付く');
+
+      // 二度付け防止：同じ時期を再度反映しても記録されない
+      const again = await setBalance({ granted: 20, record_grant: true });
+      assert.strictEqual(again.body.grant_recorded, false, '二度付けされない');
+
+      // 本人に個別お知らせが届く
+      const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
+      const notices = await staff.get('/api/notices').set('x-csrf-token', staffCsrf);
+      assert.ok(notices.body.notices.some(n => n.title === '有給休暇が付与されました'), '付与お知らせが本人に届く');
+    } finally {
+      // 後続テストのため状態を戻す（付与日数・入社日）
+      await setBalance({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+    }
+  });
+
+  await test('管理サマリの残: お祝い休暇での取得は有給から差し引かない', async () => {
+    const { agent: admin, csrfToken: adminCsrf } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const today = getTodayJST();
+    try {
+      // 入社日を当日に設定（お祝い休暇有効期間内）＋付与10・お祝い5
+      await admin.post('/api/admin/staff/t_nurse/hire-date')
+        .set('x-csrf-token', adminCsrf).send({ hire_date: today });
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf)
+        .send({ granted: 10, carried_over: 0, manual_adjustment: 0, celebration_days: 5, celebration_used_adj: 0 });
+
+      // お祝い休暇申請“前”の残・使用を控える（他テストの承認済み申請の影響を排除）
+      const before = await admin.get('/api/admin/leave/summary');
+      const beforeRow = before.body.summary.find(s => s.id === 't_nurse');
+
+      // 本人がお祝い休暇（type=celebration）を1日申請 → 管理者が承認
+      const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
+      const reqRes = await staff.post('/api/leave/requests')
+        .set('x-csrf-token', staffCsrf)
+        .send({ type: 'celebration', startDate: today, endDate: today });
+      assert.ok(reqRes.status === 200 || reqRes.status === 201, `申請 status=${reqRes.status} body=${JSON.stringify(reqRes.body)}`);
+      const reqId = reqRes.body.id ?? reqRes.body.request?.id;
+      const apRes = await admin.post(`/api/admin/leave/requests/${reqId}/approve`)
+        .set('x-csrf-token', adminCsrf).send({ comment: 'ok' });
+      assert.strictEqual(apRes.status, 200);
+
+      // 管理サマリ: お祝い休暇取得分は有給残・使用に影響しない（前後で不変）
+      const after = await admin.get('/api/admin/leave/summary');
+      const afterRow = after.body.summary.find(s => s.id === 't_nurse');
+      assert.strictEqual(afterRow.used, beforeRow.used, 'お祝い休暇取得で有給の使用は増えない');
+      assert.strictEqual(afterRow.balance, beforeRow.balance, 'お祝い休暇取得で有給残は減らない');
+    } finally {
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf)
+        .send({ granted: 0, carried_over: 0, manual_adjustment: 0, celebration_used_adj: 0 });
+    }
+  });
+
+  await test('管理者: 本人ビュー内訳の取得（本人 /api/leave/balance と一致）', async () => {
+    const { agent: admin } = await loginAs(app, 't_admin', 'Admin12345', true);
+    const adminView = await admin.get('/api/admin/staff/t_nurse/leave-balance-view');
+    assert.strictEqual(adminView.status, 200);
+    assert.strictEqual(typeof adminView.body.balance, 'number', 'balance が返る');
+    assert.ok('celebration_remaining' in adminView.body, 'お祝い休暇残を含む');
+    // 本人が自分の /api/leave/balance で見る値と一致する
+    const { agent: staff } = await loginAs(app, 't_nurse', 'nurse123');
+    const own = await staff.get('/api/leave/balance');
+    assert.strictEqual(adminView.body.balance, own.body.balance, '本人画面と残日数が一致');
+    assert.strictEqual(adminView.body.used, own.body.used, '本人画面と使用日数が一致');
+    // 存在しない職員 → 404
+    const nf = await admin.get('/api/admin/staff/__nope__/leave-balance-view');
+    assert.strictEqual(nf.status, 404);
   });
 
   clearRateLimits();

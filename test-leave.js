@@ -13,6 +13,7 @@ const {
   hasReachedGrantDate,
   calcLeaveGrantDays,
   calcNextGrant,
+  calcPendingGrant,
   calcCelebrationRemaining,
   calcOncallLeaveExpiry,
   calcValidOncallLeave,
@@ -141,6 +142,73 @@ test('入社10年 → 次回付与日は正しく計算', () => {
   const r = calcNextGrant('2016-04-01', '2026-03-30');
   assert.strictEqual(r.next_grant_days, 20);
   assert.ok(r.days_until_next > 0);
+});
+
+// ─── calcPendingGrant ───
+console.log('\n📌 calcPendingGrant');
+
+test('入社日未設定 → null', () => {
+  assert.strictEqual(calcPendingGrant({ leave_granted: 0 }, '2026-01-01'), null);
+});
+
+test('半年経過・未反映（granted=0）→ 10日付与のアラート', () => {
+  // 2025-01-01入社、2025-07-01で6ヶ月到達
+  const p = calcPendingGrant({ hire_date: '2025-01-01', leave_granted: 0 }, '2025-07-01');
+  assert.ok(p);
+  assert.strictEqual(p.grant_days, 10);
+  assert.strictEqual(p.tenure_label, '6ヶ月');
+  assert.strictEqual(p.reached_date, '2025-07-01');
+});
+
+test('半年経過・反映済み（granted=10）→ null', () => {
+  assert.strictEqual(calcPendingGrant({ hire_date: '2025-01-01', leave_granted: 10 }, '2025-07-01'), null);
+});
+
+test('半年未到達（前日）→ null', () => {
+  assert.strictEqual(calcPendingGrant({ hire_date: '2025-01-01', leave_granted: 0 }, '2025-06-30'), null);
+});
+
+test('アーカイブ済みスタッフ → null', () => {
+  assert.strictEqual(calcPendingGrant({ hire_date: '2025-01-01', leave_granted: 0, archived: true }, '2025-07-01'), null);
+});
+
+test('1年6ヶ月経過・granted=10のまま → 12日付与のアラート', () => {
+  // 2024-01-01入社、2025-07-01で18ヶ月到達
+  const p = calcPendingGrant({ hire_date: '2024-01-01', leave_granted: 10 }, '2025-07-01');
+  assert.ok(p);
+  assert.strictEqual(p.grant_days, 12);
+  assert.strictEqual(p.tenure_label, '1年6ヶ月');
+});
+
+test('最大付与到達・反映済み（granted=20）→ null', () => {
+  assert.strictEqual(calcPendingGrant({ hire_date: '2016-04-01', leave_granted: 20 }, '2026-04-01'), null);
+});
+
+test('プラトー・既存最大付与(20)で履歴なし → null（大量アラート回避）', () => {
+  // 2015-01-01入社（プラトー超）。granted=20・履歴なしは反映済み扱い
+  assert.strictEqual(calcPendingGrant({ hire_date: '2015-01-01', leave_granted: 20 }, '2026-07-05'), null);
+});
+
+test('プラトー・付与0で未反映 → 20日付与のアラート（ラベルは頭打ちしない）', () => {
+  // 2015-01-01入社を2026-07-05時点で。138ヶ月＝11年6ヶ月経過
+  const p = calcPendingGrant({ hire_date: '2015-01-01', leave_granted: 0 }, '2026-07-05');
+  assert.ok(p);
+  assert.strictEqual(p.grant_days, 20);
+  assert.strictEqual(p.tenure_label, '11年6ヶ月');
+});
+
+test('プラトー・毎年更新: 直近マイルストーンが履歴未記録なら再度アラート', () => {
+  // 2018-01-01入社を2026-07-05時点で = 102ヶ月（8年6ヶ月）到達。66は履歴済みだが102は未記録
+  const staff = { hire_date: '2018-01-01', leave_granted: 20, leave_grant_history: [{ grantedAt: '2023-07-01', months: 66, days: 20 }] };
+  const p = calcPendingGrant(staff, '2026-07-05');
+  assert.ok(p);
+  assert.strictEqual(p.reached_months, 102);
+  assert.strictEqual(p.tenure_label, '8年6ヶ月');
+});
+
+test('プラトー・直近マイルストーンが履歴記録済み → null', () => {
+  const staff = { hire_date: '2018-01-01', leave_granted: 20, leave_grant_history: [{ grantedAt: '2026-07-01', months: 102, days: 20 }] };
+  assert.strictEqual(calcPendingGrant(staff, '2026-07-05'), null);
 });
 
 // ─── calcLeaveBalance ───
