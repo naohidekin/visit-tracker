@@ -368,6 +368,47 @@ async function runTests(app) {
     assert.strictEqual(nf.status, 404);
   });
 
+  await test('管理者: 承認済み申請の取消 → cancelled・本人へ通知', async () => {
+    const { agent: admin, csrfToken: adminCsrf } = await loginAs(app, 't_admin', 'Admin12345', true);
+    try {
+      // お祝い休暇への自動変換を避けるため入社日は過去（お祝い期限切れ）＋付与10
+      await admin.post('/api/admin/staff/t_nurse/hire-date')
+        .set('x-csrf-token', adminCsrf).send({ hire_date: '2020-01-01' });
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf).send({ granted: 10, carried_over: 0, manual_adjustment: 0 });
+
+      // 本人が有給申請 → 管理者が承認
+      const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
+      const reqRes = await staff.post('/api/leave/requests')
+        .set('x-csrf-token', staffCsrf).send({ type: 'full', startDate: '2028-05-15', endDate: '2028-05-15' });
+      const reqId = reqRes.body.id ?? reqRes.body.request?.id;
+      assert.ok(reqId, `申請ID body=${JSON.stringify(reqRes.body)}`);
+      const ap = await admin.post(`/api/admin/leave/requests/${reqId}/approve`)
+        .set('x-csrf-token', adminCsrf).send({ comment: 'ok' });
+      assert.strictEqual(ap.status, 200);
+
+      // 管理者が承認済み申請を取消
+      const cancel = await admin.post(`/api/admin/leave/requests/${reqId}/cancel`)
+        .set('x-csrf-token', adminCsrf).send({});
+      assert.strictEqual(cancel.status, 200);
+      assert.strictEqual(cancel.body.ok, true, '取消成功');
+
+      // ステータスが cancelled になり、使用日数から外れる
+      const hist = await admin.get('/api/admin/leave/requests');
+      assert.strictEqual(hist.body.requests.find(r => r.id === reqId).status, 'cancelled', '取消済みになる');
+      // 本人に取消通知
+      const notices = await staff.get('/api/notices').set('x-csrf-token', staffCsrf);
+      assert.ok(notices.body.notices.some(n => n.title === '有給申請が取り消されました'), '取消通知が本人に届く');
+      // 存在しない申請 → 404
+      const nf = await admin.post('/api/admin/leave/requests/__nope__/cancel')
+        .set('x-csrf-token', adminCsrf).send({});
+      assert.strictEqual(nf.status, 404);
+    } finally {
+      await admin.post('/api/admin/staff/t_nurse/leave-balance')
+        .set('x-csrf-token', adminCsrf).send({ granted: 0, carried_over: 0, manual_adjustment: 0 });
+    }
+  });
+
   clearRateLimits();
   // ────────────────────────────────────────────────────────────
   console.log('\n📌 オンコール記録・集計テスト');
