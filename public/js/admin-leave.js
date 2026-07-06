@@ -62,6 +62,12 @@ document.getElementById('leavePendingBody').addEventListener('click', e => {
   if (btn.dataset.action === 'leave-reject')  openLeaveModal('reject', btn.dataset.id);
 });
 
+// ── #leaveHistoryBody イベント委譲（承認済み申請の取消） ────────
+document.getElementById('leaveHistoryBody').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action="admin-cancel-leave"]');
+  if (btn) adminCancelLeave(btn.dataset.id);
+});
+
 // ── #leaveBalanceBody イベント委譲 ─────────────────────────────
 document.getElementById('leaveBalanceBody').addEventListener('click', e => {
   const editBtn = e.target.closest('[data-action="edit-leave"]');
@@ -153,6 +159,10 @@ async function loadLeaveHistory() {
     const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
     const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
+    const canCancel = (r.status === 'pending' || r.status === 'approved');
+    const opCell = canCancel
+      ? `<button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c" data-action="admin-cancel-leave" data-id="${esc(r.id)}">取消</button>`
+      : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>
       <td style="white-space:nowrap">${dateStr}</td>
@@ -160,8 +170,26 @@ async function loadLeaveHistory() {
       <td><span class="leave-status ${r.status}">${statusLabels[r.status]}</span></td>
       <td style="font-size:14px">${esc(r.adminComment || '-')}</td>
       <td style="font-size:14px">${created}</td>
+      <td>${opCell}</td>
     </tr>`;
   }).join('');
+}
+
+// 管理者による申請取消（承認済みも取消可能。取消で有給残へ反映）
+async function adminCancelLeave(id) {
+  if (!confirm('この有給申請を取り消しますか？\n承認済みの場合、有給残に反映され、本人にお知らせが届きます。')) return;
+  const res = await apiFetch(`/api/admin/leave/requests/${id}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    showToast('申請を取り消しました');
+    loadLeaveHistory();
+  } else {
+    showToast('エラー: ' + (data.error || '取消に失敗しました'));
+  }
 }
 
 async function loadLeaveBalanceSummary() {

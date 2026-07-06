@@ -83,6 +83,7 @@ const AUDIT_ACTION_LABELS = {
   'leave.reject': '有給却下',
   'leave.balance_update': '有給残調整',
   'leave.grant_recorded': '有給付与記録',
+  'leave.admin_cancel': '有給申請取消',
   'oncall.upsert': 'OC記録登録',
   'oncall.delete': 'OC記録削除',
   'oncall.eligible_update': 'OC対象変更',
