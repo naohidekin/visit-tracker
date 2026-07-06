@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, atomicModify } = require('../lib/data');
+const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, loadAttendance, saveAttendance, atomicModify } = require('../lib/data');
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
@@ -26,6 +26,63 @@ function createStaffNotice(staffId, title, body) {
     };
     data.notices.push(notice);
     saveNotices(data);
+  });
+}
+
+// 日付配列 → 通知用の期間表記（"YYYY-MM-DD" or "開始〜終了"）
+function formatLeaveDateRange(dates) {
+  const d = dates || [];
+  if (d.length === 0) return '(日付不明)';
+  if (d.length === 1) return d[0];
+  return `${d[0]}〜${d[d.length - 1]}`;
+}
+
+// 申請 → 種別の日本語ラベル（履歴画面と同じ表記に統一）
+function leaveTypeLabel(request) {
+  const ot = request.originalType || request.type;
+  const isHalf = (ot === 'half_am' || ot === 'half_pm');
+  const base = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : request.type === 'celebration' ? 'お祝い休暇' : '全日';
+  return (request.type === 'celebration' && isHalf) ? base + '（お祝い）' : base;
+}
+
+// 申請取消の共通処理（本人取消・管理者取消）。
+// 取消時、出勤自動確定cronが書いた「有給」勤怠レコード（source:'auto'）も掃除する
+// （同日を含む他の承認済み申請が残っている場合は消さない。手動レコードは触らない）。
+function cancelLeaveRequest(requestId, { allowedStatuses, cancelledBy, requireStaffId = null }) {
+  return atomicModify(() => {
+    const leaveData = loadLeave();
+    const request = leaveData.requests.find(r => r.id === requestId);
+    if (!request) return { error: '申請が見つかりません', status: 404 };
+    if (requireStaffId && request.staffId !== requireStaffId)
+      return { error: '自分の申請のみ取消できます', status: 403 };
+    if (!allowedStatuses.includes(request.status))
+      return { error: allowedStatuses.includes('pending') ? 'この申請は取消できません' : '承認済みの申請のみ取消できます', status: 400 };
+
+    const wasApproved = request.status === 'approved';
+    request.status = 'cancelled';
+    request.cancelledAt = getNowJST().toISOString();
+    request.cancelledBy = cancelledBy;
+    saveLeave(leaveData);
+
+    // 承認済みだった場合のみ、自動確定済みの「有給」勤怠レコードを掃除
+    if (wasApproved) {
+      const attendanceData = loadAttendance();
+      let changed = false;
+      for (const d of request.dates || []) {
+        const rec = attendanceData.records[d] && attendanceData.records[d][request.staffId];
+        if (rec && rec.source === 'auto' && rec.status === 'leave') {
+          const stillOnLeave = leaveData.requests.some(r =>
+            r.id !== request.id && r.staffId === request.staffId && r.status === 'approved' && (r.dates || []).includes(d));
+          if (!stillOnLeave) {
+            delete attendanceData.records[d][request.staffId];
+            changed = true;
+          }
+        }
+      }
+      if (changed) saveAttendance(attendanceData);
+    }
+
+    return { ok: true, request };
   });
 }
 
@@ -295,19 +352,10 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
 }));
 
 router.post('/api/leave/requests/:id/cancel', requireStaff, asyncRoute((req, res) => {
-  const result = atomicModify(() => {
-    const leaveData = loadLeave();
-    const request = leaveData.requests.find(r => r.id === req.params.id);
-    if (!request) return { error: '申請が見つかりません', status: 404 };
-    if (request.staffId !== req.session.staffId)
-      return { error: '自分の申請のみ取消できます', status: 403 };
-    if (request.status !== 'pending' && request.status !== 'approved')
-      return { error: 'この申請は取消できません', status: 400 };
-
-    request.status = 'cancelled';
-    request.cancelledAt = getNowJST().toISOString();
-    saveLeave(leaveData);
-    return { ok: true, request };
+  const result = cancelLeaveRequest(req.params.id, {
+    allowedStatuses: ['pending', 'approved'],
+    cancelledBy: 'staff',
+    requireStaffId: req.session.staffId,
   });
   if (result.error) return res.status(result.status).json({ error: result.error });
   auditLog(req, 'leave.cancel', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${result.request.dates[0]}` });
@@ -381,14 +429,9 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
 
   try {
     const request = result.request;
-    const dates    = request.dates || [];
-    const dateStr  = dates.length === 0 ? '(日付不明)'
-      : dates.length === 1 ? dates[0]
-      : `${dates[0]}〜${dates[dates.length - 1]}`;
-    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : request.type === 'half_pm' ? '午後半休' : 'お祝い休暇';
     createStaffNotice(request.staffId,
       '✅ 有給申請が承認されました',
-      `${dateStr}（${typeLabel}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
+      `${formatLeaveDateRange(request.dates)}（${leaveTypeLabel(request)}）の有給申請が承認されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
     );
   } catch (e) {
     console.error('[leave.approve] 通知の作成に失敗:', e.message);
@@ -417,14 +460,9 @@ router.post('/api/admin/leave/requests/:id/reject', requireAdmin, asyncRoute((re
 
   try {
     const request = result.request;
-    const dates    = request.dates || [];
-    const dateStr  = dates.length === 0 ? '(日付不明)'
-      : dates.length === 1 ? dates[0]
-      : `${dates[0]}〜${dates[dates.length - 1]}`;
-    const typeLabel = request.type === 'full' ? '全日' : request.type === 'half_am' ? '午前半休' : '午後半休';
     createStaffNotice(request.staffId,
       '❌ 有給申請が却下されました',
-      `${dateStr}（${typeLabel}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
+      `${formatLeaveDateRange(request.dates)}（${leaveTypeLabel(request)}）の有給申請が却下されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
     );
   } catch (e) {
     console.error('[leave.reject] 通知の作成に失敗:', e.message);
@@ -433,36 +471,20 @@ router.post('/api/admin/leave/requests/:id/reject', requireAdmin, asyncRoute((re
   res.json({ ok: true });
 }));
 
-// 管理者による申請取消（承認待ち・承認済みのどちらも取消可能。承認済みは取消で有給残へ反映）
+// 管理者による承認済み申請の取消（取消で有給残・勤怠へ反映。承認待ちは「却下」を使う）
 router.post('/api/admin/leave/requests/:id/cancel', requireAdmin, asyncRoute((req, res) => {
-  const result = atomicModify(() => {
-    const leaveData = loadLeave();
-    const request = leaveData.requests.find(r => r.id === req.params.id);
-    if (!request) return { error: '申請が見つかりません', status: 404 };
-    if (request.status !== 'pending' && request.status !== 'approved')
-      return { error: '承認待ち・承認済みの申請のみ取消できます', status: 400 };
-
-    request.status = 'cancelled';
-    request.cancelledAt = getNowJST().toISOString();
-    if (req.body.comment) request.adminComment = req.body.comment;
-    saveLeave(leaveData);
-    return { ok: true, request };
+  const result = cancelLeaveRequest(req.params.id, {
+    allowedStatuses: ['approved'],
+    cancelledBy: 'admin',
   });
   if (result.error) return res.status(result.status).json({ error: result.error });
   auditLog(req, 'leave.admin_cancel', { type: 'leave', id: result.request.id, label: `${result.request.staffName} ${(result.request.dates || [])[0]}` });
 
   try {
     const request = result.request;
-    const dates = request.dates || [];
-    const dateStr = dates.length === 0 ? '(日付不明)'
-      : dates.length === 1 ? dates[0]
-      : `${dates[0]}〜${dates[dates.length - 1]}`;
-    const ot = request.originalType || request.type;
-    const typeLabel = request.type === 'celebration' ? 'お祝い休暇'
-      : ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : '全日';
     createStaffNotice(request.staffId,
       '有給申請が取り消されました',
-      `${dateStr}（${typeLabel}）の有給申請が管理者により取り消されました。${request.adminComment ? '\nコメント: ' + request.adminComment : ''}`
+      `${formatLeaveDateRange(request.dates)}（${leaveTypeLabel(request)}）の有給申請が管理者により取り消されました。\nご不明な点は管理者にご確認ください。`
     );
   } catch (e) {
     console.error('[leave.admin_cancel] 通知の作成に失敗:', e.message);

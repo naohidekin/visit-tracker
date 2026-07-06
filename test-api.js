@@ -377,15 +377,31 @@ async function runTests(app) {
       await admin.post('/api/admin/staff/t_nurse/leave-balance')
         .set('x-csrf-token', adminCsrf).send({ granted: 10, carried_over: 0, manual_adjustment: 0 });
 
-      // 本人が有給申請 → 管理者が承認
+      // 本人が有給申請
       const { agent: staff, csrfToken: staffCsrf } = await loginAs(app, 't_nurse', 'nurse123');
       const reqRes = await staff.post('/api/leave/requests')
         .set('x-csrf-token', staffCsrf).send({ type: 'full', startDate: '2028-05-15', endDate: '2028-05-15' });
       const reqId = reqRes.body.id ?? reqRes.body.request?.id;
       assert.ok(reqId, `申請ID body=${JSON.stringify(reqRes.body)}`);
+
+      // 承認待ちは管理者取消できない（却下に一本化）→ 400
+      const pendingCancel = await admin.post(`/api/admin/leave/requests/${reqId}/cancel`)
+        .set('x-csrf-token', adminCsrf).send({});
+      assert.strictEqual(pendingCancel.status, 400, '承認待ちの取消は400');
+
+      // 管理者が承認
       const ap = await admin.post(`/api/admin/leave/requests/${reqId}/approve`)
         .set('x-csrf-token', adminCsrf).send({ comment: 'ok' });
       assert.strictEqual(ap.status, 200);
+
+      // 出勤自動確定cron相当: 該当日に auto の「有給」勤怠レコードを保存しておく
+      const { loadAttendance, saveAttendance } = require('./lib/data');
+      {
+        const att = loadAttendance();
+        if (!att.records['2028-05-15']) att.records['2028-05-15'] = {};
+        att.records['2028-05-15']['t_nurse'] = { status: 'leave', source: 'auto', updatedAt: new Date().toISOString() };
+        saveAttendance(att);
+      }
 
       // 管理者が承認済み申請を取消
       const cancel = await admin.post(`/api/admin/leave/requests/${reqId}/cancel`)
@@ -393,9 +409,19 @@ async function runTests(app) {
       assert.strictEqual(cancel.status, 200);
       assert.strictEqual(cancel.body.ok, true, '取消成功');
 
-      // ステータスが cancelled になり、使用日数から外れる
+      // ステータスが cancelled になり、実行者が admin として記録される
       const hist = await admin.get('/api/admin/leave/requests');
-      assert.strictEqual(hist.body.requests.find(r => r.id === reqId).status, 'cancelled', '取消済みになる');
+      const cancelled = hist.body.requests.find(r => r.id === reqId);
+      assert.strictEqual(cancelled.status, 'cancelled', '取消済みになる');
+      assert.strictEqual(cancelled.cancelledBy, 'admin', '取消実行者=admin');
+
+      // 自動確定済みの「有給」勤怠レコードが掃除される
+      {
+        const att = loadAttendance();
+        assert.strictEqual(att.records['2028-05-15'] && att.records['2028-05-15']['t_nurse'], undefined,
+          '自動の有給勤怠レコードが削除される');
+      }
+
       // 本人に取消通知
       const notices = await staff.get('/api/notices').set('x-csrf-token', staffCsrf);
       assert.ok(notices.body.notices.some(n => n.title === '有給申請が取り消されました'), '取消通知が本人に届く');
