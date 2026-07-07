@@ -19,6 +19,14 @@ function switchLeaveTab(btn) {
   if (tabId === 'leaveBalance') loadLeaveBalanceSummary();
 }
 
+// 申請 → 種別の日本語ラベル（サーバ routes/leave.js の leaveTypeLabel と同表記）
+function leaveTypeLabelOf(r) {
+  const ot = r.originalType || r.type;
+  const isHalf = (ot === 'half_am' || ot === 'half_pm');
+  const base = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : r.type === 'celebration' ? 'お祝い休暇' : '全日';
+  return (r.type === 'celebration' && isHalf) ? base + '（お祝い）' : base;
+}
+
 async function loadLeavePending() {
   const spinner = document.getElementById('leavePendingSpinner');
   const empty = document.getElementById('leavePendingEmpty');
@@ -34,11 +42,7 @@ async function loadLeavePending() {
 
   document.getElementById('leavePendingBody').innerHTML = requests.map(r => {
     const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
-    const ot = r.originalType || r.type;
-    const isHalf = (ot === 'half_am' || ot === 'half_pm');
-    const isCeleb = r.type === 'celebration';
-    const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
-    const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
+    const typeLabel = leaveTypeLabelOf(r);
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
     return `<tr>
       <td>${esc(r.staffName)}</td>
@@ -153,21 +157,18 @@ async function loadLeaveHistory() {
   const statusLabels = { pending: '承認待ち', approved: '承認済', rejected: '却下', cancelled: '取消済' };
   document.getElementById('leaveHistoryBody').innerHTML = requests.map(r => {
     const dateStr = r.dates.length === 1 ? r.dates[0] : r.dates[0] + '〜' + r.dates[r.dates.length - 1];
-    const ot = r.originalType || r.type;
-    const isHalf = (ot === 'half_am' || ot === 'half_pm');
-    const isCeleb = r.type === 'celebration';
-    const baseLabel = ot === 'half_am' ? '午前半休' : ot === 'half_pm' ? '午後半休' : isCeleb ? 'お祝い休暇' : '全日';
-    const typeLabel = isCeleb && isHalf ? baseLabel + '（お祝い）' : baseLabel;
+    const typeLabel = leaveTypeLabelOf(r);
     const created = r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '';
-    const canCancel = (r.status === 'pending' || r.status === 'approved');
-    const opCell = canCancel
+    // 取消は承認済みのみ（承認待ちは申請一覧タブの「却下」を使う）
+    const opCell = r.status === 'approved'
       ? `<button class="btn btn-sm" style="background:#fee2e2;color:#b91c1c" data-action="admin-cancel-leave" data-id="${esc(r.id)}">取消</button>`
       : '';
+    const statusText = statusLabels[r.status] + (r.status === 'cancelled' && r.cancelledBy === 'admin' ? '（管理者）' : '');
     return `<tr>
       <td>${esc(r.staffName)}</td>
       <td style="white-space:nowrap">${dateStr}</td>
       <td>${typeLabel}</td>
-      <td><span class="leave-status ${r.status}">${statusLabels[r.status]}</span></td>
+      <td><span class="leave-status ${r.status}">${statusText}</span></td>
       <td style="font-size:14px">${esc(r.adminComment || '-')}</td>
       <td style="font-size:14px">${created}</td>
       <td>${opCell}</td>
@@ -175,9 +176,9 @@ async function loadLeaveHistory() {
   }).join('');
 }
 
-// 管理者による申請取消（承認済みも取消可能。取消で有給残へ反映）
+// 管理者による承認済み申請の取消（取消で有給残・勤怠へ反映）
 async function adminCancelLeave(id) {
-  if (!confirm('この有給申請を取り消しますか？\n承認済みの場合、有給残に反映され、本人にお知らせが届きます。')) return;
+  if (!confirm('この承認済みの有給申請を取り消しますか？\n有給残に反映され、本人にお知らせが届きます。')) return;
   const res = await apiFetch(`/api/admin/leave/requests/${id}/cancel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
