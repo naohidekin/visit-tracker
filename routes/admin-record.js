@@ -2,12 +2,23 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, getSpreadsheetIdForYear } = require('../lib/data');
+const { loadStaff, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { validateUnitValue } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { updateValues, batchUpdateValues } = require('../lib/sheets');
 const { DATA_START_ROW } = require('../lib/constants');
+
+// 記録が直接入力された日について、残っている「未確定の予定」を削除する。
+// （routes/record.js と同じ整合性維持。古い予定の確定による実績上書きを防ぐ）
+function clearPendingScheduleFor(staffId, date) {
+  atomicModify(() => {
+    const data = loadSchedules();
+    const before = data.schedules.length;
+    data.schedules = data.schedules.filter(s => !(s.staffId === staffId && s.date === date));
+    if (data.schedules.length !== before) saveSchedules(data);
+  });
+}
 
 router.post('/api/admin/record', requireAdmin, async (req, res) => {
   const { staffId, date } = req.body;
@@ -43,6 +54,7 @@ router.post('/api/admin/record', requireAdmin, async (req, res) => {
       if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
       await updateValues(sid, `${month}月!${staff.col}${row}`, [[vv.value]]);
     }
+    clearPendingScheduleFor(staffId, date);
     auditLog(req, 'record.admin_edit', { type: 'visit_record', id: staffId, label: `${staff.name} ${date}` }, { date, ...req.body });
     res.json({ success: true });
   } catch (e) {
