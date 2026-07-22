@@ -70,13 +70,18 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
     let newEntry;
     let sheetErrors = [];
     if (type === 'nurse') {
-      // C(index 2) + 看護師人数 × 2列 = 新看護師の介護列
-      const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
-      const kaigoIdx = 2 + nurseCount * 2;
+      // 既存の全看護師（アーカイブ済み含む）の最終医療列の右隣に新看護師を配置する。
+      // 人数カウント（!archived）で算出すると、アーカイブ済みスタッフの列が「空き番号」
+      // として再利用され、既存スタッフのデータと列が衝突・ずれてしまう。アーカイブしても
+      // シート上の列は解放されないため、実際に割り当て済みの列番号から算出する。
+      const nurseIryoIdxs = data.staff
+        .filter(s => s.type === 'nurse' && s.iryo_col)
+        .map(s => colToIdx(s.iryo_col));
+      const kaigoIdx = nurseIryoIdxs.length ? Math.max(...nurseIryoIdxs) + 1 : 2;
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
       // 太線の旧位置（追加前の最終iryo列）
-      const oldDividerIdx = nurseCount > 0 ? kaigoIdx - 1 : null;
+      const oldDividerIdx = nurseIryoIdxs.length ? kaigoIdx - 1 : null;
       const newDividerIdx = kaigoIdx + 1;
 
       const NURSE_DARK_BG  = { red: 0.18431373, green: 0.45882353, blue: 0.70980392 };
@@ -201,7 +206,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
             ] : []),
             // 新太線を設定（リハビリ職がいない場合のみ新iryo列右に設定。いる場合は最終PT列右で管理）
             ...(() => {
-              const rehabCount = data.staff.filter(s => !['nurse','office'].includes(s.type) && !s.archived).length;
+              const rehabCount = data.staff.filter(s => s.col && s.type !== 'nurse').length;
               if (rehabCount > 0) return []; // リハビリがいる場合は太線を動かさない
               return [
                 { updateBorders: { range: { sheetId: sid, startRowIndex: 1, endRowIndex: 36,
@@ -311,15 +316,20 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
       operations.push({ action: 'staff_record_created', staffId: loginId, name, type, columns: null, note: 'スプレッドシート列なし' });
 
     } else {
-      // C(index 2) + 看護師人数 × 2列 + リハビリ人数 = 新リハビリの列
-      const nurseCount = data.staff.filter(s => s.type === 'nurse' && !s.archived).length;
-      const rehabCount = data.staff.filter(s => !['nurse','office'].includes(s.type) && !s.archived).length;
-      const newColIdx = 2 + nurseCount * 2 + rehabCount;
+      // 既存の全スタッフ（アーカイブ済み含む）の最終列の右隣に新リハビリ職を配置する。
+      // 人数カウント（!archived）で算出すると、アーカイブ済みスタッフの列が「空き番号」
+      // として再利用され、列挿入で既存リハビリ職のデータを1列右にずらす一方、そのスタッフの
+      // 列番号メタ情報は更新されないため列ずれ（記録の消失・別人の値の表示）が発生する。
+      // 実際に割り当て済みの最終列の右隣（＝常に右端）に置けば既存列は一切動かない。
+      // 役員・事務（office/admin）は列を持たないので対象外。
+      const assignedIdxs = data.staff.flatMap(s =>
+        s.type === 'nurse'
+          ? (s.iryo_col ? [colToIdx(s.iryo_col)] : [])
+          : (s.col ? [colToIdx(s.col)] : []));
+      const newColIdx = assignedIdxs.length ? Math.max(...assignedIdxs) + 1 : 2;
       const newCol    = idxToCol(newColIdx);
-      // 旧最終スタッフ列（太線を移動する元の列）
-      const oldLastColIdx = rehabCount > 0
-        ? 2 + nurseCount * 2 + rehabCount - 1   // 直前のリハビリ最終列
-        : 2 + nurseCount * 2 - 1;                // リハビリ未登録時は看護師最終iryo列
+      // 旧最終スタッフ列（太線を移動する元の列）＝新列のひとつ左
+      const oldLastColIdx = newColIdx - 1;
       const SOLID        = { style: 'SOLID',        color: { red:0, green:0, blue:0 } };
       const SOLID_MEDIUM = { style: 'SOLID_MEDIUM', color: { red:0, green:0, blue:0 } };
 
