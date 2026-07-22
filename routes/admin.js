@@ -9,6 +9,7 @@ router.use('/', require('./admin-staff'));
 router.use('/', require('./admin-incentive'));
 router.use('/', require('./admin-billing'));
 router.use('/', require('./admin-record'));
+router.use('/', require('./admin-column-audit'));
 router.use('/', require('./admin-standby'));
 router.use('/', require('./admin-audit'));
 router.use('/', require('./admin-attendance'));

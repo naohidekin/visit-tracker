@@ -136,6 +136,24 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
     assert.strictEqual(new Set(all).size,all.length,`列共有が発生: ${JSON.stringify(all)}`);
   });
 
+  await test('列ずれ調査ツール(column-audit)が既存の列ずれを検出する', async () => {
+    reset([
+      {id:'pt_a',name:'田中',type:'PT',col:'E'},   // データは別列(G)に取り残されている想定
+      {id:'pt_b',name:'佐藤',type:'PT',col:'E'},   // 同じ列Eを指す（重複＝異常）
+      {id:'pt_c',name:'鈴木',type:'PT',col:'F'},
+    ]);
+    writeRange('7月!E4',[['佐藤']]); // 見出し行(row4)
+    writeRange('7月!F4',[['鈴木']]);
+    writeRange('7月!G4',[['田中']]);
+    const {a}=await adminLogin(app);
+    const r=await a.get('/api/admin/column-audit');
+    assert.strictEqual(r.status,200);
+    assert.ok(r.body.summary.likelyDesynced,'列ずれを検出する');
+    assert.strictEqual(r.body.summary.duplicateColumnAssignments,1,'重複列(E)を1件検出');
+    assert.ok(r.body.suspects.some(s=>s.id==='pt_a'),'田中(pt_a)の見出し不一致を検出');
+    assert.ok(!r.body.suspects.some(s=>s.id==='pt_c'),'鈴木(pt_c)は正常と判定');
+  });
+
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   console.log(`結果: ${passed} passed, ${failed} failed`);
   if(failed>0){console.error('❌ テスト失敗');process.exit(1);}
