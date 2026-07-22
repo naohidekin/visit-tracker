@@ -137,28 +137,29 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
   });
 
   await test('調査ツールが正しい列を提案し、修復を適用できる', async () => {
+    // 仮名（実在スタッフ名は使わない）。姓の前方一致で見出しと照合する挙動を検証。
     reset([
-      {id:'ikkata',name:'生方雪絵',type:'nurse',kaigo_col:'C',iryo_col:'D'}, // 正しい
-      {id:'nishi', name:'西口玲里',type:'nurse',kaigo_col:'O',iryo_col:'P'}, // 正しい
-      {id:'naka',  name:'中島大智',type:'PT',   col:'O'},                    // 誤り: 本来はK（西口と列O重複）
+      {id:'n1', name:'甲野花子',type:'nurse',kaigo_col:'C',iryo_col:'D'}, // 正しい
+      {id:'n2', name:'乙川桃子',type:'nurse',kaigo_col:'O',iryo_col:'P'}, // 正しい
+      {id:'pt1',name:'丙田太郎',type:'PT',   col:'O'},                    // 誤り: 本来はK（乙川と列O重複）
     ]);
     // シート見出し（row3=姓 / row4=介護|医療|リハビリ氏名）
-    writeRange('7月!C3',[['生方']]); writeRange('7月!C4',[['介護']]); writeRange('7月!D4',[['医療']]);
-    writeRange('7月!O3',[['西口']]); writeRange('7月!O4',[['介護']]); writeRange('7月!P4',[['医療']]);
-    writeRange('7月!K4',[['中島']]); // 中島(PT)の本来の列
+    writeRange('7月!C3',[['甲野']]); writeRange('7月!C4',[['介護']]); writeRange('7月!D4',[['医療']]);
+    writeRange('7月!O3',[['乙川']]); writeRange('7月!O4',[['介護']]); writeRange('7月!P4',[['医療']]);
+    writeRange('7月!K4',[['丙田']]); // 丙田(PT)の本来の列
     const {a,csrf}=await adminLogin(app);
     let r=await a.get('/api/admin/column-audit');
     assert.strictEqual(r.status,200);
     assert.ok(r.body.summary.likelyDesynced,'列ずれを検出');
     assert.strictEqual(r.body.summary.duplicateColumnAssignments,1,'列Oの重複を検出');
-    const pNaka=r.body.proposals.find(p=>p.id==='naka');
-    assert.strictEqual(pNaka.status,'matched'); assert.strictEqual(pNaka.proposed.col,'K','中島の正しい列はK');
-    const pNishi=r.body.proposals.find(p=>p.id==='nishi');
-    assert.strictEqual(pNishi.proposed.kaigo_col,'O'); assert.strictEqual(pNishi.proposed.iryo_col,'P');
+    const pPt=r.body.proposals.find(p=>p.id==='pt1');
+    assert.strictEqual(pPt.status,'matched'); assert.strictEqual(pPt.proposed.col,'K','PTの正しい列はK');
+    const pN2=r.body.proposals.find(p=>p.id==='n2');
+    assert.strictEqual(pN2.proposed.kaigo_col,'O'); assert.strictEqual(pN2.proposed.iryo_col,'P'); // 看護師は動かない
     // 適用（列番号メタのみ更新）
-    r=await a.post('/api/admin/column-audit/apply').set('x-csrf-token',csrf).send({changes:[{id:'naka',col:'K'}]});
+    r=await a.post('/api/admin/column-audit/apply').set('x-csrf-token',csrf).send({changes:[{id:'pt1',col:'K'}]});
     assert.strictEqual(r.status,200,JSON.stringify(r.body)); assert.ok(r.body.success);
-    assert.strictEqual(colOf('naka'),'K','中島の列がKに修復された');
+    assert.strictEqual(colOf('pt1'),'K','PTの列がKに修復された');
     // 再チェックでクリーン
     r=await a.get('/api/admin/column-audit');
     assert.strictEqual(r.body.summary.duplicateColumnAssignments,0,'重複が解消');
@@ -166,11 +167,11 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
   });
 
   await test('修復適用で重複が生じる場合は拒否される（データ保護）', async () => {
+    // 仮名（実在スタッフ名は使わない）
     reset([
-      {id:'p1',name:'中島大智',type:'PT',col:'K'},
-      {id:'p2',name:'西口玲里',type:'PT',col:'L'},
+      {id:'p1',name:'ダミー甲',type:'PT',col:'K'},
+      {id:'p2',name:'ダミー乙',type:'PT',col:'L'},
     ]);
-    writeRange('7月!K4',[['中島']]); writeRange('7月!L4',[['西口']]);
     const {a,csrf}=await adminLogin(app);
     const r=await a.post('/api/admin/column-audit/apply').set('x-csrf-token',csrf).send({changes:[{id:'p2',col:'K'}]});
     assert.strictEqual(r.status,400,'重複する適用は400で拒否');
