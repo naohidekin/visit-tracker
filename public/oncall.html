@@ -260,8 +260,11 @@
 
     const sel = document.getElementById('monthSelect');
     const now = new Date();
+    // 「M月（締期間）」=(M-1)/16〜M/15。毎月16日以降は「当月16日〜翌月15日」が“今の締期間”なので、
+    // 翌月ラベルを起点にする。これをしないと、16日以降に入力した当番が前の締期間に隠れて表示されない。
+    const baseOffset = now.getDate() >= 16 ? 1 : 0;
     for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(now.getFullYear(), now.getMonth() + baseOffset - i, 1);
       const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
       const label = (d.getMonth() + 1) + '月（締期間）';
       sel.innerHTML += `<option value="${val}">${label}</option>`;
