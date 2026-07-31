@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お祝い休暇の付け替え修正 | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--ok-bg:#e6f7ef;--ng:#c0392b;--ng-bg:#fdecea;--warn:#9a6700;--warn-bg:#fff7e0}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:linear-gradient(135deg,#1F497D,#2E75B6);color:#fff;padding:14px 18px;font-weight:800;font-size:18px}
+    .container{padding:16px;max-width:1000px;margin:0 auto}
+    .card{background:var(--white);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.08);padding:16px;margin-bottom:14px;border:1px solid rgba(0,0,0,.04)}
+    .banner{border-radius:12px;padding:14px 16px;font-weight:700;margin-bottom:14px}
+    .banner.ok{background:var(--ok-bg);color:var(--ok)} .banner.ng{background:var(--ng-bg);color:var(--ng)}
+    button{background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+    button.mini{padding:8px 12px;font-size:13px}
+    button:disabled{opacity:.5;cursor:default}
+    .tblwrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+    th{background:#f8faff;color:var(--blue-dark);padding:8px;text-align:right;font-size:11px;border-bottom:2px solid var(--border)}
+    th.l,td.l{text-align:left}
+    td{padding:8px;border-bottom:1px solid #f0f4f8;text-align:right;vertical-align:middle}
+    .arrow{color:var(--muted);margin:0 4px}
+    .b4{color:var(--muted)} .af{color:var(--ok);font-weight:800}
+    .neg{color:var(--ng);font-weight:800}
+    .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+    .tag.warn{background:var(--warn-bg);color:var(--warn)}
+    .muted{color:var(--muted);font-size:12px}
+    .warn-line{color:var(--warn);font-size:11px;margin-top:4px}
+    .loading{text-align:center;padding:28px;color:var(--muted)}
+    .note{background:#f8faff;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);line-height:1.7;margin-top:10px}
+  </style>
+</head>
+<body>
+<header>お祝い休暇の付け替え修正（二重付与の解消）</header>
+<div class="container">
+  <div class="card">
+    <p class="muted" style="margin-bottom:6px">お祝い休暇で取得したのに<b>通常有給として記録</b>されている分を<b>お祝い休暇へ付け替え</b>、有給付与を勤続年数どおりの自動計算値、お祝い付与を標準(3日)に揃えます。</p>
+    <p class="muted" style="margin-bottom:10px">まず「対象を表示」で内容を確認し、スタッフごとに「この内容で修正」を押してください。</p>
+    <button id="runBtn">対象を表示</button>
+  </div>
+  <div id="result"></div>
+</div>
+<script src="/vendor/api-fetch.js"></script>
+<script>
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function n(v){return (Math.round(Number(v)*10)/10);}
+  function baCell(before,after){
+    const cls = Number(after)<0 ? 'neg' : 'af';
+    if(Number(before)===Number(after)) return '<span class="b4">'+n(before)+'</span>';
+    return '<span class="b4">'+n(before)+'</span><span class="arrow">→</span><span class="'+cls+'">'+n(after)+'</span>';
+  }
+
+  async function apply(staffId, name){
+    if(!confirm(name+' さんの記録を付け替え修正します。よろしいですか？\n（有給付与・お祝い付与・取得記録の分類が変更されます）')) return;
+    try{
+      const res=await apiFetch('/api/admin/leave-reconcile/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({staffId})});
+      const data=await res.json();
+      if(!res.ok||!data.success) throw new Error(data.error||('HTTP '+res.status));
+      alert(name+' さんを修正しました。\n有給付与 '+n(data.plan.after.granted)+'日 / お祝い付与 '+n(data.plan.after.celebration_days)+'日 / 有給残 '+n(data.plan.after.balance)+'日');
+      run();
+    }catch(e){ alert('修正に失敗: '+e.message); }
+  }
+
+  async function run(){
+    const box=document.getElementById('result');
+    box.innerHTML='<div class="card loading">確認中...</div>';
+    let data;
+    try{
+      const res=await fetch('/api/admin/leave-reconcile');
+      if(res.status===401){box.innerHTML='<div class="card banner ng">管理者としてログインしてください。<a href="/admin">管理画面へ</a></div>';return;}
+      if(!res.ok)throw new Error((await res.json()).error||('HTTP '+res.status));
+      data=await res.json();
+    }catch(e){box.innerHTML='<div class="card banner ng">取得に失敗: '+esc(e.message)+'</div>';return;}
+
+    if(!data.rows.length){
+      box.innerHTML='<div class="banner ok">✅ 付け替えが必要なスタッフはいません</div>';
+      return;
+    }
+
+    let html='<div class="banner ng">付け替え対象: '+data.rows.length+'名</div>';
+    html+='<div class="card"><div class="tblwrap"><table><tr>'
+      +'<th class="l">氏名</th><th class="l">入社日</th><th>付け替え<br>日数</th>'
+      +'<th>有給付与<br>(前→後)</th><th>お祝い付与<br>(前→後)</th><th>有給残<br>(前→後)</th><th></th></tr>';
+    for(const r of data.rows){
+      const warn = r.warnings && r.warnings.length
+        ? '<div class="warn-line">⚠ '+r.warnings.map(esc).join('<br>⚠ ')+'</div>' : '';
+      html+='<tr>'
+        +'<td class="l">'+esc(r.name)+warn+'</td>'
+        +'<td class="l muted">'+esc(r.hire_date||'-')+'</td>'
+        +'<td><b>'+n(r.reclassify_days)+'</b></td>'
+        +'<td>'+baCell(r.before.granted,r.after.granted)+'</td>'
+        +'<td>'+baCell(r.before.celebration_days,r.after.celebration_days)+'</td>'
+        +'<td>'+baCell(r.before.balance,r.after.balance)+'</td>'
+        +'<td><button class="mini" data-id="'+esc(r.id)+'" data-name="'+esc(r.name)+'">この内容で修正</button></td>'
+        +'</tr>';
+    }
+    html+='</table></div>'
+      +'<div class="note">・<b>付け替え日数</b>＝通常有給として記録されている取得分を、お祝い休暇へ移す日数（標準枠3日を上限）。<br>'
+      +'・<b>有給付与(後)</b>＝勤続年数に応じた法定の自動計算値。<br>'
+      +'・<b>お祝い付与(後)</b>＝標準の3日に揃えます。<br>'
+      +'・修正後の記録は「お祝い休暇の一部消費」として扱われ、有給残・お祝い残ともに正しく計算されます。監査ログに記録されます。</div></div>';
+    box.innerHTML=html;
+    box.querySelectorAll('button[data-id]').forEach(b=>{
+      b.addEventListener('click',()=>apply(b.getAttribute('data-id'),b.getAttribute('data-name')));
+    });
+  }
+  document.getElementById('runBtn').addEventListener('click',run);
+</script>
+</body>
+</html>
