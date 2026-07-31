@@ -63,10 +63,13 @@ function computeReconcilePlan(staff, requests, todayStr, mutate) {
   const eligible = celebrationActive
     && (leaveGranted > autoGrant || balanceBefore < 0);
 
-  // 付け替える日数（お祝い標準枠=3 を上限）
-  const reclassify = Math.min(appRegularUsed, DEFAULT_CELEBRATION_DAYS);
+  // 付け替える日数（お祝い枠を上限）。枠は管理者が設定した現行値を尊重し、
+  // 未設定(0など)で使用分に満たない場合のみ標準3日または使用分まで引き上げる（勝手に下げない）。
+  const celebCap = Math.max(celebrationDays, DEFAULT_CELEBRATION_DAYS);
+  const reclassify = Math.min(appRegularUsed, celebCap);
   const proposedGranted = autoGrant;
-  const proposedCelebrationDays = Math.max(DEFAULT_CELEBRATION_DAYS, round1(existingCelebUsage + reclassify));
+  // お祝い付与は現行値を維持。使用分（既存+付替）を賄えない場合だけ引き上げる。
+  const proposedCelebrationDays = Math.max(celebrationDays, round1(existingCelebUsage + reclassify));
   const afterRegularUsed = round1(appRegularUsed - reclassify);
 
   // 修正後の残高（通常有給）を予測

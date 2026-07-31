@@ -629,6 +629,10 @@
             <label>お祝い休暇（使用済み調整）</label>
             <input type="number" id="leaveEditCelebAdj" step="0.5" min="0" max="30" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           </div>
+          <div style="background:#f7f9fc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">お祝い休暇 使用（申請から自動集計）</span><span id="leaveEditCelebUsed" style="font-weight:700">-</span></div>
+            <div style="display:flex;justify-content:space-between;margin-top:2px"><span style="color:var(--muted)">お祝い休暇 残</span><span id="leaveEditCelebRemain" style="font-weight:700">-</span></div>
+          </div>
           <div id="leaveEditHistory" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
             <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">付与履歴</div>
             <div id="leaveEditHistoryList" style="font-size:12px;color:var(--text);line-height:1.7"></div>

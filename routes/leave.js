@@ -8,7 +8,7 @@ const { loadStaff, saveStaff, loadLeave, saveLeave, loadNotices, saveNotices, lo
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, isValidDate, validateNum, getTodayJST, getNowJST, toDateStr } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcPendingGrant, formatTenureLabel, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
+const { calcLeaveBalance, calcLeaveGrantDays, calcNextGrant, calcPendingGrant, formatTenureLabel, calcCelebrationUsed, calcCelebrationRemaining, calcValidOncallLeave } = require('../lib/leave-calc');
 
 // 有給通知ヘルパー（個人宛お知らせ）
 function createStaffNotice(staffId, title, body) {
@@ -125,25 +125,9 @@ function buildLeaveBalanceView(staff) {
 
   const nextGrant = calcNextGrant(staff.hire_date, undefined, staff.celebration_expiry_months || 6);
 
-  // お祝い休暇の使用日数を計算（手動調整 + celebration申請 + 部分消費のある通常申請）
+  // お祝い休暇の使用日数（手動調整 + celebration申請 + 部分消費のある通常申請）
   const celebrationDays = staff.celebration_days ?? 3;
-  const celebrationAdj = staff.celebration_used_adj || 0;
-  let celebrationUsed = celebrationAdj;
-  for (const r of approved) {
-    if (celebrationUsed >= celebrationDays) break;
-    if (r.type === 'celebration') {
-      const ot = r.originalType || r.type;
-      const perDate = (ot === 'half_am' || ot === 'half_pm') ? 0.5 : 1;
-      for (const d of r.dates) {
-        if (celebrationUsed >= celebrationDays) break;
-        celebrationUsed += perDate;
-      }
-    } else if (r.celebration_days) {
-      // 部分消費: 通常申請のうちお祝い休暇から消費した分
-      celebrationUsed = Math.min(celebrationDays, celebrationUsed + r.celebration_days);
-    }
-  }
-  celebrationUsed = Math.round(Math.min(celebrationUsed, celebrationDays) * 10) / 10;
+  const celebrationUsed = calcCelebrationUsed(staff, approved);
 
   return {
     balance,
@@ -543,6 +527,8 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         grant_date: s.leave_grant_date,
         celebration_days: s.celebration_days ?? 3,
         celebration_used_adj: s.celebration_used_adj || 0,
+        celebration_used: calcCelebrationUsed(s, approved),
+        celebration_remaining: Math.max(0, (s.celebration_days ?? 3) - calcCelebrationUsed(s, approved)),
         pending_grant: calcPendingGrant(s),
         grant_history: (s.leave_grant_history || []).slice()
           .sort((a, b) => (b.grantedAt || '').localeCompare(a.grantedAt || ''))

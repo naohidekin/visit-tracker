@@ -37,6 +37,9 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
   // ③ 二重だが取得実績なし（付与3＝お祝い3、通常有給の使用0）→ 水増し付与を0に戻すだけ
   put({id:'s_phantom',name:'水増子',type:'PT',col:'H',archived:false,hire_date:hireYoung,
     leave_granted:3,leave_carried_over:0,leave_manual_adjustment:0,oncall_leave_granted:0,celebration_days:3,celebration_used_adj:0});
+  // ④ お祝い付与が標準より多い(5)スタッフ → 付替時に勝手に3へ下げない（現行値を維持）
+  put({id:'s_celeb5',name:'祝五郎',type:'PT',col:'I',archived:false,hire_date:hireYoung,
+    leave_granted:0,leave_carried_over:0,leave_manual_adjustment:0,oncall_leave_granted:0,celebration_days:5,celebration_used_adj:0});
   // ④ 正常（勤続長め・お祝い期限切れ・付与＝自動計算）
   const hireOld=daysFromNow(-900);
   const okGrant=calcLeaveGrantDays(hireOld,daysFromNow(0));
@@ -48,6 +51,7 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
     {id:'z2',staffId:'s_zeroed',staffName:'ゼロ太郎',type:'full',dates:[daysFromNow(-19)],status:'approved'},
     {id:'z3',staffId:'s_zeroed',staffName:'ゼロ太郎',type:'full',dates:[daysFromNow(-18)],status:'approved'},
     {id:'d1',staffId:'s_double',staffName:'二重花子',type:'full',dates:[daysFromNow(-15)],status:'approved'},
+    {id:'c1',staffId:'s_celeb5',staffName:'祝五郎',type:'full',dates:[daysFromNow(-12)],status:'approved'},
     {id:'o1',staffId:'s_ok',staffName:'正常次郎',type:'full',dates:[daysFromNow(-25)],status:'approved'},
   ]});
 
@@ -89,9 +93,19 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
     assert.strictEqual(phantom.after.balance,0);
   });
 
+  await test('お祝い付与が標準より多い場合は下げず現行値を維持する', () => {
+    const c5=prev.rows.find(r=>r.id==='s_celeb5');
+    assert.ok(c5,'祝五郎が対象');
+    assert.strictEqual(c5.before.celebration_days,5);
+    assert.strictEqual(c5.after.celebration_days,5,'5のまま（3に下げない）');
+    assert.strictEqual(c5.reclassify_days,1);
+    assert.strictEqual(c5.after.granted,0);
+    assert.strictEqual(c5.after.balance,0);
+  });
+
   await test('正常スタッフ（お祝い期限切れ・付与＝自動）は対象外', () => {
     assert.ok(!prev.rows.find(r=>r.id==='s_ok'),'正常次郎は対象外');
-    assert.strictEqual(prev.summary.eligible,3);
+    assert.strictEqual(prev.summary.eligible,4);
   });
 
   await test('適用: 付け替え後にDBが正しく更新される', async () => {
@@ -110,10 +124,20 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
   await test('冪等: 適用後は対象外になる', async () => {
     const again=(await a.get('/api/admin/leave-reconcile')).body;
     assert.ok(!again.rows.find(r=>r.id==='s_zeroed'),'再適用は不要');
-    assert.strictEqual(again.summary.eligible,2,'残るのは二重花子と水増子');
+    assert.strictEqual(again.summary.eligible,3,'残るのは二重花子・水増子・祝五郎');
     // 二重に適用しようとしても対象外エラー
     const res=await a.post('/api/admin/leave-reconcile/apply').set('x-csrf-token',csrf).send({staffId:'s_zeroed'});
     assert.strictEqual(res.status,400,'対象外は400');
+  });
+
+  await test('サマリにお祝い休暇の使用日数・残が出る（モーダル表示用）', async () => {
+    const sum=(await a.get('/api/admin/leave/summary')).body.summary;
+    const z=sum.find(x=>x.id==='s_zeroed');
+    assert.strictEqual(z.celebration_used,3,'付替後はお祝い使用3日として集計される');
+    assert.strictEqual(z.celebration_remaining,0,'残0（付与3−使用3）');
+    const c5=sum.find(x=>x.id==='s_celeb5');
+    assert.strictEqual(c5.celebration_used,0,'未付替は0（まだ通常有給として記録）');
+    assert.strictEqual(c5.celebration_remaining,5,'残5（付与5−使用0）');
   });
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
