@@ -57,10 +57,10 @@ function computeReconcilePlan(staff, requests, todayStr, mutate) {
 
   const balanceBefore = calcLeaveBalance(staff, approved);
 
-  // 付け替え対象: お祝い期間内で、通常有給の使用があり、かつ
-  //   ・付与が自動計算より多い（二重で膨らんでいる） か
-  //   ・すでに付与を下げた結果、残高がマイナス
-  const eligible = celebrationActive && appRegularUsed > 0
+  // 付け替え対象: お祝い期間内（＝まだ通常有給が付与されない勤続）で、次のいずれか
+  //   ・付与が自動計算より多い（お祝い分が二重に入り込んで膨らんでいる。使用0でも解消する）
+  //   ・すでに付与を下げた結果、通常有給として記録された取得分で残高がマイナス
+  const eligible = celebrationActive
     && (leaveGranted > autoGrant || balanceBefore < 0);
 
   // 付け替える日数（お祝い標準枠=3 を上限）

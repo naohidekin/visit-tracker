@@ -34,7 +34,10 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
   // ② まだ二重のまま（付与3＝お祝い3、通常有給1日使用）
   put({id:'s_double',name:'二重花子',type:'nurse',kaigo_col:'E',iryo_col:'F',archived:false,hire_date:hireYoung,
     leave_granted:3,leave_carried_over:0,leave_manual_adjustment:0,oncall_leave_granted:0,celebration_days:3,celebration_used_adj:0});
-  // ③ 正常（勤続長め・お祝い期限切れ・付与＝自動計算）
+  // ③ 二重だが取得実績なし（付与3＝お祝い3、通常有給の使用0）→ 水増し付与を0に戻すだけ
+  put({id:'s_phantom',name:'水増子',type:'PT',col:'H',archived:false,hire_date:hireYoung,
+    leave_granted:3,leave_carried_over:0,leave_manual_adjustment:0,oncall_leave_granted:0,celebration_days:3,celebration_used_adj:0});
+  // ④ 正常（勤続長め・お祝い期限切れ・付与＝自動計算）
   const hireOld=daysFromNow(-900);
   const okGrant=calcLeaveGrantDays(hireOld,daysFromNow(0));
   put({id:'s_ok',name:'正常次郎',type:'PT',col:'G',archived:false,hire_date:hireOld,
@@ -59,6 +62,7 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
   const prev=(await a.get('/api/admin/leave-reconcile')).body;
   const zeroed=prev.rows.find(r=>r.id==='s_zeroed');
   const dbl=prev.rows.find(r=>r.id==='s_double');
+  const phantom=prev.rows.find(r=>r.id==='s_phantom');
 
   await test('マイナス残（付与0・通常有給3使用）を対象にする', () => {
     assert.ok(zeroed,'ゼロ太郎が対象');
@@ -76,9 +80,18 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
     assert.strictEqual(dbl.after.balance,0);
   });
 
+  await test('二重だが取得実績なし（水増し付与）も対象にする', () => {
+    assert.ok(phantom,'水増子が対象');
+    assert.strictEqual(phantom.reclassify_days,0,'付け替え日数は0');
+    assert.strictEqual(phantom.before.granted,3);
+    assert.strictEqual(phantom.after.granted,0,'水増し付与を0に戻す');
+    assert.strictEqual(phantom.after.celebration_days,3);
+    assert.strictEqual(phantom.after.balance,0);
+  });
+
   await test('正常スタッフ（お祝い期限切れ・付与＝自動）は対象外', () => {
     assert.ok(!prev.rows.find(r=>r.id==='s_ok'),'正常次郎は対象外');
-    assert.strictEqual(prev.summary.eligible,2);
+    assert.strictEqual(prev.summary.eligible,3);
   });
 
   await test('適用: 付け替え後にDBが正しく更新される', async () => {
@@ -97,7 +110,7 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
   await test('冪等: 適用後は対象外になる', async () => {
     const again=(await a.get('/api/admin/leave-reconcile')).body;
     assert.ok(!again.rows.find(r=>r.id==='s_zeroed'),'再適用は不要');
-    assert.strictEqual(again.summary.eligible,1,'残るのは二重花子のみ');
+    assert.strictEqual(again.summary.eligible,2,'残るのは二重花子と水増子');
     // 二重に適用しようとしても対象外エラー
     const res=await a.post('/api/admin/leave-reconcile/apply').set('x-csrf-token',csrf).send({staffId:'s_zeroed'});
     assert.strictEqual(res.status,400,'対象外は400');
