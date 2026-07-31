@@ -239,6 +239,10 @@ function openLeaveEdit(id) {
   document.getElementById('leaveEditAdj').value = s.manual_adjustment || 0;
   document.getElementById('leaveEditCelebDays').value = s.celebration_days ?? 3;
   document.getElementById('leaveEditCelebAdj').value = s.celebration_used_adj || 0;
+  const celebUsed = s.celebration_used ?? 0;
+  const celebRemain = s.celebration_remaining ?? Math.max(0, (s.celebration_days ?? 3) - celebUsed);
+  document.getElementById('leaveEditCelebUsed').textContent = `${celebUsed}日`;
+  document.getElementById('leaveEditCelebRemain').textContent = `${celebRemain}日 / ${s.celebration_days ?? 3}日`;
 
   // 付与時期の案内 & 「付与を反映」ボタン
   const box = document.getElementById('leaveEditGrantBox');
