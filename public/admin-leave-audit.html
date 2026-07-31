@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>有給・お祝い休暇チェック | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--ok-bg:#e6f7ef;--ng:#c0392b;--ng-bg:#fdecea;--warn:#9a6700;--warn-bg:#fff7e0}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:linear-gradient(135deg,#1F497D,#2E75B6);color:#fff;padding:14px 18px;font-weight:800;font-size:18px}
+    .container{padding:16px;max-width:1000px;margin:0 auto}
+    .card{background:var(--white);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.08);padding:16px;margin-bottom:14px;border:1px solid rgba(0,0,0,.04)}
+    .banner{border-radius:12px;padding:14px 16px;font-weight:700;margin-bottom:14px}
+    .banner.ok{background:var(--ok-bg);color:var(--ok)} .banner.ng{background:var(--ng-bg);color:var(--ng)}
+    button{background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+    .tblwrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+    th{background:#f8faff;color:var(--blue-dark);padding:8px;text-align:right;font-size:11px;border-bottom:2px solid var(--border)}
+    th.l,td.l{text-align:left}
+    td{padding:8px;border-bottom:1px solid #f0f4f8;text-align:right;vertical-align:middle}
+    tr.suspect td{background:#fff7ec}
+    .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+    .tag.ng{background:var(--ng-bg);color:var(--ng)} .tag.ok{background:var(--ok-bg);color:var(--ok)}
+    .muted{color:var(--muted);font-size:12px}
+    .hl{color:var(--ng);font-weight:800}
+    .sug{color:var(--ok);font-weight:800}
+    details{margin-top:6px} summary{cursor:pointer;color:var(--blue);font-size:12px}
+    .loading{text-align:center;padding:28px;color:var(--muted)}
+  </style>
+</head>
+<body>
+<header>有給・お祝い休暇 チェック（読み取り専用）</header>
+<div class="container">
+  <div class="card">
+    <p class="muted" style="margin-bottom:10px">「付与日数（有給）」に<b>お祝い休暇分が二重に入っていないか</b>と、<b>アプリ申請で実際に使われた分</b>を一覧表示します。データは変更しません。</p>
+    <button id="runBtn">チェックする</button>
+  </div>
+  <div id="result"></div>
+</div>
+<script src="/vendor/api-fetch.js"></script>
+<script>
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function n(v){return (Math.round(Number(v)*10)/10);}
+  async function run(){
+    const box=document.getElementById('result');
+    box.innerHTML='<div class="card loading">チェック中...</div>';
+    let data;
+    try{
+      const res=await fetch('/api/admin/leave-audit');
+      if(res.status===401){box.innerHTML='<div class="card banner ng">管理者としてログインしてください。<a href="/admin">管理画面へ</a></div>';return;}
+      if(!res.ok)throw new Error((await res.json()).error||('HTTP '+res.status));
+      data=await res.json();
+    }catch(e){box.innerHTML='<div class="card banner ng">取得に失敗: '+esc(e.message)+'</div>';return;}
+
+    const s=data.summary;
+    let html = s.doubleSuspects>0
+      ? '<div class="banner ng">⚠️ 二重の疑い: '+s.doubleSuspects+'名（付与日数＝お祝い休暇日数、かつ自動計算より多い）</div>'
+      : '<div class="banner ok">✅ 二重の疑いは見つかりませんでした</div>';
+
+    html+='<div class="card"><div class="tblwrap"><table><tr>'
+      +'<th class="l">氏名</th><th class="l">入社日</th><th>付与規定<br>(自動)</th><th>現・付与<br>(有給)</th><th>お祝い<br>付与</th><th>お祝い<br>使用済調整</th>'
+      +'<th>アプリ使用<br>(通常有給)</th><th>アプリ使用<br>(お祝い)</th><th>残(有給)</th><th>判定</th><th>推奨<br>付与</th></tr>';
+    for(const r of data.rows){
+      const tag=r.double_suspect?'<span class="tag ng">二重疑い</span>':'<span class="tag ok">OK</span>';
+      const sug=r.double_suspect
+        ? '<span class="sug">'+r.suggested_granted+'</span>'+(r.would_go_negative_if_auto?'<br><span class="muted">※使用分あり</span>':'')
+        : '<span class="muted">—</span>';
+      const detail = r.used_list.length
+        ? '<details><summary>申請'+r.used_list.length+'件</summary>'+r.used_list.map(u=>
+            esc((u.dates[0]||'')+(u.dates.length>1?('〜'+u.dates[u.dates.length-1]):''))+'：'+esc(u.type)+(u.originalType?('('+esc(u.originalType)+')'):'')
+            +' '+u.days+'日（通常'+u.regular+'/お祝い'+u.celebration+'）').join('<br>')+'</details>'
+        : '';
+      html+='<tr class="'+(r.double_suspect?'suspect':'')+'">'
+        +'<td class="l">'+esc(r.name)+detail+'</td><td class="l muted">'+esc(r.hire_date||'-')+'</td>'
+        +'<td>'+r.auto_grant+'</td><td'+(r.double_suspect?' class="hl"':'')+'>'+r.leave_granted+'</td>'
+        +'<td>'+r.celebration_days+'</td><td>'+r.celebration_used_adj+'</td>'
+        +'<td>'+n(r.app_regular_used)+'</td><td>'+n(r.app_celebration_used)+'</td>'
+        +'<td>'+n(r.balance)+'</td><td>'+tag+'</td><td>'+sug+'</td></tr>';
+    }
+    html+='</table></div>'
+      +'<p class="muted" style="margin-top:10px">・<b>二重疑い</b>＝「付与日数(有給)」が「お祝い休暇 付与」と同じ数で、勤続に応じた自動計算より多い状態。お祝いは別枠なので、有給付与にお祝い分を含めるのは二重です。<br>'
+      +'・<b>推奨付与</b>＝二重を解消した場合の有給付与日数（自動計算。ただしアプリで通常有給を使っている場合はその分を下回れないため、使用分で下限調整）。<br>'
+      +'・氏名の「申請N件」を開くと、アプリで承認された使用の内訳（通常有給/お祝い）が見られます。</p></div>';
+    box.innerHTML=html;
+  }
+  document.getElementById('runBtn').addEventListener('click',run);
+</script>
+</body>
+</html>
