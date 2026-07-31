@@ -332,6 +332,16 @@ test('celebration_expiry_months未設定: デフォルト6ヶ月で期限切れ 
   assert.strictEqual(calcCelebrationRemaining(staff, '2026-09-02'), 0);
 });
 
+test('celebration_days=0（付与なし）→ 残0（|| 3 で3に戻らない）', () => {
+  const staff = { hire_date: '2025-10-01', celebration_days: 0, celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 0);
+});
+
+test('celebration_days未設定 → デフォルト3（?? 3 でデフォルトは維持）', () => {
+  const staff = { hire_date: '2025-10-01', celebration_used_adj: 0 };
+  assert.strictEqual(calcCelebrationRemaining(staff, '2026-01-01'), 3);
+});
+
 // ─── お祝い休暇統合バリデーション ───
 console.log('\n📌 お祝い休暇統合バリデーション');
 

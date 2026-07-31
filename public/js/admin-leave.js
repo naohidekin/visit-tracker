@@ -237,7 +237,7 @@ function openLeaveEdit(id) {
   document.getElementById('leaveEditGranted').value = s.granted || 0;
   document.getElementById('leaveEditCarried').value = s.carried_over || 0;
   document.getElementById('leaveEditAdj').value = s.manual_adjustment || 0;
-  document.getElementById('leaveEditCelebDays').value = s.celebration_days || 3;
+  document.getElementById('leaveEditCelebDays').value = s.celebration_days ?? 3;
   document.getElementById('leaveEditCelebAdj').value = s.celebration_used_adj || 0;
 
   // 付与時期の案内 & 「付与を反映」ボタン
