@@ -126,7 +126,7 @@ function buildLeaveBalanceView(staff) {
   const nextGrant = calcNextGrant(staff.hire_date, undefined, staff.celebration_expiry_months || 6);
 
   // お祝い休暇の使用日数を計算（手動調整 + celebration申請 + 部分消費のある通常申請）
-  const celebrationDays = staff.celebration_days || 3;
+  const celebrationDays = staff.celebration_days ?? 3;
   const celebrationAdj = staff.celebration_used_adj || 0;
   let celebrationUsed = celebrationAdj;
   for (const r of approved) {
@@ -224,7 +224,7 @@ router.post('/api/leave/requests', requireStaff, asyncRoute((req, res) => {
       const celebrationExpiry = new Date(hire);
       celebrationExpiry.setMonth(celebrationExpiry.getMonth() + expiryMonths);
       const now = new Date(getTodayJST());
-      const celebrationDays = staff.celebration_days || 3;
+      const celebrationDays = staff.celebration_days ?? 3;
       const celebrationAdj = staff.celebration_used_adj || 0;
       let celebrationUsed = celebrationAdj;
       // 承認済みの消化数: type='celebration' + 部分消費のある通常申請
@@ -396,7 +396,7 @@ router.post('/api/admin/leave/requests/:id/approve', requireAdmin, asyncRoute((r
       if (hire) {
         const celebrationExpiry = new Date(hire);
         celebrationExpiry.setMonth(celebrationExpiry.getMonth() + expiryMonths);
-        const celebDays = staff.celebration_days || 3;
+        const celebDays = staff.celebration_days ?? 3;
         const celebAdj = staff.celebration_used_adj || 0;
         let celebUsed = celebAdj;
         for (const r of leaveData.requests.filter(r => r.staffId === staff.id && r.status === 'approved' && r.id !== request.id)) {
@@ -541,7 +541,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         pending: pendingDays,
         balance,
         grant_date: s.leave_grant_date,
-        celebration_days: s.celebration_days || 3,
+        celebration_days: s.celebration_days ?? 3,
         celebration_used_adj: s.celebration_used_adj || 0,
         pending_grant: calcPendingGrant(s),
         grant_history: (s.leave_grant_history || []).slice()
