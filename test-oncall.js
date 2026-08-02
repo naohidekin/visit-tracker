@@ -35,6 +35,9 @@ function frontendDefaultMonth(todayStr){
     id:'t_nurse',name:'テスト看護師',type:'nurse',kaigo_col:'C',iryo_col:'D',
     password_hash:bcrypt.hashSync('nurse123',4),is_admin:false,archived:false,hire_date:'2024-04-01',oncall_eligible:true,
   }));
+  getDb().prepare('INSERT OR REPLACE INTO staff (id,data) VALUES (?,?)').run('boss',JSON.stringify({
+    id:'boss',name:'管理者',type:'office',is_admin:true,archived:false,password_hash:bcrypt.hashSync('Admin12345',4),
+  }));
   const {app}=require('./server.js');
   const a=request.agent(app);
   const login=await a.post('/api/login').send({loginId:'t_nurse',password:'nurse123'});
@@ -67,6 +70,21 @@ function frontendDefaultMonth(todayStr){
     assert.strictEqual(frontendDefaultMonth('2026-12-20'),'2027-01','年跨ぎ: 12/20 の初期表示は 翌年1月');
     // 初期表示月が、その日入力した当番を必ず含むこと
     assert.ok((await recs(frontendDefaultMonth('2026-07-20'))).some(r=>r.date==='2026-07-20'),'初期表示月に当日の当番が含まれる');
+  });
+
+  await test('管理者向け: オンコール有給の累計実績（15時間=1日）を集計する', async () => {
+    // これまでに 7/20=8h + 7/10=5h を登録済み（計13h）。あと3hで計16h=1日付与。
+    await post({date:'2026-07-12',count:0,totalHours:3,transportCount:0});
+    const admin=request.agent(app);
+    await admin.post('/api/admin/login').send({staffId:'boss',password:'Admin12345'});
+    const rows=(await admin.get('/api/admin/oncall/leave-ledger')).body.rows;
+    const row=rows.find(r=>r.staffId==='t_nurse');
+    assert.ok(row,'対象スタッフが実績に出る');
+    assert.strictEqual(row.totalHours,16,'累計16時間');
+    assert.strictEqual(row.grantedDays,1,'16h → 15hで1日付与');
+    assert.strictEqual(row.validDays,1,'期限内なので有効1日');
+    assert.strictEqual(row.expiredDays,0,'期限切れなし');
+    assert.strictEqual(row.hoursToNext,14,'次の1日まであと14時間（30h-16h）');
   });
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

@@ -21,6 +21,7 @@ function toggleAccordion(header) {
     if (h2 && h2.textContent.includes('オンコール管理')) {
       initOncallMonth();
       loadOncallSummary();
+      loadOncallLeaveLedger();
     }
     if (h2 && h2.textContent.includes('待機・雨の日管理')) {
       initStandbyMonth();
@@ -91,7 +92,8 @@ function navigateTo(sectionId) {
       if (isFirst) loadAuditLog(1); break;
     case 'sec-oncall':
       if (isFirst) initOncallMonth();
-      loadOncallSummary(); break;
+      loadOncallSummary();
+      loadOncallLeaveLedger(); break;
     case 'sec-standby':
       if (isFirst) initStandbyMonth();
       loadStandbyData(); break;

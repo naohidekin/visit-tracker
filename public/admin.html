@@ -832,6 +832,34 @@
       </div><!-- /sec-standby -->
 
       <div class="page-section" id="sec-oncall">
+      <!-- オンコール有給（累計実績） -->
+      <div class="card">
+        <div class="card-header">
+          <h2>🎁 オンコール有給（累計実績）</h2>
+          <span class="acc-icon">▼</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">オンコールの<b>通算稼働時間</b>から付与される有給の実績です（<b>15時間＝1日</b>で換算）。有効分は有給残に加算され、期限切れ分は除外されます。</p>
+          <div id="oncallLedgerSpinner" class="spinner" style="display:none">読み込み中...</div>
+          <div class="tblwrap" style="overflow-x:auto">
+            <table style="width:100%;font-size:13px;border-collapse:collapse;white-space:nowrap">
+              <thead>
+                <tr style="background:#f0f4f8">
+                  <th style="padding:8px 6px;text-align:left;border-bottom:2px solid var(--border)">名前</th>
+                  <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">累計<br>稼働時間</th>
+                  <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">換算付与<br>(15h=1日)</th>
+                  <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">有効</th>
+                  <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">期限切れ</th>
+                  <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border)">次の1日<br>まで</th>
+                </tr>
+              </thead>
+              <tbody id="oncallLedgerBody"></tbody>
+            </table>
+          </div>
+          <div id="oncallLedgerEmpty" class="empty-msg" style="display:none">オンコール対象のスタッフがいません</div>
+        </div>
+      </div>
+
       <!-- オンコール管理 -->
       <div class="card">
         <div class="card-header">
