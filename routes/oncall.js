@@ -8,7 +8,7 @@ const { loadStaff, saveStaff, loadOncall, saveOncall, atomicModify } = require('
 const { requireStaff, requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, validateNum, getNowJST, getTodayJST, toDateStr, formatLocalDate } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { calcOncallLeaveExpiry } = require('../lib/leave-calc');
+const { calcOncallLeaveExpiry, calcValidOncallLeave } = require('../lib/leave-calc');
 const { BILLING_DAY } = require('../lib/constants');
 
 // 締期間の開始日・終了日を算出（前月16日〜当月15日）
@@ -181,6 +181,41 @@ router.get('/api/admin/oncall/summary', requireAdmin, (req, res) => {
       };
     });
   res.json({ summary });
+});
+
+// オンコール累計稼働時間 → 有給付与の「実績」一覧（全期間・スタッフ別）
+// 15時間=1日で換算した付与日数、期限内(有効)・期限切れ、次の1日までの残り時間、付与履歴を返す。
+router.get('/api/admin/oncall/leave-ledger', requireAdmin, (req, res) => {
+  const staffData = loadStaff();
+  const oncallData = loadOncall();
+  const round1 = (n) => Math.round(n * 10) / 10;
+  const rows = staffData.staff
+    .filter(s => !s.archived && s.oncall_eligible)
+    .map(s => {
+      const totalMinutes = oncallData.records
+        .filter(r => r.staffId === s.id)
+        .reduce((sum, r) => sum + (r.totalMinutes || 0), 0);
+      const grantedDays = Math.floor(totalMinutes / 900); // 900分=15時間
+      const validDays = calcValidOncallLeave(s);
+      const grantedStored = s.oncall_leave_granted || 0;
+      const expiredDays = Math.max(0, grantedStored - validDays);
+      const minutesToNext = (grantedDays + 1) * 900 - totalMinutes; // 次の1日まで
+      const history = (s.oncall_leave_history || []).slice()
+        .sort((a, b) => (b.grantedAt || '').localeCompare(a.grantedAt || ''));
+      return {
+        staffId: s.id, name: s.name, type: s.type,
+        totalMinutes,
+        totalHours: round1(totalMinutes / 60),
+        grantedDays,
+        validDays,
+        expiredDays,
+        minutesToNext,
+        hoursToNext: round1(minutesToNext / 60),
+        history,
+      };
+    })
+    .sort((a, b) => b.totalMinutes - a.totalMinutes);
+  res.json({ rows });
 });
 
 router.get('/api/admin/oncall/records', requireAdmin, (req, res) => {

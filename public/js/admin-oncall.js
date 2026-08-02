@@ -73,6 +73,45 @@ function oncallMinToHM(min) {
   return Math.floor(min / 60) + ':' + String(min % 60).padStart(2, '0');
 }
 
+// ── オンコール有給（累計実績）─────────────────────────────
+async function loadOncallLeaveLedger() {
+  const spinner = document.getElementById('oncallLedgerSpinner');
+  const body = document.getElementById('oncallLedgerBody');
+  const empty = document.getElementById('oncallLedgerEmpty');
+  if (!body) return;
+  spinner.style.display = '';
+  body.innerHTML = '';
+  empty.style.display = 'none';
+  try {
+    const res = await fetch('/api/admin/oncall/leave-ledger');
+    const { rows } = await res.json();
+    spinner.style.display = 'none';
+    if (!rows || !rows.length) { empty.style.display = ''; return; }
+    body.innerHTML = rows.map(r => {
+      const hist = r.history.length
+        ? `<details style="margin-top:2px"><summary style="cursor:pointer;color:#2E75B6;font-size:11px">付与履歴 ${r.history.length}件</summary>`
+          + r.history.map(h => `<div style="font-size:11px;color:var(--muted)">${esc(h.grantedAt || '')} ＋${h.days}日${h.expiresAt ? `（期限 ${esc(h.expiresAt)}）` : ''}</div>`).join('')
+          + `</details>`
+        : '';
+      const expired = r.expiredDays > 0
+        ? `<span style="color:#c0392b">${r.expiredDays}日</span>`
+        : `<span style="color:var(--muted)">0日</span>`;
+      return `<tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;font-weight:600">${esc(r.name)}${hist}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${r.totalHours}h</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center;font-weight:700">${r.grantedDays}日</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center;color:#0a7c42;font-weight:700">${r.validDays}日</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center">${expired}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #f0f4f8;text-align:center;color:var(--muted)">あと${r.hoursToNext}h</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    spinner.style.display = 'none';
+    empty.textContent = 'データの取得に失敗しました';
+    empty.style.display = '';
+  }
+}
+
 // ── スタッフ別詳細ドリルダウン ─────────────────────────
 const WD_ONCALL = ['日','月','火','水','木','金','土'];
 
