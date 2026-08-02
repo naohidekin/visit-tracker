@@ -85,6 +85,10 @@ function frontendDefaultMonth(todayStr){
     assert.strictEqual(row.validDays,1,'期限内なので有効1日');
     assert.strictEqual(row.expiredDays,0,'期限切れなし');
     assert.strictEqual(row.hoursToNext,14,'次の1日まであと14時間（30h-16h）');
+    // 残日数管理サマリにも OC(有効) が出る
+    const sum=(await admin.get('/api/admin/leave/summary')).body.summary;
+    const srow=sum.find(s=>s.id==='t_nurse');
+    assert.strictEqual(srow.oncall_leave_valid,1,'サマリのOC(有効)は1日');
   });
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

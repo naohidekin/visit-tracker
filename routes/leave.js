@@ -521,6 +521,7 @@ router.get('/api/admin/leave/summary', requireAdmin, (_req, res) => {
         carried_over: carriedOver,
         manual_adjustment: manualAdj,
         oncall_leave: oncallLeave,
+        oncall_leave_valid: calcValidOncallLeave(s),
         used: usedDays,
         pending: pendingDays,
         balance,
