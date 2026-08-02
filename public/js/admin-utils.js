@@ -157,11 +157,11 @@ function exportLeaveBalanceCSV() {
   fetch('/api/admin/leave/summary')
     .then(r => r.json())
     .then(({ summary }) => {
-      const headers = ['名前', '職種', '入社日', '最終付与', '付与', '繰越', '調整', '使用', '申請中', '残日数'];
+      const headers = ['名前', '職種', '入社日', '最終付与', '付与', '繰越', '調整', 'OC(オンコール)', '使用', '申請中', '残日数'];
       const rows = summary.map(s => [
         s.name, s.type === 'nurse' ? '看護師' : s.type,
         s.hire_date || '', s.auto_grant_days, s.granted, s.carried_over,
-        s.manual_adjustment, s.used, s.pending, s.balance
+        s.manual_adjustment, s.oncall_leave_valid, s.used, s.pending, s.balance
       ]);
       downloadCSV(headers, rows, `有給残日数一覧_${today}.csv`);
     })

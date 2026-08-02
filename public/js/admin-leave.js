@@ -219,6 +219,7 @@ async function loadLeaveBalanceSummary() {
       <td data-label="付与">${s.granted}日${grantBadge}</td>
       <td data-label="繰越">${s.carried_over}日</td>
       <td data-label="調整">${adjStr}</td>
+      <td data-label="OC">${s.oncall_leave_valid ? `<span title="オンコール由来の有給（期限内）" style="color:#1F497D;font-weight:700">${s.oncall_leave_valid}日</span>` : '<span style="color:var(--muted)">0日</span>'}</td>
       <td data-label="使用">${s.used}日</td>
       <td class="leave-balance" data-label="残" style="font-weight:700;color:${balColor}">${s.balance}日</td>
       <td data-label="">${editBtn}</td>

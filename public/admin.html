@@ -573,11 +573,12 @@
           <!-- 残日数管理タブ -->
           <div id="leaveBalance" style="display:none">
             <div style="margin-bottom:8px"><button class="btn-csv" id="leaveBalanceCSVBtn">CSV出力</button></div>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:8px">💡 <b>氏名をクリック</b>すると、<b>本人の有給画面と同じ内訳（リアルタイム）</b>が開きます（オンコール有給・お祝い休暇・次回付与などを含む）。「OC」列＝オンコール由来の有給（期限内）です。</p>
             <div class="spinner" id="leaveBalanceSpinner">読み込み中...</div>
             <div class="table-wrap" id="leaveBalanceTableWrap" style="display:none">
               <table>
                 <thead>
-                  <tr><th>名前</th><th>入社日</th><th>付与</th><th>繰越</th><th>調整</th><th>使用</th><th>残</th><th>操作</th></tr>
+                  <tr><th>名前</th><th>入社日</th><th>付与</th><th>繰越</th><th>調整</th><th>OC</th><th>使用</th><th>残</th><th>操作</th></tr>
                 </thead>
                 <tbody id="leaveBalanceBody"></tbody>
               </table>
