@@ -67,7 +67,9 @@ function reset(staffRows){
   db.prepare('INSERT OR REPLACE INTO staff (id,data) VALUES (?,?)').run('boss',JSON.stringify(boss));
   staffRows.forEach((s,i)=>{const row={hire_date:'2024-04-01',archived:false,seq:i+2,password_hash:bcrypt.hashSync('pass1234',4),...s};db.prepare('INSERT OR REPLACE INTO staff (id,data) VALUES (?,?)').run(s.id,JSON.stringify(row));});
 }
-const cell=(col)=>{const k=`7月!${col}25`;return store.has(k)?store.get(k):null;};
+// 監査は「今日の月」のシートを読むため、テストデータも当月シートに書く（月依存の失敗を防ぐ）
+const M7=(new Date().getMonth()+1)+'月';
+const cell=(col)=>{const k=`${M7}!${col}25`;return store.has(k)?store.get(k):null;};
 function colOf(id){return loadStaff().staff.find(s=>s.id===id)?.col;}
 function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(s=>s.col);assert.strictEqual(new Set(cols).size,cols.length,`列の共有が発生: ${JSON.stringify(cols)}`);}
 
@@ -83,7 +85,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'pt_b',name:'PT-B',type:'PT',col:'D'},
       {id:'pt_c',name:'PT-C',type:'PT',col:'E'},
     ]);
-    writeRange('7月!C25',[[11]]); writeRange('7月!D25',[[22]]); writeRange('7月!E25',[[33]]);
+    writeRange(`${M7}!C25`,[[11]]); writeRange(`${M7}!D25`,[[22]]); writeRange(`${M7}!E25`,[[33]]);
     const {a,csrf}=await adminLogin(app);
     await a.patch('/api/admin/staff/pt_a/archive').set('x-csrf-token',csrf).send({});
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'PT-D',type:'PT',loginId:'pt_d',initialPw:'pass1234'});
@@ -103,7 +105,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'pt_a',name:'PT-A',type:'PT',col:'C'},
       {id:'pt_b',name:'PT-B',type:'PT',col:'D'},
     ]);
-    writeRange('7月!C25',[[10]]); writeRange('7月!D25',[[20]]);
+    writeRange(`${M7}!C25`,[[10]]); writeRange(`${M7}!D25`,[[20]]);
     const {a,csrf}=await adminLogin(app);
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'PT-C',type:'PT',loginId:'pt_c',initialPw:'pass1234'});
     assert.strictEqual(r.status,200);
@@ -118,9 +120,9 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'ns_b',name:'看B',type:'nurse',kaigo_col:'E',iryo_col:'F'},
       {id:'pt_x',name:'PT-X',type:'PT',col:'G'},
     ]);
-    writeRange('7月!C25',[[1]]); writeRange('7月!D25',[[2]]); // 看A
-    writeRange('7月!E25',[[3]]); writeRange('7月!F25',[[4]]); // 看B
-    writeRange('7月!G25',[[99]]);                              // PT-X
+    writeRange(`${M7}!C25`,[[1]]); writeRange(`${M7}!D25`,[[2]]); // 看A
+    writeRange(`${M7}!E25`,[[3]]); writeRange(`${M7}!F25`,[[4]]); // 看B
+    writeRange(`${M7}!G25`,[[99]]);                              // PT-X
     const {a,csrf}=await adminLogin(app);
     await a.patch('/api/admin/staff/ns_a/archive').set('x-csrf-token',csrf).send({});
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'看C',type:'nurse',loginId:'ns_c',initialPw:'pass1234'});
@@ -144,9 +146,9 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'pt1',name:'丙田太郎',type:'PT',   col:'O'},                    // 誤り: 本来はK（乙川と列O重複）
     ]);
     // シート見出し（row3=姓 / row4=介護|医療|リハビリ氏名）
-    writeRange('7月!C3',[['甲野']]); writeRange('7月!C4',[['介護']]); writeRange('7月!D4',[['医療']]);
-    writeRange('7月!O3',[['乙川']]); writeRange('7月!O4',[['介護']]); writeRange('7月!P4',[['医療']]);
-    writeRange('7月!K4',[['丙田']]); // 丙田(PT)の本来の列
+    writeRange(`${M7}!C3`,[['甲野']]); writeRange(`${M7}!C4`,[['介護']]); writeRange(`${M7}!D4`,[['医療']]);
+    writeRange(`${M7}!O3`,[['乙川']]); writeRange(`${M7}!O4`,[['介護']]); writeRange(`${M7}!P4`,[['医療']]);
+    writeRange(`${M7}!K4`,[['丙田']]); // 丙田(PT)の本来の列
     const {a,csrf}=await adminLogin(app);
     let r=await a.get('/api/admin/column-audit');
     assert.strictEqual(r.status,200);
