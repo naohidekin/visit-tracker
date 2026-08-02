@@ -328,9 +328,18 @@ async function renderLeaveView(staffId) {
   p.push(r('使用済み（有給）', v.used + '日'));
   if (v.oncall_leave_valid) p.push(r('累積OC（有効）', v.oncall_leave_valid + '日' + (v.oncall_leave_expiry_date ? `（期限 ${v.oncall_leave_expiry_date}）` : '')));
   if (v.oncall_leave_expired) p.push(r('累積OC（期限切れ）', v.oncall_leave_expired + '日'));
-  p.push('<div style="border-top:1px solid var(--border);margin:6px 0"></div>');
-  p.push(r('お祝い休暇 残', `${v.celebration_remaining}日 / ${v.celebration_days}日`));
-  p.push(r('お祝い休暇 使用', v.celebration_used + '日'));
+  // お祝い休暇は入職1年経過後は非表示（本人画面と同様、期間終了後は不要なため）
+  let showCeleb = true;
+  if (v.hire_date) {
+    const h = new Date(v.hire_date);
+    const oneYearAfter = new Date(h.getFullYear() + 1, h.getMonth(), h.getDate());
+    showCeleb = new Date() < oneYearAfter;
+  }
+  if (showCeleb) {
+    p.push('<div style="border-top:1px solid var(--border);margin:6px 0"></div>');
+    p.push(r('お祝い休暇 残', `${v.celebration_remaining}日 / ${v.celebration_days}日`));
+    p.push(r('お祝い休暇 使用', v.celebration_used + '日'));
+  }
   if (v.next_grant && v.next_grant.next_grant_date) p.push(r('次回付与', `${v.next_grant.next_grant_date} に ${v.next_grant.next_grant_days}日`));
   box.innerHTML = `<div style="background:var(--card-bg,#f7f9fc);border:1px solid var(--border);border-radius:8px;padding:10px">${p.join('')}</div>`;
 }
