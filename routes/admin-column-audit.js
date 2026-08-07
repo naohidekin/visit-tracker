@@ -13,34 +13,7 @@ const { auditLog } = require('../lib/audit');
 const { getValues } = require('../lib/sheets');
 const { HEADER_ROW } = require('../lib/constants');
 
-const noSpace = (s) => String(s || '').replace(/[\s　]/g, '');
-const stripMark = (s) => noSpace(s).replace(/[（(]?(介護|医療)[）)]?/g, '');
-
-// シートの見出し（row3=姓, row4=介護/医療 または リハビリ氏名 / 初期作成分は row4="氏名(介護)"）を
-// 列ごとに分類する。
-function buildColumnMap(row3, row4, maxIdx) {
-  const cols = [];
-  for (let i = 2; i <= maxIdx; i++) {
-    const r3 = noSpace(row3[i]);
-    const r4raw = String(row4[i] || '');
-    const r4 = noSpace(r4raw);
-    if (!r3 && !r4) continue;
-    let kind = null, surname = '';
-    if (/介護/.test(r4)) { kind = 'kaigo'; surname = r3 || stripMark(r4); }
-    else if (/医療/.test(r4)) { kind = 'iryo'; surname = r3 || ''; }
-    else if (r4) { kind = 'rehab'; surname = r3 || r4; }
-    else if (r3) { kind = 'rehab'; surname = r3; }
-    cols.push({ idx: i, col: idxToCol(i), kind, surname, raw3: row3[i] || '', raw4: r4raw });
-  }
-  return cols;
-}
-
-// 氏名（漢字）と見出しの姓が一致するか（どちらかがもう一方の前方一致）
-function nameMatches(staffName, surname) {
-  const a = noSpace(staffName), b = noSpace(surname);
-  if (!a || !b) return false;
-  return a.startsWith(b) || b.startsWith(a);
-}
+const { buildColumnMap, nameMatches } = require('../lib/sheet-columns');
 
 // 各スタッフの「正しい列」をシート見出しから推定する
 function proposeMapping(colStaff, colMap) {
