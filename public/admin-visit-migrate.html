@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>訪問件数のSQLite取り込み | にこっと訪問看護ステーション</title>
+  <link rel="icon" href="/logo.png">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--blue:#2E75B6;--blue-dark:#1F497D;--bg:#f0f4f8;--white:#fff;--border:#dce3ed;--text:#1a2233;--muted:#6b7a99;--ok:#0a7c42;--ok-bg:#e6f7ef;--ng:#c0392b;--ng-bg:#fdecea;--warn:#9a6700;--warn-bg:#fff7e0}
+    body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:var(--bg);min-height:100vh;color:var(--text)}
+    header{background:linear-gradient(135deg,#1F497D,#2E75B6);color:#fff;padding:14px 18px;font-weight:800;font-size:18px}
+    .container{padding:16px;max-width:1000px;margin:0 auto}
+    .card{background:var(--white);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.08);padding:16px;margin-bottom:14px;border:1px solid rgba(0,0,0,.04)}
+    .banner{border-radius:12px;padding:14px 16px;font-weight:700;margin-bottom:14px}
+    .banner.ok{background:var(--ok-bg);color:var(--ok)} .banner.ng{background:var(--ng-bg);color:var(--ng)} .banner.warn{background:var(--warn-bg);color:var(--warn)}
+    button{background:var(--blue);color:#fff;border:none;border-radius:9px;padding:11px 18px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:8px}
+    button.green{background:var(--ok)} button:disabled{opacity:.5;cursor:default}
+    .tblwrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+    th{background:#f8faff;color:var(--blue-dark);padding:8px;text-align:right;font-size:11px;border-bottom:2px solid var(--border)}
+    th.l,td.l{text-align:left}
+    td{padding:8px;border-bottom:1px solid #f0f4f8;text-align:right}
+    .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+    .tag.ok{background:var(--ok-bg);color:var(--ok)} .tag.ng{background:var(--ng-bg);color:var(--ng)}
+    .muted{color:var(--muted);font-size:12px}
+    .note{background:#f8faff;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);line-height:1.7;margin-top:10px}
+    .loading{text-align:center;padding:28px;color:var(--muted)}
+    a.back{color:var(--blue);font-size:13px;text-decoration:none;font-weight:700}
+  </style>
+</head>
+<body>
+<header>訪問件数のSQLite取り込み（過去データ移行・照合）</header>
+<div class="container">
+  <div style="margin-bottom:12px"><a class="back" href="/admin">← 管理ポータルへ戻る</a></div>
+  <div class="card">
+    <p class="muted" style="margin-bottom:6px">Googleシートの訪問件数を<b>読み取って</b>SQLiteへ取り込みます（<b>シートは一切変更しません</b>）。各シートの見出し（氏名）を正として列とスタッフを対応づけます。</p>
+    <p class="muted" style="margin-bottom:10px">まず「状態を確認」でSheetとSQLiteの件数を見比べ、問題なければ「取り込みを実行」してください。<b>先に列ずれ調査ツールで列を修復しておくと確実です。</b></p>
+    <button id="statusBtn">状態を確認（照合）</button>
+    <button id="runBtn" class="green">取り込みを実行</button>
+  </div>
+  <div id="result"></div>
+</div>
+<script src="/vendor/api-fetch.js"></script>
+<script>
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function render(data){
+    const box=document.getElementById('result');
+    const s=data.summary;
+    let html = s.fullyCovered
+      ? '<div class="banner ok">✅ SheetのデータはすべてSQLiteに取り込まれています（Sheet '+s.sheetTotal+'件 / SQLite '+s.sqliteTotal+'件）</div>'
+      : '<div class="banner warn">⏳ 未取り込みがあります（Sheet '+s.sheetTotal+'件 / SQLite '+s.sqliteTotal+'件）。「取り込みを実行」を押してください。</div>';
+
+    if(data.years&&data.years.length){
+      html+='<div class="card"><b>対象シート</b><div class="tblwrap"><table><tr><th class="l">年</th><th>Sheet件数</th></tr>'
+        +data.years.map(y=>'<tr><td class="l">'+esc(y.year)+'年</td><td>'+y.sheetRecords+'</td></tr>').join('')+'</table></div></div>';
+    }
+
+    html+='<div class="card"><b>スタッフ別 件数（Sheet と SQLite）</b><div class="tblwrap"><table><tr>'
+      +'<th class="l">氏名</th><th>種別</th><th>Sheet</th><th>SQLite</th><th>状態</th></tr>';
+    for(const r of data.rows){
+      const tag=r.covered?'<span class="tag ok">OK</span>':'<span class="tag ng">未取込</span>';
+      html+='<tr><td class="l">'+esc(r.name)+'</td><td>'+esc(r.type)+'</td><td>'+r.sheetCount+'</td><td>'+r.sqliteCount+'</td><td>'+tag+'</td></tr>';
+    }
+    html+='</table></div></div>';
+
+    if(data.unresolved&&data.unresolved.length){
+      html+='<div class="card"><div class="banner warn" style="margin:0 0 8px">⚠ 見出しと対応づけできないスタッフ: '+data.unresolved.length+'名</div>'
+        +'<div class="muted">同姓が複数列にある/見出しが見つからない等。列ずれ調査ツールで確認してください。</div>'
+        +'<div class="tblwrap"><table><tr><th class="l">氏名</th><th class="l">理由</th></tr>'
+        +data.unresolved.map(u=>'<tr><td class="l">'+esc(u.name)+'</td><td class="l muted">'+esc((u.reasons||[]).join(', '))+'</td></tr>').join('')
+        +'</table></div></div>';
+    }
+
+    if(data.orphanCols&&data.orphanCols.length){
+      html+='<div class="card"><b>取り込まない列（退職者の残列など・Sheetにのみ保存）</b>'
+        +'<p class="muted" style="margin:6px 0">どのスタッフにも紐づかない見出しの列です。データはGoogleシート側にそのまま残ります（消えません）。</p>'
+        +'<div class="tblwrap"><table><tr><th class="l">場所（年/列:見出し）</th><th>データ件数</th></tr>'
+        +data.orphanCols.map(o=>'<tr><td class="l">'+esc(o.where)+'</td><td>'+o.count+'</td></tr>').join('')
+        +'</table></div></div>';
+    }
+
+    html+='<div class="note">・この操作でGoogleシートは変更されません（読むだけ）。<br>'
+      +'・「SQLite」列がSheet以上ならその人の取り込みは完了です（今日以降の入力は自動で両方に保存されます）。<br>'
+      +'・「取り込まない列」はSheetにそのまま残るのでデータは失われません。必要なら個別に対応します。</div>';
+    box.innerHTML=html;
+  }
+
+  async function loadStatus(){
+    const box=document.getElementById('result');
+    box.innerHTML='<div class="card loading">照合中...</div>';
+    try{
+      const res=await fetch('/api/admin/visit-migrate/status');
+      if(res.status===401){box.innerHTML='<div class="card banner ng">管理者としてログインしてください。<a href="/admin">管理画面へ</a></div>';return;}
+      if(!res.ok)throw new Error((await res.json()).error||('HTTP '+res.status));
+      render(await res.json());
+    }catch(e){box.innerHTML='<div class="card banner ng">取得に失敗: '+esc(e.message)+'</div>';}
+  }
+
+  async function runBackfill(){
+    if(!confirm('Googleシートの訪問件数をSQLiteへ取り込みます。\n（シートは変更しません。読み取りのみ）\nよろしいですか？'))return;
+    const box=document.getElementById('result');
+    box.innerHTML='<div class="card loading">取り込み中...（データ量により時間がかかります）</div>';
+    try{
+      const res=await apiFetch('/api/admin/visit-migrate/backfill',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+      const data=await res.json();
+      if(!res.ok||!data.success)throw new Error(data.error||('HTTP '+res.status));
+      alert('取り込み完了: '+data.imported+'件をSQLiteへ保存しました。続けて照合結果を表示します。');
+      loadStatus();
+    }catch(e){box.innerHTML='<div class="card banner ng">取り込みに失敗: '+esc(e.message)+'</div>';}
+  }
+
+  document.getElementById('statusBtn').addEventListener('click',loadStatus);
+  document.getElementById('runBtn').addEventListener('click',runBackfill);
+</script>
+</body>
+</html>
