@@ -3,71 +3,16 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadStandby, saveStandby, atomicModify, getSpreadsheetIdForYear } = require('../lib/data');
+const { loadStaff, loadStandby, saveStandby, atomicModify, getRecordStatusForDate } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, formatLocalDate, getStandbyFeeWithCustom, isOnLeaveToday } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { getSheets, sheetsRetry } = require('../lib/sheets');
-const { DATA_START_ROW, BILLING_DAY } = require('../lib/constants');
+const { BILLING_DAY } = require('../lib/constants');
 
-// 全スタッフの入力状況を一括取得（batchGet で効率化）
-async function getAllStaffRecordStatus(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const row = DATA_START_ROW + d.getDate() - 1;
-  const sid = getSpreadsheetIdForYear(year);
-
-  const staffData = loadStaff();
-  const activeStaff = staffData.staff.filter(s => !s.archived);
-
-  // batchGet用のレンジを構築（列未設定スタッフを除外）
-  const ranges = [];
-  const staffMap = [];
-  for (const s of activeStaff) {
-    if (s.type === 'nurse' ? (!s.kaigo_col || !s.iryo_col) : !s.col) continue;
-    if (s.type === 'nurse') {
-      ranges.push(`${month}月!${s.kaigo_col}${row}:${s.iryo_col}${row}`);
-    } else {
-      ranges.push(`${month}月!${s.col}${row}`);
-    }
-    staffMap.push(s);
-  }
-
+// 全スタッフの入力状況（SQLite正本から判定。Sheetは読まない）。段階4b。
+function getAllStaffRecordStatus(dateStr) {
   try {
-    const api = await getSheets();
-    const resp = await sheetsRetry(() => api.spreadsheets.values.batchGet({
-      spreadsheetId: sid,
-      ranges,
-    }));
-
-    const results = { missing: [], entered: [], onLeave: [] };
-    const valueRanges = resp.data.valueRanges || [];
-
-    for (let i = 0; i < staffMap.length; i++) {
-      const s = staffMap[i];
-      const info = { id: s.id, name: s.name, type: s.type };
-
-      if (isOnLeaveToday(s.id, dateStr)) {
-        results.onLeave.push(info);
-        continue;
-      }
-
-      const vals = valueRanges[i]?.values?.[0] ?? [];
-      let hasRecord = false;
-      if (s.type === 'nurse') {
-        hasRecord = (vals[0] !== undefined && vals[0] !== '') || (vals[1] !== undefined && vals[1] !== '');
-      } else {
-        hasRecord = vals[0] !== undefined && vals[0] !== '';
-      }
-
-      if (hasRecord) {
-        results.entered.push(info);
-      } else {
-        results.missing.push(info);
-      }
-    }
-    return results;
+    return getRecordStatusForDate(dateStr, isOnLeaveToday);
   } catch (e) {
     console.error('⚠️ 全スタッフ入力状況チェックエラー:', e.message);
     return { missing: [], entered: [], onLeave: [], error: e.message };
