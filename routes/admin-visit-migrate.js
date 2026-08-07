@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadRegistry, upsertVisitRecord, getVisitRecordsRange } = require('../lib/data');
+const { loadStaff, loadRegistry, insertVisitRecordIfAbsent, getVisitRecordsRange } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { asyncRoute, idxToCol } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
@@ -96,7 +96,7 @@ async function collect(doWrite) {
   for (const s of staffList) perStaff[s.id] = { id: s.id, name: s.name, type: s.type, sheetCount: 0 };
   const orphanAgg = {}; // key: `${year}/${col}:${surname}` -> count
   const unresolvedAgg = {}; // staffId -> Set(year:status)
-  let imported = 0;
+  let imported = 0, skipped = 0;
   const yearsReport = [];
 
   for (const year of years) {
@@ -120,8 +120,9 @@ async function collect(doWrite) {
         yearRecords += recs.length;
         if (doWrite) {
           for (const r of recs) {
-            upsertVisitRecord(m.staff.id, r.date, { kaigo: r.kaigo, iryo: r.iryo, value: r.value });
-            imported++;
+            // 既存（二重書き込み済みの正しい値）は上書きしない。無い分だけ取り込む。
+            if (insertVisitRecordIfAbsent(m.staff.id, r.date, { kaigo: r.kaigo, iryo: r.iryo, value: r.value })) imported++;
+            else skipped++;
           }
         }
       }
@@ -144,7 +145,7 @@ async function collect(doWrite) {
   const orphanCols = Object.entries(orphanAgg).map(([k, count]) => ({ where: k, count }))
     .sort((a, b) => b.count - a.count);
 
-  return { perStaff, orphanCols, unresolved, years: yearsReport, imported };
+  return { perStaff, orphanCols, unresolved, years: yearsReport, imported, skipped };
 }
 
 // ─── 状態確認（読み取り専用・照合） ───────────────────────────
@@ -176,11 +177,12 @@ router.get('/api/admin/visit-migrate/status', requireAdmin, asyncRoute(async (_r
 router.post('/api/admin/visit-migrate/backfill', requireAdmin, asyncRoute(async (req, res) => {
   const c = await collect(true);
   auditLog(req, 'visit.migrate_backfill', { type: 'visit_record' }, {
-    imported: c.imported, years: c.years.map(y => y.year), orphanColumns: c.orphanCols.length,
+    imported: c.imported, skipped: c.skipped, years: c.years.map(y => y.year), orphanColumns: c.orphanCols.length,
   });
   res.json({
     success: true,
     imported: c.imported,
+    skipped: c.skipped,
     years: c.years,
     perStaff: Object.values(c.perStaff),
     orphanCols: c.orphanCols,

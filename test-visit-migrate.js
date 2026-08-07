@@ -24,7 +24,7 @@ require.cache[sp]={id:sp,filename:sp,loaded:true,exports:fakeSheets};
 const request=require('supertest');
 const bcrypt=require('bcryptjs');
 const {getDb}=require('./lib/db');
-const {ensureDataDir,getVisitRecord}=require('./lib/data');
+const {ensureDataDir,getVisitRecord,upsertVisitRecord}=require('./lib/data');
 
 let passed=0,failed=0;
 async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed++;}catch(e){console.error(`  ❌ ${name}\n     ${e.message}`);failed++;}}
@@ -94,10 +94,24 @@ async function test(name,fn){try{await fn();console.log(`  ✅ ${name}`);passed+
     assert.ok(s.summary.fullyCovered,'全スタッフでSheet≦SQLite（取りこぼしなし）');
   });
 
-  await test('冪等: 再実行しても件数は増えない（INSERT OR REPLACE）', async () => {
+  await test('既存(二重書き込み済み)の正しい値はシートで上書きしない', async () => {
+    // 2月の見出しとデータ（看甲 2/1 = 介護5）を仕込む
+    seed('2月!C3','看甲'); seed('2月!C4','介護'); seed('2月!D4','医療');
+    seed('2月!C5','5');
+    // ただしSQLiteには既に「二重書き込み済みの正しい値」= 介護99 が入っているとする
+    upsertVisitRecord('n1',`${YEAR}-02-01`,{kaigo:99,iryo:null,value:null});
     const r=await a.post('/api/admin/visit-migrate/backfill').set('x-csrf-token',csrf).send({});
+    assert.strictEqual(r.status,200,JSON.stringify(r.body));
+    // シートの5では上書きされず、99のまま
+    assert.strictEqual(getVisitRecord('n1',`${YEAR}-02-01`).kaigo,99,'既存値99が保護される');
+    assert.ok(r.body.skipped>=1,'既存分はskippedとして数える');
+  });
+
+  await test('冪等: 再実行しても件数は増えない（既存は保護）', async () => {
+    await a.post('/api/admin/visit-migrate/backfill').set('x-csrf-token',csrf).send({});
     const s=(await a.get('/api/admin/visit-migrate/status')).body;
-    assert.strictEqual(s.rows.find(x=>x.id==='n1').sqliteCount,2,'2件のまま');
+    // n1: 1/1, 1/2（Sheet由来）＋ 2/1（事前投入・保護）= 3件のまま
+    assert.strictEqual(s.rows.find(x=>x.id==='n1').sqliteCount,3,'3件のまま');
   });
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
