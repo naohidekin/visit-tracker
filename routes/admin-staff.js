@@ -59,6 +59,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
   const nextSeq = allSeqs.length > 0 ? Math.max(...allSeqs) + 1 : 1;
 
   const operations = []; // 実行レポート用
+  let nurseInsertIdx = null; // 看護師追加時の列挿入index（この位置以降のPT列だけを+2シフトする）
 
   try {
     const api = await getSheets();
@@ -78,6 +79,7 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
         .filter(s => s.type === 'nurse' && s.iryo_col)
         .map(s => colToIdx(s.iryo_col));
       const kaigoIdx = nurseIryoIdxs.length ? Math.max(...nurseIryoIdxs) + 1 : 2;
+      nurseInsertIdx = kaigoIdx; // ハンドラスコープへ退避（PT列シフトのしきい値に使う）
       const kaigoCol = idxToCol(kaigoIdx);
       const iryoCol  = idxToCol(kaigoIdx + 1);
       // 太線の旧位置（追加前の最終iryo列）
@@ -390,8 +392,11 @@ router.post('/api/admin/staff', requireAdmin, asyncRoute(async (req, res) => {
     const savedData = atomicModify(() => {
       const freshData = loadStaff();
       if (isNurseType) {
+        // 挿入位置(nurseInsertIdx)以降のPT列だけを+2シフト。
+        // 左側にいるPT（中島・小澤など）は物理的に動かないので触らない（列ずれ防止）。
         for (const s of freshData.staff)
-          if (s.type !== 'nurse' && s.col != null) s.col = idxToCol(colToIdx(s.col) + 2);
+          if (s.type !== 'nurse' && s.col != null && colToIdx(s.col) >= nurseInsertIdx)
+            s.col = idxToCol(colToIdx(s.col) + 2);
       }
       freshData.staff.push(newEntry);
       saveStaff(freshData);
@@ -530,7 +535,9 @@ router.delete('/api/admin/staff/:id', requireAdmin, asyncRoute(async (req, res) 
           }
         }
         for (const s of data.staff) {
-          if (s.type !== 'nurse' && s.col != null) s.col = idxToCol(colToIdx(s.col) - 2);
+          // 削除位置(delStart)より右のPT列だけを-2シフト。左側のPTは動かないので触らない。
+          if (s.type !== 'nurse' && s.col != null && colToIdx(s.col) > delStart)
+            s.col = idxToCol(colToIdx(s.col) - 2);
         }
         saveStaff(data);
         return { staff: data.staff };

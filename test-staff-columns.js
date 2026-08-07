@@ -47,6 +47,7 @@ const fakeApi={spreadsheets:{
 }};
 const fakeSheets={getAuth:()=>({}),getSheets:async()=>fakeApi,sheetsRetry:async(fn)=>fn(),buildSheetHeaderRow:()=>['日付','曜日'],createSpreadsheetForYear:async()=>'dummy',hasRecordForDate:async()=>false,getAllStaffRecordStatus:async()=>({missing:[],entered:[],onLeave:[]}),getValues:async(s,r)=>readRange(r),updateValues:async(s,r,v)=>{writeRange(r,v);},batchUpdateValues:async(s,d)=>{for(const x of d)writeRange(x.range,x.values);},batchGetValues:async(s,rs)=>rs.map(r=>({values:readRange(r)}))};
 const sp=require.resolve('./lib/sheets.js');
+const realBuildSheetHeaderRow=require('./lib/sheets.js').buildSheetHeaderRow; // 実物を退避（この後fakeに差し替えるため）
 require.cache[sp]={id:sp,filename:sp,loaded:true,exports:fakeSheets};
 
 const request=require('supertest');
@@ -79,6 +80,13 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
 
   console.log('\n📌 スタッフ列割り当ての整合性テスト');
 
+  // 管理者ログインは1回だけ（ログインAPIはIP毎5回/5分の制限があるため共有する）。
+  // 先にbossを用意（reset()前でも認証できるように）。セッションはcookie-sessionで
+  // reset()のDB再作成後も有効（bossは毎回同じidで再作成される）。
+  getDb().prepare('INSERT OR REPLACE INTO staff (id,data) VALUES (?,?)').run('boss',
+    JSON.stringify({id:'boss',name:'管理者',type:'office',is_admin:true,archived:false,password_hash:bcrypt.hashSync('pass1234',4)}));
+  const { a: A, csrf: CSRF } = await adminLogin(app);
+
   await test('アーカイブ→リハビリ追加で既存リハビリ職の記録が消えない（列ずれ防止）', async () => {
     reset([
       {id:'pt_a',name:'PT-A',type:'PT',col:'C'},
@@ -86,7 +94,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'pt_c',name:'PT-C',type:'PT',col:'E'},
     ]);
     writeRange(`${M7}!C25`,[[11]]); writeRange(`${M7}!D25`,[[22]]); writeRange(`${M7}!E25`,[[33]]);
-    const {a,csrf}=await adminLogin(app);
+    const a=A, csrf=CSRF;
     await a.patch('/api/admin/staff/pt_a/archive').set('x-csrf-token',csrf).send({});
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'PT-D',type:'PT',loginId:'pt_d',initialPw:'pass1234'});
     assert.strictEqual(r.status,200,`追加は成功: ${JSON.stringify(r.body)}`);
@@ -106,7 +114,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'pt_b',name:'PT-B',type:'PT',col:'D'},
     ]);
     writeRange(`${M7}!C25`,[[10]]); writeRange(`${M7}!D25`,[[20]]);
-    const {a,csrf}=await adminLogin(app);
+    const a=A, csrf=CSRF;
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'PT-C',type:'PT',loginId:'pt_c',initialPw:'pass1234'});
     assert.strictEqual(r.status,200);
     assert.strictEqual(colOf('pt_c'),'E','新リハビリは D の次=E（役員で1つ飛ばない）');
@@ -123,7 +131,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
     writeRange(`${M7}!C25`,[[1]]); writeRange(`${M7}!D25`,[[2]]); // 看A
     writeRange(`${M7}!E25`,[[3]]); writeRange(`${M7}!F25`,[[4]]); // 看B
     writeRange(`${M7}!G25`,[[99]]);                              // PT-X
-    const {a,csrf}=await adminLogin(app);
+    const a=A, csrf=CSRF;
     await a.patch('/api/admin/staff/ns_a/archive').set('x-csrf-token',csrf).send({});
     const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'看C',type:'nurse',loginId:'ns_c',initialPw:'pass1234'});
     assert.strictEqual(r.status,200,`看護師追加成功: ${JSON.stringify(r.body)}`);
@@ -149,7 +157,7 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
     writeRange(`${M7}!C3`,[['甲野']]); writeRange(`${M7}!C4`,[['介護']]); writeRange(`${M7}!D4`,[['医療']]);
     writeRange(`${M7}!O3`,[['乙川']]); writeRange(`${M7}!O4`,[['介護']]); writeRange(`${M7}!P4`,[['医療']]);
     writeRange(`${M7}!K4`,[['丙田']]); // 丙田(PT)の本来の列
-    const {a,csrf}=await adminLogin(app);
+    const a=A, csrf=CSRF;
     let r=await a.get('/api/admin/column-audit');
     assert.strictEqual(r.status,200);
     assert.ok(r.body.summary.likelyDesynced,'列ずれを検出');
@@ -174,10 +182,53 @@ function assertNoSharedCols(){const cols=loadStaff().staff.filter(s=>s.col).map(
       {id:'p1',name:'ダミー甲',type:'PT',col:'K'},
       {id:'p2',name:'ダミー乙',type:'PT',col:'L'},
     ]);
-    const {a,csrf}=await adminLogin(app);
+    const a=A, csrf=CSRF;
     const r=await a.post('/api/admin/column-audit/apply').set('x-csrf-token',csrf).send({changes:[{id:'p2',col:'K'}]});
     assert.strictEqual(r.status,400,'重複する適用は400で拒否');
     assert.strictEqual(colOf('p2'),'L','拒否されたので変更されない');
+  });
+
+  await test('看護師追加: 挿入位置より左のリハビリ職の列はずれない（+2バグ修正）', async () => {
+    // 本番再現: リハビリ職が看護師の間におり、新看護師は最右に入る。
+    reset([
+      {id:'ns1',name:'看甲',type:'nurse',kaigo_col:'C',iryo_col:'D'},
+      {id:'pt1',name:'リ乙',type:'PT',col:'E'},            // 看護師の間のPT（左側）
+      {id:'ns2',name:'看丙',type:'nurse',kaigo_col:'F',iryo_col:'G'},
+    ]);
+    writeRange(`${M7}!E25`,[[42]]);   // pt1 の記録
+    const a=A, csrf=CSRF;
+    const r=await a.post('/api/admin/staff').set('x-csrf-token',csrf).send({name:'看丁',type:'nurse',loginId:'ns3',initialPw:'pass1234'});
+    assert.strictEqual(r.status,200,`看護師追加成功: ${JSON.stringify(r.body)}`);
+    // 新看護師は最右(H/I)。pt1(E)は挿入位置より左なので動かない。
+    assert.strictEqual(colOf('pt1'),'E','PTの列はEのまま（誤って+2されない）');
+    assert.strictEqual(cell('E'),'42','PTの記録42がそのまま読める');
+    assertNoSharedCols();
+  });
+
+  await test('看護師削除: 削除位置より左のリハビリ職の列はずれない（-2アンダーフロー修正）', async () => {
+    reset([
+      {id:'ns1',name:'看甲',type:'nurse',kaigo_col:'C',iryo_col:'D'},
+      {id:'pt1',name:'リ乙',type:'PT',col:'E'},
+      {id:'ns2',name:'看丙',type:'nurse',kaigo_col:'F',iryo_col:'G'},
+    ]);
+    writeRange(`${M7}!E25`,[[7]]);
+    const a=A, csrf=CSRF;
+    const r=await a.delete('/api/admin/staff/ns2').set('x-csrf-token',csrf).send({});
+    assert.strictEqual(r.status,200,`削除成功: ${JSON.stringify(r.body)}`);
+    // ns2(F/G)削除。pt1(E)は削除位置より左なので動かない。
+    assert.strictEqual(colOf('pt1'),'E','PTの列はEのまま（誤って-2されない）');
+    assert.strictEqual(cell('E'),'7','PTの記録がそのまま読める');
+  });
+
+  await test('新シート見出し生成: 列を持たないoffice/adminがいてもクラッシュしない', () => {
+    const row = realBuildSheetHeaderRow([
+      {id:'boss',name:'管理者',type:'office'},              // col なし
+      {id:'ns',name:'看甲',type:'nurse',kaigo_col:'C',iryo_col:'D'},
+      {id:'pt',name:'リ乙',type:'PT',col:'E'},
+    ]);
+    assert.strictEqual(row[colIdx('C')],'看甲(介護)');
+    assert.strictEqual(row[colIdx('D')],'看甲(医療)');
+    assert.strictEqual(row[colIdx('E')],'リ乙');
   });
 
   console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
