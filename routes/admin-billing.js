@@ -3,11 +3,10 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, getSpreadsheetIdForYear } = require('../lib/data');
+const { loadStaff, getVisitSheetRows } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
 const { countBusinessDays, countBusinessDaysRange } = require('../lib/helpers');
-const { getValues } = require('../lib/sheets');
-const { DATA_START_ROW, WD, BILLING_DAY, INCENTIVE_NURSE_RATE, INCENTIVE_REHAB_RATE } = require('../lib/constants');
+const { WD, BILLING_DAY, INCENTIVE_NURSE_RATE, INCENTIVE_REHAB_RATE } = require('../lib/constants');
 
 // ─── 管理者用 締め期間日別明細 ──────────────────────────────────
 async function handleAdminBillingDetail(req, res) {
@@ -31,23 +30,9 @@ async function handleAdminBillingDetail(req, res) {
   const isNurse = staff.type === 'nurse';
 
   try {
-    const sidPrev = getSpreadsheetIdForYear(prevYear);
-    const sidCur  = getSpreadsheetIdForYear(y);
-    const colRange = isNurse
-      ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
-      : `${staff.col}%s:${staff.col}%s`;
-
-    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
-    const endRowA   = DATA_START_ROW + daysInPrev - 1;
-    const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
-    const startRowB = DATA_START_ROW;
-    const endRowB   = DATA_START_ROW + 14;
-    const rangeB = `${m}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
-
-    const [rowsA, rowsB] = await Promise.all([
-      getValues(sidPrev, rangeA).catch(() => []),
-      getValues(sidCur,  rangeB).catch(() => []),
-    ]);
+    // SQLite正本から取得（前月BILLING_DAY〜末日 / 当月1〜15日）
+    const rowsA = getVisitSheetRows(staff, prevYear, prevM, BILLING_DAY, daysInPrev);
+    const rowsB = getVisitSheetRows(staff, y, m, 1, BILLING_DAY - 1);
 
     const days = [];
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
@@ -141,16 +126,14 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
   }
 
   const y   = Number(year), m = Number(month);
-  const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
-  const endRow = DATA_START_ROW + daysInMonth - 1;
   const iDef = staffData.incentive_defaults;
   const defNurseRate = (staffData.incentive_defaults || {}).nurse_rate ?? INCENTIVE_NURSE_RATE;
   const defRehabRate = (staffData.incentive_defaults || {}).rehab_rate ?? INCENTIVE_REHAB_RATE;
 
   try {
     if (staff.type === 'nurse') {
-      const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
+      const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -182,7 +165,7 @@ router.get('/api/admin/monthly-detail', requireAdmin, async (req, res) => {
                  incentive_rate: rateAN,
                  work_hours: staff.work_hours ?? null } });
     } else {
-      const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
+      const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
       let total_units = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -219,9 +202,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
   if (!year || !month) return res.status(400).json({ error: 'パラメータ不足' });
 
   const y = Number(year), m = Number(month);
-  const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
-  const endRow = DATA_START_ROW + daysInMonth - 1;
 
   const staffData = loadStaff();
   const iDef = staffData.incentive_defaults;
@@ -237,7 +218,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
       try {
         if (staff.type === 'nurse' ? (!staff.kaigo_col || !staff.iryo_col) : !staff.col) continue;
         if (staff.type === 'nurse') {
-          const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
+          const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
           let total_kaigo = 0, total_iryo = 0, working_days = 0;
           for (const r of rows) {
             const k = parseFloat(r?.[0]) || 0;
@@ -269,7 +250,7 @@ router.get('/api/admin/incentive-summary', requireAdmin, async (req, res) => {
           });
         } else if (staff.col) {
           // リハビリ職共通（PT/OT/ST）: 単一列構造
-          const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
+          const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
           let total_units = 0, working_days = 0;
           for (const r of rows) {
             const v = parseFloat(r?.[0]) || 0;
