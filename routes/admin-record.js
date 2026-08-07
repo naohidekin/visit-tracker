@@ -2,9 +2,9 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify } = require('../lib/data');
+const { loadStaff, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify, upsertVisitRecord } = require('../lib/data');
 const { requireAdmin } = require('../lib/auth-middleware');
-const { validateUnitValue } = require('../lib/helpers');
+const { validateUnitValue, getNowJST } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
 const { updateValues, batchUpdateValues } = require('../lib/sheets');
 const { DATA_START_ROW } = require('../lib/constants');
@@ -48,11 +48,15 @@ router.post('/api/admin/record', requireAdmin, async (req, res) => {
         { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kv.value]] },
         { range: `${month}月!${staff.iryo_col}${row}`, values: [[iv.value]] },
       ]);
+      try { upsertVisitRecord(staffId, date, { kaigo: kv.value === '' ? null : kv.value, iryo: iv.value === '' ? null : iv.value }, getNowJST().toISOString()); }
+      catch (dbErr) { console.error('⚠️ visit_records 二重書き込み失敗(管理・看護師):', dbErr.message); }
     } else {
       const { value } = req.body;
       const vv = validateUnitValue(value);
       if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
       await updateValues(sid, `${month}月!${staff.col}${row}`, [[vv.value]]);
+      try { upsertVisitRecord(staffId, date, { value: vv.value === '' ? null : vv.value }, getNowJST().toISOString()); }
+      catch (dbErr) { console.error('⚠️ visit_records 二重書き込み失敗(管理・PT):', dbErr.message); }
     }
     clearPendingScheduleFor(staffId, date);
     auditLog(req, 'record.admin_edit', { type: 'visit_record', id: staffId, label: `${staff.name} ${date}` }, { date, ...req.body });
