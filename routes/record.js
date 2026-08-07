@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify } = require('../lib/data');
+const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify, upsertVisitRecord } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, validateNum, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, countBusinessDays, countBusinessDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
@@ -123,6 +123,9 @@ router.post('/api/record', requireStaff, async (req, res) => {
         { range: `${month}月!${staff.kaigo_col}${row}`, values: [[kv.value]] },
         { range: `${month}月!${staff.iryo_col}${row}`,  values: [[iv.value]] },
       ]);
+      // 二重書き込み（SQLite正本化への移行用。失敗してもシート保存は成立させる）
+      try { upsertVisitRecord(staff.id, date, { kaigo: kv.value === '' ? null : kv.value, iryo: iv.value === '' ? null : iv.value }, getNowJST().toISOString()); }
+      catch (dbErr) { console.error('⚠️ visit_records 二重書き込み失敗(看護師):', dbErr.message); }
       clearPendingScheduleFor(staff.id, date);
       auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, kaigo: kv.value, iryo: iv.value });
       res.json({ success: true, kaigo: kv.value, iryo: iv.value });
@@ -131,6 +134,9 @@ router.post('/api/record', requireStaff, async (req, res) => {
       const vv = validateUnitValue(value);
       if (!vv.valid) return res.status(400).json({ error: '単位数は0〜9999の数値で入力してください' });
       await updateValues(sid, `${month}月!${staff.col}${row}`, [[vv.value]]);
+      // 二重書き込み（SQLite正本化への移行用）
+      try { upsertVisitRecord(staff.id, date, { value: vv.value === '' ? null : vv.value }, getNowJST().toISOString()); }
+      catch (dbErr) { console.error('⚠️ visit_records 二重書き込み失敗(PT):', dbErr.message); }
       clearPendingScheduleFor(staff.id, date);
       auditLog(req, 'record.create', { type: 'visit_record', id: staff.id, label: `${staff.name} ${date}` }, { date, value: vv.value });
       res.json({ success: true, value: vv.value });
