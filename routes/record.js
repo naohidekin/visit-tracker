@@ -4,11 +4,11 @@
 const express = require('express');
 const router = express.Router();
 
-const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify, upsertVisitRecord } = require('../lib/data');
+const { loadStaff, loadLeave, loadStandby, getSpreadsheetIdForYear, loadSchedules, saveSchedules, atomicModify, upsertVisitRecord, getVisitRecord, getVisitSheetRows } = require('../lib/data');
 const { requireStaff } = require('../lib/auth-middleware');
 const { validateUnitValue, validateNum, isValidDate, getTodayJST, getNowJST, isWorkday, isOnLeaveToday, countBusinessDays, countBusinessDaysRange } = require('../lib/helpers');
 const { auditLog } = require('../lib/audit');
-const { getValues, updateValues, batchUpdateValues, getAllStaffRecordStatus } = require('../lib/sheets');
+const { updateValues, batchUpdateValues, getAllStaffRecordStatus } = require('../lib/sheets');
 const { DATA_START_ROW, WD, BILLING_DAY } = require('../lib/constants');
 
 function isColumnMissing(staff) {
@@ -28,22 +28,13 @@ function clearPendingScheduleFor(staffId, date) {
   });
 }
 
-async function hasRecordForDate(staff, dateStr) {
+function hasRecordForDate(staff, dateStr) {
   if (isColumnMissing(staff)) return true;
-  const d = new Date(dateStr + 'T00:00:00');
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const row = DATA_START_ROW + d.getDate() - 1;
-  const sid = getSpreadsheetIdForYear(year);
-
   try {
-    if (staff.type === 'nurse') {
-      const vals = (await getValues(sid, `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`))[0] ?? [];
-      return (vals[0] !== undefined && vals[0] !== '') || (vals[1] !== undefined && vals[1] !== '');
-    } else {
-      const val = (await getValues(sid, `${month}月!${staff.col}${row}`))[0]?.[0];
-      return val !== undefined && val !== '';
-    }
+    const rec = getVisitRecord(staff.id, dateStr); // SQLite正本
+    if (!rec) return false;
+    if (staff.type === 'nurse') return rec.kaigo != null || rec.iryo != null;
+    return rec.value != null;
   } catch (e) {
     console.error(`⚠️ 未入力チェックエラー (${staff.id}):`, e.message);
     return true; // エラー時はリマインダーを出さない
@@ -51,15 +42,9 @@ async function hasRecordForDate(staff, dateStr) {
 }
 
 // ─── API: 記録の取得（上書きチェック用） ────────────────────────
-router.get('/api/record', requireStaff, async (req, res) => {
+router.get('/api/record', requireStaff, (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'パラメータが不足しています' });
-
-  const d     = new Date(date);
-  const year  = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const row   = DATA_START_ROW + d.getDate() - 1;
-  const sid   = getSpreadsheetIdForYear(year);
 
   const data  = loadStaff();
   const staff = data.staff.find(s => s.id === req.session.staffId);
@@ -69,13 +54,9 @@ router.get('/api/record', requireStaff, async (req, res) => {
   }
 
   try {
-    if (staff.type === 'nurse') {
-      const vals = (await getValues(sid, `${month}月!${staff.kaigo_col}${row}:${staff.iryo_col}${row}`))[0] ?? [];
-      res.json({ kaigo: vals[0] ?? null, iryo: vals[1] ?? null });
-    } else {
-      const val = (await getValues(sid, `${month}月!${staff.col}${row}`))[0]?.[0] ?? null;
-      res.json({ value: val });
-    }
+    const rec = getVisitRecord(staff.id, date); // SQLite正本
+    if (staff.type === 'nurse') res.json({ kaigo: rec?.kaigo ?? null, iryo: rec?.iryo ?? null });
+    else res.json({ value: rec?.value ?? null });
   } catch (e) {
     console.error('❌ record GET error:', e.message);
     res.status(500).json({ error: '記録の取得に失敗しました' });
@@ -156,8 +137,6 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
   if (!yv.valid || !mv.valid) return res.status(400).json({ error: '年月の値が不正です' });
 
   const daysInMonth = new Date(yv.value, mv.value, 0).getDate();
-  const endRow      = DATA_START_ROW + daysInMonth - 1;
-  const sid         = getSpreadsheetIdForYear(yv.value);
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -168,7 +147,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
 
   try {
     if (staff.type === 'nurse') {
-      const rows = await getValues(sid, `${mv.value}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
+      const rows = getVisitSheetRows(staff, yv.value, mv.value, 1, daysInMonth);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       for (const r of rows) {
         const k = parseFloat(r?.[0]) || 0;
@@ -189,7 +168,7 @@ router.get('/api/monthly-stats', requireStaff, async (req, res) => {
                  incentive_line: iline, incentive_triggered: total >= targetTotal,
                  work_hours: staff.work_hours ?? null });
     } else {
-      const rows = await getValues(sid, `${mv.value}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
+      const rows = getVisitSheetRows(staff, yv.value, mv.value, 1, daysInMonth);
       let total_units = 0, working_days = 0;
       for (const r of rows) {
         const v = parseFloat(r?.[0]) || 0;
@@ -238,23 +217,9 @@ async function handleBillingDetail(req, res) {
   const isNurse = staff.type === 'nurse';
 
   try {
-    const sidPrev = getSpreadsheetIdForYear(prevYear);
-    const sidCur  = getSpreadsheetIdForYear(y);
-    const colRange = isNurse
-      ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
-      : `${staff.col}%s:${staff.col}%s`;
-
-    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
-    const endRowA   = DATA_START_ROW + daysInPrev - 1;
-    const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
-    const startRowB = DATA_START_ROW;
-    const endRowB   = DATA_START_ROW + (BILLING_DAY - 2);
-    const rangeB = `${m}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
-
-    const [rowsA, rowsB] = await Promise.all([
-      getValues(sidPrev, rangeA).catch(() => []),
-      getValues(sidCur,  rangeB).catch(() => []),
-    ]);
+    // SQLite正本から取得（前月BILLING_DAY〜末日 / 当月1〜(BILLING_DAY-1)日）
+    const rowsA = getVisitSheetRows(staff, prevYear, prevM, BILLING_DAY, daysInPrev);
+    const rowsB = getVisitSheetRows(staff, y, m, 1, BILLING_DAY - 1);
 
     const days = [];
     let total_kaigo = 0, total_iryo = 0, total_units = 0, working_days = 0;
@@ -345,9 +310,7 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
   const mv = validateNum(month, { min: 1, max: 12 });
   if (!yv.valid || !mv.valid) return res.status(400).json({ error: '年月の値が不正です' });
   const y = yv.value, m = mv.value;
-  const sid = getSpreadsheetIdForYear(y);
   const daysInMonth = new Date(y, m, 0).getDate();
-  const endRow = DATA_START_ROW + daysInMonth - 1;
 
   const staffData = loadStaff();
   const staff = staffData.staff.find(s => s.id === req.session.staffId);
@@ -360,7 +323,7 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
 
   try {
     if (staff.type === 'nurse') {
-      const rows = await getValues(sid, `${m}月!${staff.kaigo_col}${DATA_START_ROW}:${staff.iryo_col}${endRow}`);
+      const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
       let total_kaigo = 0, total_iryo = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -390,7 +353,7 @@ router.get('/api/monthly-detail', requireStaff, async (req, res) => {
                  incentive_amount: incentive_amountN,
                  work_hours: staff.work_hours ?? null } });
     } else {
-      const rows = await getValues(sid, `${m}月!${staff.col}${DATA_START_ROW}:${staff.col}${endRow}`);
+      const rows = getVisitSheetRows(staff, y, m, 1, daysInMonth);
       let total_units = 0, working_days = 0;
       const days = [];
       for (let d = 1; d <= daysInMonth; d++) {
@@ -445,30 +408,10 @@ router.get('/api/incentive-estimate', requireStaff, async (req, res) => {
   const iDef = staffData.incentive_defaults;
 
   try {
-    const sidPrev = getSpreadsheetIdForYear(prevYear);
-    const sidCur  = getSpreadsheetIdForYear(payYear);
-
-    // 取得する列を決定
     const isNurse = staff.type === 'nurse';
-    const colRange = isNurse
-      ? `${staff.kaigo_col}%s:${staff.iryo_col}%s`
-      : `${staff.col}%s:${staff.col}%s`;
-
-    // Range A: 前月BILLING_DAY日〜末日
-    const startRowA = DATA_START_ROW + (BILLING_DAY - 1);
-    const endRowA   = DATA_START_ROW + daysInPrev - 1;
-    const rangeA = `${prevM}月!${colRange.replace('%s', startRowA).replace('%s', endRowA)}`;
-
-    // Range B: 当月1日〜(BILLING_DAY-1)日
-    const startRowB = DATA_START_ROW;
-    const endRowB   = DATA_START_ROW + (BILLING_DAY - 2);
-    const rangeB = `${payM}月!${colRange.replace('%s', startRowB).replace('%s', endRowB)}`;
-
-    // 並列フェッチ
-    const [rowsA, rowsB] = await Promise.all([
-      getValues(sidPrev, rangeA).catch(() => []),
-      getValues(sidCur,  rangeB).catch(() => []),
-    ]);
+    // SQLite正本から取得（前月BILLING_DAY〜末日 / 当月1〜(BILLING_DAY-1)日）
+    const rowsA = getVisitSheetRows(staff, prevYear, prevM, BILLING_DAY, daysInPrev);
+    const rowsB = getVisitSheetRows(staff, payYear, payM, 1, BILLING_DAY - 1);
 
     // 今日の日付で残日数・確定判定
     const today = new Date();
